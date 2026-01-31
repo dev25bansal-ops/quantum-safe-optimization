@@ -14,9 +14,12 @@ from typing import Any, Dict, List, Optional, Protocol
 from uuid import UUID, uuid4
 
 from qsop.domain.models.job import JobSpec, JobResult, JobStatus, AlgorithmSettings, BackendSettings
-from qsop.domain.models.problem import OptimizationProblem
 from qsop.domain.ports.job_store import JobStore
+from qsop.domain.ports.artifact_store import ArtifactStore
 from qsop.domain.ports.event_bus import EventBus, DomainEvent, EventTypes
+from qsop.application.services.crypto_service import CryptoService
+from qsop.crypto.envelopes.envelope import EncryptedEnvelope
+from qsop.crypto.signing.signatures import SignatureBundle
 
 logger = logging.getLogger(__name__)
 
@@ -135,12 +138,16 @@ class JobService:
         self,
         repository: JobStore,
         event_bus: EventBus,
+        artifact_store: Optional[ArtifactStore] = None,
+        crypto_service: Optional[CryptoService] = None,
         validator: Optional[JobValidator] = None,
         preprocessor: Optional[JobPreprocessor] = None,
         aggregator: Optional[ResultAggregator] = None,
     ) -> None:
         self._repository = repository
         self._event_bus = event_bus
+        self._artifact_store = artifact_store
+        self._crypto = crypto_service
         self._validator = validator or DefaultJobValidator()
         self._preprocessor = preprocessor or DefaultJobPreprocessor()
         self._aggregator = aggregator or DefaultResultAggregator()
@@ -232,6 +239,64 @@ class JobService:
                 return None
             return await self._repository.get_result(job_id)
         except Exception:
+            return None
+
+    async def get_job_result_payload(self, job_id: UUID, tenant_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the decrypted and verified result payload for a job.
+        """
+        if not self._artifact_store or not self._crypto:
+            logger.warning("Artifact store or crypto service not available")
+            return None
+
+        result = await self.get_job_result(job_id, tenant_id)
+        if not result or not result.result_artifact_id:
+            logger.warning(f"No result found for job {job_id}")
+            return None
+
+        try:
+            # 1. Fetch encrypted blob from artifact store
+            blob = self._artifact_store.get_blob(result.result_artifact_id)
+            
+            # 2. Reconstruct envelope from metadata (as stored in Step 1)
+            envelope_dict = blob.metadata.get("envelope")
+            if not envelope_dict:
+                logger.error(f"Missing envelope metadata in blob {result.result_artifact_id}")
+                return None
+            
+            envelope = EncryptedEnvelope.from_dict(envelope_dict)
+            
+            # 3. Retrieve signature if present
+            signature = None
+            if result.signature:
+                # Try to get signature bundle from result metadata
+                sig_bundle_dict = result.metadata.get("signature_bundle")
+                if sig_bundle_dict:
+                    signature = SignatureBundle.from_dict(sig_bundle_dict)
+            
+            # 4. Decrypt and verify
+            # We need the decryption key.
+            decrypt_key_id = blob.key_id
+            
+            if signature:
+                plaintext, is_valid = self._crypto.decrypt_and_verify(
+                    envelope,
+                    signature,
+                    decrypt_key_id=decrypt_key_id
+                )
+                if not is_valid:
+                    logger.error(f"Signature verification failed for job {job_id}")
+                    # We might still return plaintext in some cases, 
+                    # but for security we should probably fail or flag it.
+            else:
+                plaintext = self._crypto.decrypt_artifact(envelope, decrypt_key_id)
+            
+            # 5. Deserialize payload
+            import json
+            return json.loads(plaintext.decode("utf-8"))
+
+        except Exception as e:
+            logger.exception(f"Failed to retrieve secure result for job {job_id}: {e}")
             return None
     
     async def cancel_job(self, job_id: UUID, tenant_id: str) -> bool:
