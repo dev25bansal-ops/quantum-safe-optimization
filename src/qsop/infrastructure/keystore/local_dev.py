@@ -8,18 +8,18 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-import logging
 
-from ...domain.ports.keystore import KeyStore, KeyMetadata
+from ...domain.ports.keystore import KeyStore, KeyMetadata, KeyType, KeyStatus
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
 class LocalDevKeyStore:
     """
     Local file-based keystore for development.
@@ -27,11 +27,9 @@ class LocalDevKeyStore:
     Stores keys in a local directory. NOT SECURE - for development only.
     """
     
-    storage_path: Path = field(default_factory=lambda: Path.home() / ".qsop" / "keys")
-    _keys: dict[str, dict] = field(default_factory=dict, repr=False)
-    
-    def __post_init__(self) -> None:
-        """Initialize storage directory."""
+    def __init__(self, storage_path: Path | None = None):
+        self.storage_path = storage_path or Path.home() / ".qsop" / "keys"
+        self._keys: dict[str, dict] = {}
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self._load_keys()
         logger.warning(
@@ -43,203 +41,194 @@ class LocalDevKeyStore:
         """Load keys from storage."""
         metadata_file = self.storage_path / "metadata.json"
         if metadata_file.exists():
-            with open(metadata_file, "r") as f:
-                self._keys = json.load(f)
+            try:
+                with open(metadata_file, "r") as f:
+                    self._keys = json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to load key metadata: {e}")
+                self._keys = {}
     
     def _save_metadata(self) -> None:
         """Save key metadata."""
         metadata_file = self.storage_path / "metadata.json"
-        # Don't save private keys in metadata
+        # Don't save private keys in metadata summary
         safe_metadata = {
-            k: {kk: vv for kk, vv in v.items() if kk != "private_key"}
+            k: {kk: vv for kk, vv in v.items() if kk != "secret_key"}
             for k, v in self._keys.items()
         }
         with open(metadata_file, "w") as f:
             json.dump(safe_metadata, f, indent=2)
     
-    def create_key(
+    def store_key(
         self,
-        *,
-        key_type: str,
+        key_type: KeyType,
         algorithm: str,
-        owner: str,
-        metadata: dict | None = None,
+        public_key: bytes,
+        secret_key: bytes,
+        key_id: str | None = None,
+        expires_at: datetime | None = None,
+        owner_id: str | None = None,
+        tags: tuple[str, ...] = (),
+        **metadata: Any,
     ) -> str:
-        """Create a new key pair."""
-        import uuid
-        from ...crypto.pqc import KEMAlgorithm, SignatureAlgorithm, get_kem, get_signature_scheme
-        
-        key_id = f"key-{uuid.uuid4().hex[:16]}"
-        
-        # Generate keys based on type
-        if key_type == "kem":
-            alg = KEMAlgorithm(algorithm)
-            kem = get_kem(alg)
-            public_key, private_key = kem.keygen()
-        elif key_type == "signature":
-            alg = SignatureAlgorithm(algorithm)
-            sig = get_signature_scheme(alg)
-            public_key, private_key = sig.keygen()
-        else:
-            raise ValueError(f"Unknown key type: {key_type}")
+        """Store a new key pair."""
+        actual_key_id = key_id or f"key-{uuid.uuid4().hex[:16]}"
         
         # Store key data
         key_data = {
-            "key_id": key_id,
-            "key_type": key_type,
+            "key_id": actual_key_id,
+            "key_type": key_type.value,
             "algorithm": algorithm,
-            "owner": owner,
+            "owner_id": owner_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "status": "active",
-            "metadata": metadata or {},
+            "expires_at": expires_at.isoformat() if expires_at else None,
+            "status": KeyStatus.ACTIVE.value,
+            "tags": list(tags),
+            "usage_count": 0,
+            "last_used_at": None,
+            "custom_data": metadata,
             "public_key": public_key.hex(),
-            "private_key": private_key.hex(),  # In real implementation, encrypt this
+            "secret_key": secret_key.hex(),
         }
         
-        self._keys[key_id] = key_data
-        
-        # Save to files
+        self._keys[actual_key_id] = key_data
         self._save_metadata()
-        key_file = self.storage_path / f"{key_id}.key"
+        
+        # Save full key data to individual file
+        key_file = self.storage_path / f"{actual_key_id}.key"
         with open(key_file, "w") as f:
             json.dump(key_data, f)
-        
-        return key_id
+            
+        return actual_key_id
     
     def get_public_key(self, key_id: str) -> bytes:
-        """Get public key by ID."""
+        """Retrieve a public key."""
         if key_id not in self._keys:
-            # Try to load from file
-            key_file = self.storage_path / f"{key_id}.key"
-            if key_file.exists():
-                with open(key_file, "r") as f:
-                    self._keys[key_id] = json.load(f)
-            else:
-                raise KeyError(f"Key not found: {key_id}")
-        
+            self._load_key_from_file(key_id)
+            
         return bytes.fromhex(self._keys[key_id]["public_key"])
     
-    def use_private_key(self, key_id: str, purpose: str) -> PrivateKeyHandle:
-        """Get a handle to use a private key."""
+    def get_secret_key(self, key_id: str) -> bytes:
+        """Retrieve a secret key."""
         if key_id not in self._keys:
-            key_file = self.storage_path / f"{key_id}.key"
-            if key_file.exists():
-                with open(key_file, "r") as f:
-                    self._keys[key_id] = json.load(f)
-            else:
-                raise KeyError(f"Key not found: {key_id}")
-        
+            self._load_key_from_file(key_id)
+            
         key_data = self._keys[key_id]
-        
-        if key_data["status"] != "active":
-            raise ValueError(f"Key {key_id} is not active")
-        
-        return LocalPrivateKeyHandle(
-            key_id=key_id,
-            private_key=bytes.fromhex(key_data["private_key"]),
-            algorithm=key_data["algorithm"],
-            key_type=key_data["key_type"],
+        if key_data["status"] != KeyStatus.ACTIVE.value:
+            raise ValueError(f"Key {key_id} is not active (status: {key_data['status']})")
+            
+        return bytes.fromhex(key_data["secret_key"])
+    
+    def get_metadata(self, key_id: str) -> KeyMetadata:
+        """Retrieve key metadata."""
+        if key_id not in self._keys:
+            self._load_key_from_file(key_id)
+            
+        kd = self._keys[key_id]
+        return KeyMetadata(
+            key_id=kd["key_id"],
+            key_type=KeyType(kd["key_type"]),
+            algorithm=kd["algorithm"],
+            status=KeyStatus(kd["status"]),
+            created_at=datetime.fromisoformat(kd["created_at"]),
+            expires_at=datetime.fromisoformat(kd["expires_at"]) if kd["expires_at"] else None,
+            owner_id=kd.get("owner_id"),
+            usage_count=kd.get("usage_count", 0),
+            last_used_at=datetime.fromisoformat(kd["last_used_at"]) if kd.get("last_used_at") else None,
+            tags=tuple(kd.get("tags", [])),
+            custom_data=kd.get("custom_data", {}),
         )
     
-    def rotate_key(self, key_id: str) -> str:
-        """Rotate a key, returning new key ID."""
-        old_key = self._keys.get(key_id)
-        if old_key is None:
-            raise KeyError(f"Key not found: {key_id}")
+    def list_keys(
+        self,
+        key_type: KeyType | None = None,
+        status: KeyStatus | None = None,
+        owner_id: str | None = None,
+        tags: tuple[str, ...] | None = None,
+    ) -> list[KeyMetadata]:
+        """List keys matching criteria."""
+        results = []
+        for kid in self._keys:
+            meta = self.get_metadata(kid)
+            
+            if key_type and meta.key_type != key_type:
+                continue
+            if status and meta.status != status:
+                continue
+            if owner_id and meta.owner_id != owner_id:
+                continue
+            if tags and not all(t in meta.tags for t in tags):
+                continue
+                
+            results.append(meta)
+            
+        return results
+    
+    def rotate_key(
+        self,
+        key_id: str,
+        new_public_key: bytes,
+        new_secret_key: bytes,
+        new_key_id: str | None = None,
+    ) -> str:
+        """Rotate a key."""
+        old_meta = self.get_metadata(key_id)
         
-        # Create new key with same parameters
-        new_key_id = self.create_key(
-            key_type=old_key["key_type"],
-            algorithm=old_key["algorithm"],
-            owner=old_key["owner"],
-            metadata={
-                **old_key.get("metadata", {}),
-                "rotated_from": key_id,
-            },
+        # Mark old key as inactive/rotated
+        self._keys[key_id]["status"] = KeyStatus.INACTIVE.value
+        
+        # Store new key
+        new_id = self.store_key(
+            key_type=old_meta.key_type,
+            algorithm=old_meta.algorithm,
+            public_key=new_public_key,
+            secret_key=new_secret_key,
+            key_id=new_key_id,
+            owner_id=old_meta.owner_id,
+            tags=old_meta.tags,
+            rotated_from=key_id,
+            **old_meta.custom_data
         )
         
-        # Mark old key as rotated
-        self._keys[key_id]["status"] = "rotated"
-        self._keys[key_id]["rotated_to"] = new_key_id
+        self._keys[key_id]["rotated_to"] = new_id
         self._save_metadata()
         
-        return new_key_id
+        return new_id
     
-    def revoke_key(self, key_id: str, reason: str) -> None:
+    def revoke_key(self, key_id: str, reason: str = "") -> None:
         """Revoke a key."""
         if key_id not in self._keys:
-            raise KeyError(f"Key not found: {key_id}")
-        
-        self._keys[key_id]["status"] = "revoked"
-        self._keys[key_id]["revoked_at"] = datetime.now(timezone.utc).isoformat()
-        self._keys[key_id]["revoke_reason"] = reason
+            self._load_key_from_file(key_id)
+            
+        self._keys[key_id]["status"] = KeyStatus.REVOKED.value
+        self._keys[key_id]["custom_data"]["revocation_reason"] = reason
         self._save_metadata()
-        
-        # Securely delete private key file
+    
+    def delete_key(self, key_id: str) -> None:
+        """Permanently delete a key."""
+        if key_id in self._keys:
+            del self._keys[key_id]
+            
         key_file = self.storage_path / f"{key_id}.key"
         if key_file.exists():
-            # Overwrite with zeros before deleting
-            size = key_file.stat().st_size
-            with open(key_file, "wb") as f:
-                f.write(b"\x00" * size)
             key_file.unlink()
-    
-    def list_keys(self, owner: str | None = None) -> list[KeyMetadata]:
-        """List all keys, optionally filtered by owner."""
-        result = []
-        for key_id, key_data in self._keys.items():
-            if owner and key_data.get("owner") != owner:
-                continue
             
-            result.append(KeyMetadata(
-                key_id=key_id,
-                key_type=key_data["key_type"],
-                algorithm=key_data["algorithm"],
-                owner=key_data["owner"],
-                status=key_data["status"],
-                created_at=datetime.fromisoformat(key_data["created_at"]),
-            ))
-        
-        return result
+        self._save_metadata()
+    
+    def record_usage(self, key_id: str) -> None:
+        """Record key usage."""
+        if key_id not in self._keys:
+            self._load_key_from_file(key_id)
+            
+        self._keys[key_id]["usage_count"] = self._keys[key_id].get("usage_count", 0) + 1
+        self._keys[key_id]["last_used_at"] = datetime.now(timezone.utc).isoformat()
+        self._save_metadata()
 
-
-@dataclass
-class LocalPrivateKeyHandle:
-    """Handle to a private key for operations."""
-    
-    key_id: str
-    private_key: bytes
-    algorithm: str
-    key_type: str
-    
-    def decrypt(self, ciphertext: bytes) -> bytes:
-        """Decrypt using this key (for KEM keys)."""
-        if self.key_type != "kem":
-            raise ValueError("Decrypt only available for KEM keys")
-        
-        from ...crypto.pqc import KEMAlgorithm, get_kem
-        
-        alg = KEMAlgorithm(self.algorithm)
-        kem = get_kem(alg)
-        return kem.decapsulate(ciphertext, self.private_key)
-    
-    def sign(self, message: bytes) -> bytes:
-        """Sign using this key (for signature keys)."""
-        if self.key_type != "signature":
-            raise ValueError("Sign only available for signature keys")
-        
-        from ...crypto.pqc import SignatureAlgorithm, get_signature_scheme
-        
-        alg = SignatureAlgorithm(self.algorithm)
-        sig = get_signature_scheme(alg)
-        return sig.sign(message, self.private_key)
-    
-    def __del__(self) -> None:
-        """Attempt to clear private key from memory."""
-        if hasattr(self, 'private_key'):
-            # This is best-effort; Python doesn't guarantee memory clearing
-            try:
-                import ctypes
-                ctypes.memset(id(self.private_key), 0, len(self.private_key))
-            except Exception:
-                pass
+    def _load_key_from_file(self, key_id: str) -> None:
+        """Helper to load a specific key from disk if not in memory."""
+        key_file = self.storage_path / f"{key_id}.key"
+        if key_file.exists():
+            with open(key_file, "r") as f:
+                self._keys[key_id] = json.load(f)
+        else:
+            raise KeyError(f"Key not found: {key_id}")
