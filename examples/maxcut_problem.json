@@ -1,0 +1,27 @@
+{
+  "name": "MaxCut Example",
+  "type": "maxcut",
+  "description": "5-node MaxCut problem for QAOA demonstration",
+  "graph": {
+    "nodes": 5,
+    "edges": [
+      {"source": 0, "target": 1, "weight": 1.0},
+      {"source": 0, "target": 2, "weight": 1.0},
+      {"source": 1, "target": 2, "weight": 1.0},
+      {"source": 1, "target": 3, "weight": 1.0},
+      {"source": 2, "target": 3, "weight": 1.0},
+      {"source": 2, "target": 4, "weight": 1.0},
+      {"source": 3, "target": 4, "weight": 1.0}
+    ]
+  },
+  "variables": [
+    {"name": "x_0", "type": "binary"},
+    {"name": "x_1", "type": "binary"},
+    {"name": "x_2", "type": "binary"},
+    {"name": "x_3", "type": "binary"},
+    {"name": "x_4", "type": "binary"}
+  ],
+  "metadata": {
+    "optimal_cut_value": 5
+  }
+}

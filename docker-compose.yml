@@ -1,0 +1,162 @@
+# =============================================================================
+# Quantum-Safe Secure Optimization Platform - Docker Compose
+# =============================================================================
+# Usage:
+#   Development: docker-compose up -d
+#   Production:  docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  # ---------------------------------------------------------------------------
+  # Main Application
+  # ---------------------------------------------------------------------------
+  qsop:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: qsop-api
+    ports:
+      - "8000:8000"
+    environment:
+      QSOP_ENV: dev
+      QSOP_DEBUG: "true"
+      QSOP_LOG_LEVEL: INFO
+      QSOP_LOG_FORMAT: json
+      QSOP_API_HOST: "0.0.0.0"
+      QSOP_API_PORT: "8000"
+      QSOP_API_RELOAD: "false"
+      QSOP_SECRET_KEY: dev-secret-key-change-in-production-32chars
+      QSOP_DATABASE_URL: sqlite+aiosqlite:///./data/qsop.db
+      QSOP_REDIS_URL: redis://redis:6379/0
+      QSOP_PQC_KEM_ALGORITHM: Kyber512
+      QSOP_PQC_SIG_ALGORITHM: Dilithium2
+      QSOP_QUANTUM_BACKEND: aer_simulator
+      QSOP_OTEL_ENABLED: "true"
+      QSOP_OTEL_EXPORTER_ENDPOINT: http://otel-collector:4317
+      QSOP_METRICS_ENABLED: "true"
+    volumes:
+      - ./src:/app/src:ro
+      - qsop-data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  # ---------------------------------------------------------------------------
+  # Redis Cache
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: qsop-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database (optional - uncomment for production)
+  # ---------------------------------------------------------------------------
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: qsop-postgres
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     POSTGRES_USER: qsop
+  #     POSTGRES_PASSWORD: qsop_password
+  #     POSTGRES_DB: qsop
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U qsop"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   restart: unless-stopped
+  #   networks:
+  #     - qsop-network
+
+  # ---------------------------------------------------------------------------
+  # OpenTelemetry Collector
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.93.0
+    container_name: qsop-otel
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8888:8888"   # Prometheus metrics
+    volumes:
+      - ./deploy/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  # ---------------------------------------------------------------------------
+  # Prometheus
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: qsop-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  # ---------------------------------------------------------------------------
+  # Grafana
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: qsop-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+volumes:
+  qsop-data:
+  redis-data:
+  # postgres-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  qsop-network:
+    driver: bridge
