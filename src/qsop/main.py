@@ -1,5 +1,6 @@
 """FastAPI application entrypoint."""
 
+import logging
 import sys
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -36,7 +37,7 @@ structlog.configure(
         ),
     ],
     wrapper_class=structlog.make_filtering_bound_logger(
-        getattr(structlog, settings.log_level.upper(), structlog.INFO)
+        getattr(logging, settings.log_level.upper(), logging.INFO)
     ),
     context_class=dict,
     logger_factory=structlog.PrintLoggerFactory(),
