@@ -6,10 +6,16 @@ Provides high-performance quantum circuit simulation.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
+import logging
 
-from ...domain.ports.quantum_backend import QuantumBackend
+from qsop.domain.ports.quantum_backend import BackendCapabilities, QuantumBackend
+from qsop.domain.models.result import QuantumExecutionResult, MeasurementResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -20,9 +26,10 @@ class QiskitAerBackend:
     Supports both shot-based simulation and statevector mode.
     """
     
-    name: str = "qiskit_aer"
+    _name: str = "qiskit_aer"
     _simulator: Any = field(default=None, repr=False)
     _transpiler_options: dict = field(default_factory=dict)
+    _pending_jobs: dict[str, QuantumExecutionResult] = field(default_factory=dict, repr=False)
     
     def __post_init__(self) -> None:
         """Initialize the Aer simulator."""
@@ -32,29 +39,45 @@ class QiskitAerBackend:
         except ImportError:
             # Fallback to basic simulator
             self._simulator = None
-    
-    def capabilities(self) -> dict:
+
+    @property
+    def name(self) -> str:
+        """Return the backend name."""
+        return self._name
+
+    @property
+    def capabilities(self) -> BackendCapabilities:
         """Return backend capabilities."""
-        return {
-            "max_qubits": 30,
-            "max_shots": 100000,
-            "supports_statevector": True,
-            "supports_density_matrix": True,
-            "noise_model": True,
-            "gpu_acceleration": False,
-        }
+        return BackendCapabilities(
+            name=self._name,
+            num_qubits=30,
+            basis_gates=frozenset(["u1", "u2", "u3", "cx", "cz", "id", "x", "y", "z", "h", "s", "sdg", "t", "tdg"]),
+            max_shots=1000000,
+            simulator=True,
+            local=True,
+            online=True,
+            metadata={
+                "supports_statevector": True,
+                "supports_density_matrix": True,
+                "gpu_acceleration": False,
+            }
+        )
     
-    def compile(self, circuit: Any, *, options: dict | None = None) -> Any:
+    def transpile(
+        self,
+        circuit: Any,
+        optimization_level: int = 1,
+        **options: Any,
+    ) -> Any:
         """Transpile circuit for the simulator."""
-        options = options or {}
-        
         try:
             from qiskit import transpile
             
             return transpile(
                 circuit,
                 backend=self._simulator,
-                optimization_level=options.get("optimization_level", 1),
+                optimization_level=optimization_level,
+                **options
             )
         except ImportError:
             return circuit
@@ -62,33 +85,31 @@ class QiskitAerBackend:
     def run(
         self,
         circuit: Any,
-        *,
         shots: int = 1024,
-        options: dict | None = None,
-    ) -> dict:
+        **options: Any,
+    ) -> QuantumExecutionResult:
         """
         Run circuit and return results.
         
         Args:
             circuit: Quantum circuit to execute
             shots: Number of measurement shots
-            options: Additional execution options
+            **options: Additional execution options
             
         Returns:
-            Dictionary with counts and metadata
+            The quantum execution result.
         """
-        options = options or {}
-        
         if self._simulator is None:
             raise RuntimeError("Qiskit Aer not available. Install with: pip install qiskit-aer")
         
-        # Compile if needed
-        compiled = self.compile(circuit, options=options)
+        # Transpile
+        compiled = self.transpile(circuit, **options)
         
         # Configure noise if specified
         noise_model = options.get("noise_model")
         
         # Run simulation
+        start_time = datetime.utcnow()
         job = self._simulator.run(
             compiled,
             shots=shots,
@@ -104,42 +125,64 @@ class QiskitAerBackend:
             k.replace(" ", ""): v for k, v in counts.items()
         }
         
-        return {
-            "counts": normalized_counts,
-            "shots": shots,
-            "success": result.success,
-            "time_taken": result.time_taken if hasattr(result, "time_taken") else None,
-            "metadata": {
-                "backend": self.name,
+        total_shots = sum(normalized_counts.values())
+        measurements = tuple(
+            MeasurementResult(
+                bitstring=bs,
+                count=cnt,
+                probability=cnt / total_shots if total_shots > 0 else 0.0
+            )
+            for bs, cnt in normalized_counts.items()
+        )
+        
+        return QuantumExecutionResult(
+            measurements=measurements,
+            counts=normalized_counts,
+            num_qubits=compiled.num_qubits if hasattr(compiled, "num_qubits") else 0,
+            shots=shots,
+            execution_time_seconds=result.time_taken if hasattr(result, "time_taken") else 0.0,
+            backend_name=self._name,
+            job_id=job.job_id(),
+            timestamp=start_time,
+            metadata={
                 "simulator_version": getattr(self._simulator, "version", "unknown"),
-            },
-        }
+            }
+        )
     
     def submit(
         self,
         circuit: Any,
-        *,
         shots: int = 1024,
-        options: dict | None = None,
+        **options: Any,
     ) -> str:
         """Submit circuit for async execution (returns immediately)."""
-        # For simulator, we just run synchronously and return a fake job ID
-        import uuid
         job_id = str(uuid.uuid4())
         
-        # In a real implementation, would store the job
-        self._pending_jobs = getattr(self, "_pending_jobs", {})
-        self._pending_jobs[job_id] = self.run(circuit, shots=shots, options=options)
+        # For simulator, we just run synchronously for now but store in pending
+        result = self.run(circuit, shots=shots, **options)
+        self._pending_jobs[job_id] = result
         
         return job_id
     
-    def get_result(self, job_id: str) -> dict:
+    def get_result(self, job_id: str) -> QuantumExecutionResult:
         """Get result of a submitted job."""
-        pending = getattr(self, "_pending_jobs", {})
-        if job_id not in pending:
+        if job_id not in self._pending_jobs:
             raise ValueError(f"Job {job_id} not found")
-        return pending.pop(job_id)
+        return self._pending_jobs.pop(job_id)
     
+    def get_job_status(self, job_id: str) -> str:
+        """Get status of a submitted job."""
+        if job_id in self._pending_jobs:
+            return "DONE"
+        return "NOT_FOUND"
+    
+    def cancel_job(self, job_id: str) -> bool:
+        """Cancel a submitted job."""
+        if job_id in self._pending_jobs:
+            self._pending_jobs.pop(job_id)
+            return True
+        return False
+
     def run_statevector(self, circuit: Any) -> dict:
         """Run circuit in statevector mode (no measurements)."""
         if self._simulator is None:
@@ -191,7 +234,6 @@ def create_noise_model(
     """
     try:
         from qiskit_aer.noise import NoiseModel, depolarizing_error, ReadoutError
-        import numpy as np
         
         noise_model = NoiseModel()
         
