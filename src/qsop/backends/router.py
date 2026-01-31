@@ -78,8 +78,8 @@ class DepthAwareStrategy:
     """
     Selects a backend based on circuit depth and backend capabilities.
     
-    Filters out backends with insufficient qubits or unsupported gates,
-    then picks based on a combination of queue time and hardware quality.
+    Filters out backends with insufficient qubits, then picks based on 
+    a combination of queue time and whether it's a simulator (for deep circuits).
     """
     
     def select(
@@ -88,16 +88,37 @@ class DepthAwareStrategy:
         circuit: Any, 
         **options: Any
     ) -> Optional[QuantumBackend]:
-        # This strategy would ideally analyze the circuit
-        # For now, we perform basic filtering and fallback to least busy
-        online_backends = [b for b in backends if b.capabilities.online]
-        if not online_backends:
+        # 1. Extract circuit requirements
+        num_qubits = getattr(circuit, "num_qubits", 0)
+        depth = 0
+        if hasattr(circuit, "depth"):
+            try:
+                depth = circuit.depth()
+            except Exception:
+                pass
+
+        # 2. Filter backends by qubit count
+        suitable = [b for b in backends if b.capabilities.online and b.capabilities.num_qubits >= num_qubits]
+        if not suitable:
             return None
             
-        # In a real implementation, we'd check circuit.num_qubits vs backend.num_qubits
-        # and circuit depth vs coherence times.
+        # 3. Decision logic:
+        # If circuit is "deep" (arbitrary threshold > 50 gates), prefer simulators for reliability
+        # unless hardware is specifically requested.
+        is_deep = depth > 50
         
-        return min(online_backends, key=lambda b: b.capabilities.pending_jobs)
+        if is_deep:
+            simulators = [b for b in suitable if b.capabilities.simulator]
+            if simulators:
+                return min(simulators, key=lambda b: b.capabilities.pending_jobs)
+        else:
+            # For shallow circuits, prefer hardware if available
+            hardware = [b for b in suitable if not b.capabilities.simulator]
+            if hardware:
+                return min(hardware, key=lambda b: b.capabilities.pending_jobs)
+                
+        # Fallback to least busy among all suitable
+        return min(suitable, key=lambda b: b.capabilities.pending_jobs)
 
 
 class BackendRouter:
@@ -143,3 +164,25 @@ class BackendRouter:
             raise RuntimeError("No online quantum backends available in the pool")
             
         return selected
+
+
+class FailoverRouter(BackendRouter):
+    """
+    A router that supports failover if the primary selection fails.
+    """
+    
+    def route_with_failover(self, circuit: Any, **options: Any) -> QuantumBackend:
+        """
+        Attempts to route to the best backend, but provides fallbacks 
+        if the selection criteria are too strict.
+        """
+        try:
+            return self.route(circuit, **options)
+        except RuntimeError:
+            # Fallback: try any online backend if preferred strategy failed
+            backends = self.pool.list_backends(only_online=True)
+            if not backends:
+                raise RuntimeError("No online quantum backends available even for failover")
+            
+            # Use least busy as absolute fallback
+            return min(backends, key=lambda b: b.capabilities.pending_jobs)
