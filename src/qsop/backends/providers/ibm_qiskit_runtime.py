@@ -7,8 +7,12 @@ Provides access to real IBM quantum hardware.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 import logging
+
+from qsop.domain.ports.quantum_backend import BackendCapabilities, QuantumBackend
+from qsop.domain.models.result import QuantumExecutionResult, MeasurementResult
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +25,11 @@ class IBMQuantumBackend:
     Connects to IBM Quantum services for execution on real hardware.
     """
     
-    name: str = "ibm_quantum"
     instance: str = "ibm-q/open/main"
     backend_name: str | None = None  # Specific backend, or None for least busy
     _service: Any = field(default=None, repr=False)
     _backend: Any = field(default=None, repr=False)
+    _name: str = "ibm_quantum"
     
     def __post_init__(self) -> None:
         """Initialize connection to IBM Quantum."""
@@ -61,36 +65,46 @@ class IBMQuantumBackend:
         except ImportError:
             logger.warning("qiskit-ibm-runtime not installed")
             self._service = None
-    
-    def capabilities(self) -> dict:
+
+    @property
+    def name(self) -> str:
+        """Return the backend name."""
+        return self._name
+
+    @property
+    def capabilities(self) -> BackendCapabilities:
         """Return backend capabilities."""
         if self._backend is None:
-            return {
-                "available": False,
-                "error": "Backend not initialized",
-            }
+            return BackendCapabilities(name="uninitialized", num_qubits=0, online=False)
         
         config = self._backend.configuration()
-        props = self._backend.properties()
+        status = self._backend.status()
         
-        return {
-            "available": True,
-            "name": self.backend_name,
-            "n_qubits": config.n_qubits,
-            "max_shots": config.max_shots,
-            "basis_gates": config.basis_gates,
-            "coupling_map": config.coupling_map,
-            "quantum_volume": getattr(config, "quantum_volume", None),
-            "processor_type": getattr(config, "processor_type", None),
-            "status": self._backend.status().to_dict(),
-        }
+        return BackendCapabilities(
+            name=self.backend_name or "unknown",
+            num_qubits=config.n_qubits,
+            basis_gates=frozenset(config.basis_gates),
+            max_shots=config.max_shots,
+            coupling_map=tuple(tuple(pair) for pair in (config.coupling_map or [])),
+            simulator=config.simulator,
+            online=status.operational,
+            pending_jobs=status.pending_jobs,
+            metadata={
+                "quantum_volume": getattr(config, "quantum_volume", None),
+                "processor_type": getattr(config, "processor_type", None),
+                "instance": self.instance,
+            }
+        )
     
-    def compile(self, circuit: Any, *, options: dict | None = None) -> Any:
+    def transpile(
+        self,
+        circuit: Any,
+        optimization_level: int = 1,
+        **options: Any,
+    ) -> Any:
         """Transpile circuit for the backend."""
         if self._backend is None:
             raise RuntimeError("Backend not initialized")
-        
-        options = options or {}
         
         try:
             from qiskit import transpile
@@ -98,8 +112,9 @@ class IBMQuantumBackend:
             return transpile(
                 circuit,
                 backend=self._backend,
-                optimization_level=options.get("optimization_level", 2),
+                optimization_level=optimization_level,
                 seed_transpiler=options.get("seed"),
+                **options
             )
         except ImportError:
             return circuit
@@ -107,69 +122,22 @@ class IBMQuantumBackend:
     def run(
         self,
         circuit: Any,
-        *,
         shots: int = 1024,
-        options: dict | None = None,
-    ) -> dict:
+        **options: Any,
+    ) -> QuantumExecutionResult:
         """
         Run circuit on IBM hardware.
         
         Uses Qiskit Runtime for optimized execution.
         """
-        if self._service is None:
-            raise RuntimeError("IBM Quantum service not initialized")
-        
-        options = options or {}
-        
-        try:
-            from qiskit_ibm_runtime import SamplerV2 as Sampler
-            
-            # Compile circuit
-            compiled = self.compile(circuit, options=options)
-            
-            # Use Sampler primitive
-            sampler = Sampler(backend=self._backend)
-            
-            job = sampler.run([compiled], shots=shots)
-            result = job.result()
-            
-            # Extract counts from result
-            pub_result = result[0]
-            counts_data = pub_result.data
-            
-            # Convert to standard counts format
-            counts = {}
-            if hasattr(counts_data, "meas"):
-                bit_array = counts_data.meas
-                for bitstring, count in bit_array.get_counts().items():
-                    counts[bitstring] = count
-            
-            return {
-                "counts": counts,
-                "shots": shots,
-                "success": True,
-                "job_id": job.job_id(),
-                "metadata": {
-                    "backend": self.backend_name,
-                    "execution_time": getattr(result, "metadata", {}).get("time_taken"),
-                },
-            }
-            
-        except Exception as e:
-            logger.error(f"Execution failed: {e}")
-            return {
-                "counts": {},
-                "shots": 0,
-                "success": False,
-                "error": str(e),
-            }
+        job_id = self.submit(circuit, shots=shots, **options)
+        return self.get_result(job_id)
     
     def submit(
         self,
         circuit: Any,
-        *,
         shots: int = 1024,
-        options: dict | None = None,
+        **options: Any,
     ) -> str:
         """
         Submit circuit for async execution.
@@ -179,12 +147,11 @@ class IBMQuantumBackend:
         if self._service is None:
             raise RuntimeError("IBM Quantum service not initialized")
         
-        options = options or {}
-        
         try:
             from qiskit_ibm_runtime import SamplerV2 as Sampler
             
-            compiled = self.compile(circuit, options=options)
+            # Use transpile instead of compile
+            compiled = self.transpile(circuit, optimization_level=options.get("optimization_level", 2))
             sampler = Sampler(backend=self._backend)
             
             job = sampler.run([compiled], shots=shots)
@@ -193,7 +160,7 @@ class IBMQuantumBackend:
         except Exception as e:
             raise RuntimeError(f"Job submission failed: {e}")
     
-    def get_result(self, job_id: str) -> dict:
+    def get_result(self, job_id: str) -> QuantumExecutionResult:
         """
         Get result of a submitted job.
         
@@ -209,43 +176,53 @@ class IBMQuantumBackend:
             pub_result = result[0]
             counts_data = pub_result.data
             
+            # Extract counts
             counts = {}
             if hasattr(counts_data, "meas"):
                 bit_array = counts_data.meas
-                for bitstring, count in bit_array.get_counts().items():
-                    counts[bitstring] = count
+                counts = bit_array.get_counts()
             
-            return {
-                "counts": counts,
-                "success": True,
-                "job_id": job_id,
-                "metadata": {
-                    "backend": job.backend().name,
-                },
-            }
+            # Convert to domain measurements
+            total_shots = sum(counts.values())
+            measurements = tuple(
+                MeasurementResult(
+                    bitstring=bs,
+                    count=cnt,
+                    probability=cnt / total_shots if total_shots > 0 else 0.0
+                )
+                for bs, cnt in counts.items()
+            )
+            
+            # Get circuit metadata if available
+            metadata = getattr(result, "metadata", {})
+            
+            return QuantumExecutionResult(
+                measurements=measurements,
+                counts=counts,
+                num_qubits=self._backend.configuration().n_qubits if self._backend else 0,
+                shots=total_shots,
+                execution_time_seconds=metadata.get("time_taken", 0.0),
+                backend_name=self.backend_name or "unknown",
+                job_id=job_id,
+                timestamp=datetime.utcnow(),
+                metadata=metadata
+            )
             
         except Exception as e:
-            return {
-                "counts": {},
-                "success": False,
-                "error": str(e),
-            }
+            logger.error(f"Failed to get result for job {job_id}: {e}")
+            raise RuntimeError(f"Failed to get result for job {job_id}: {e}")
     
-    def job_status(self, job_id: str) -> dict:
-        """Check status of a submitted job."""
+    def get_job_status(self, job_id: str) -> str:
+        """Get status of a submitted job."""
         if self._service is None:
             raise RuntimeError("IBM Quantum service not initialized")
         
         try:
             job = self._service.job(job_id)
-            status = job.status()
-            
-            return {
-                "status": status.name,
-                "queue_position": getattr(job, "queue_position", None),
-            }
+            return job.status().name
         except Exception as e:
-            return {"status": "ERROR", "error": str(e)}
+            logger.error(f"Failed to get status for job {job_id}: {e}")
+            return "ERROR"
     
     def cancel_job(self, job_id: str) -> bool:
         """Cancel a submitted job."""
