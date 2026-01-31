@@ -20,6 +20,7 @@ from qsop.infrastructure.observability.metrics import get_metrics
 from qsop.api.routers import create_api_router
 from qsop.api.middleware.authn import AuthenticationMiddleware
 from qsop.api.middleware.request_id import RequestIDMiddleware
+from qsop.api.middleware.compliance import ComplianceMiddleware
 
 settings = get_settings()
 
@@ -80,6 +81,7 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(ComplianceMiddleware)
 app.add_middleware(
     AuthenticationMiddleware,
     jwt_secret=settings.secret_key.get_secret_value(),

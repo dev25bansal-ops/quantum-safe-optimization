@@ -97,7 +97,10 @@ class JobWorker:
                     "job_id": str(job_id),
                     "backend": spec.backend.backend_name if spec.backend else "classical",
                     "encrypt_key_id": spec.crypto.key_id if spec.crypto else None,
-                    "sign_key_id": "platform-sign-key" # Default platform signing key for now
+                    "sign_key_id": "platform-sign-key", # Default platform signing key for now
+                    "encrypt_artifacts": spec.crypto.encrypt_artifacts if spec.crypto else True,
+                    "sign_results": spec.crypto.sign_results if spec.crypto else True,
+                    "require_compliance": True # Enforce compliance by default
                 }
             )
             

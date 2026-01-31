@@ -74,7 +74,6 @@ class BaseExecutorAdapter(WorkflowExecutor[Any, Any]):
 
         try:
             # 1. Serialize result
-            # Using a simplified serialization for now
             if hasattr(result, "to_dict"):
                 data_dict = result.to_dict()
             elif isinstance(result, (dict, list, str, int, float, bool)):
@@ -84,56 +83,64 @@ class BaseExecutorAdapter(WorkflowExecutor[Any, Any]):
             
             payload = json.dumps(data_dict).encode("utf-8")
 
-            # 2. Encrypt and sign
-            # We need keys. For this phase, we'll assume they are provided in context metadata 
-            # or use default platform keys.
+            # 2. Determine security requirements
             encrypt_key_id = context.metadata.get("encrypt_key_id")
-            sign_key_id = context.metadata.get("sign_key_id")
-
-            if not encrypt_key_id or not sign_key_id:
-                logger.warning("Missing crypto keys in context, skipping result encryption")
-                return {"value": result}
-
-            envelope, signature = self._crypto.encrypt_and_sign(
-                payload,
-                encrypt_key_id=encrypt_key_id,
-                sign_key_id=sign_key_id
-            )
-
-            # 3. Create and store EncryptedBlob
-            blob_id = uuid4()
-            # EncryptedEnvelope has recipients, ciphertext, nonce.
-            # EncryptedBlob has encapsulated_key, tag (AEAD).
-            # We need to bridge these.
+            sign_key_id = context.metadata.get("sign_key_id") or "platform-sign-key"
             
-            # RecipientInfo has kem_ciphertext and wrapped_dek.
-            # EncryptedBlob currently has encapsulated_key. 
-            # For simplicity, we'll use the first recipient's kem_ciphertext as encapsulated_key.
-            recipient = envelope.recipients[0]
+            # Explicitly check if signing/encryption is requested
+            should_encrypt = context.metadata.get("encrypt_artifacts", True)
+            should_sign = context.metadata.get("sign_results", True)
+
+            signature_bundle = None
+            if should_sign:
+                try:
+                    signature_bundle = self._crypto.sign_artifact(payload, sign_key_id)
+                except Exception as e:
+                    logger.warning(f"Failed to sign result with key {sign_key_id}: {e}")
+                    if context.metadata.get("require_compliance", False):
+                        raise
+
+            # 3. Encrypt if requested and key is available
+            artifact_id = None
+            if should_encrypt and encrypt_key_id:
+                envelope = self._crypto.encrypt_artifact(payload, encrypt_key_id)
+                
+                # Create and store EncryptedBlob
+                blob_id = uuid4()
+                recipient = envelope.recipients[0]
+                
+                blob = EncryptedBlob(
+                    id=blob_id,
+                    ciphertext=envelope.ciphertext,
+                    nonce=envelope.nonce,
+                    tag=envelope.ciphertext[-16:],
+                    encapsulated_key=recipient.kem_ciphertext or b"",
+                    kem_algorithm=envelope.metadata.kem_algorithm,
+                    symmetric_algorithm=envelope.metadata.aead_algorithm,
+                    key_id=encrypt_key_id,
+                    metadata={
+                        "job_id": str(context.workflow_id),
+                        "artifact_type": ArtifactType.RESULT.value,
+                        "envelope": envelope.to_dict()
+                    }
+                )
+                self._artifact_store.store_blob(blob)
+                artifact_id = blob_id
+            else:
+                # If not encrypting, we don't store in artifact store in this simplified flow
+                # but we still return the result value
+                pass
+
+            # 4. Return result bundle
+            res_bundle = {"value": result}
+            if artifact_id:
+                res_bundle["artifact_id"] = artifact_id
             
-            blob = EncryptedBlob(
-                id=blob_id,
-                ciphertext=envelope.ciphertext,
-                nonce=envelope.nonce,
-                tag=envelope.ciphertext[-16:], # Assuming tag is appended or handled by envelope
-                encapsulated_key=recipient.kem_ciphertext or b"",
-                kem_algorithm=envelope.metadata.kem_algorithm,
-                symmetric_algorithm=envelope.metadata.aead_algorithm,
-                key_id=encrypt_key_id,
-                metadata={
-                    "job_id": str(context.workflow_id),
-                    "artifact_type": ArtifactType.RESULT.value,
-                    "envelope": envelope.to_dict() # Store full envelope for easier reconstruction
-                }
-            )
-
-            self._artifact_store.store_blob(blob)
-
-            return {
-                "artifact_id": blob_id,
-                "signature": signature.signature, # bytes
-                "signature_bundle": signature.to_dict()
-            }
+            if signature_bundle:
+                res_bundle["signature"] = signature_bundle.signature
+                res_bundle["signature_bundle"] = signature_bundle.to_dict()
+                
+            return res_bundle
 
         except Exception as e:
             logger.exception(f"Failed to secure and store result: {e}")
