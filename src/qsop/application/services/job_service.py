@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 from qsop.domain.models.job import JobSpec, JobResult, JobStatus, AlgorithmSettings, BackendSettings
 from qsop.domain.models.problem import OptimizationProblem
 from qsop.domain.ports.job_store import JobStore
+from qsop.domain.ports.event_bus import EventBus, DomainEvent, EventTypes
 
 logger = logging.getLogger(__name__)
 
@@ -133,11 +134,13 @@ class JobService:
     def __init__(
         self,
         repository: JobStore,
+        event_bus: EventBus,
         validator: Optional[JobValidator] = None,
         preprocessor: Optional[JobPreprocessor] = None,
         aggregator: Optional[ResultAggregator] = None,
     ) -> None:
         self._repository = repository
+        self._event_bus = event_bus
         self._validator = validator or DefaultJobValidator()
         self._preprocessor = preprocessor or DefaultJobPreprocessor()
         self._aggregator = aggregator or DefaultResultAggregator()
@@ -180,6 +183,17 @@ class JobService:
         
         job_id = await self._repository.create_job(processed_spec)
         logger.info(f"Job {job_id} submitted successfully")
+        
+        # Publish JOB_CREATED event
+        await self._event_bus.publish(DomainEvent(
+            event_type=EventTypes.JOB_CREATED,
+            payload={
+                "job_id": str(job_id),
+                "tenant_id": tenant_id,
+                "algorithm": processed_spec.algorithm.algorithm_name,
+            },
+            metadata={"tenant_id": tenant_id}
+        ))
         
         return job_id
     
