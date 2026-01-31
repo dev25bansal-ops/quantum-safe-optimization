@@ -15,7 +15,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ...domain.models.problem import OptimizationProblem
-from ...domain.models.result import OptimizationResult, QuantumExecutionResult
+from ...domain.models.result import OptimizationResult, QuantumExecutionResult, ConvergenceInfo
 from ...domain.ports.quantum_backend import QuantumBackend
 from ..classical.base import OptimizationHistory
 from ...infrastructure.observability.metrics import get_metrics
@@ -54,6 +54,12 @@ class HybridVQEConfig:
     convergence_threshold: float = 1e-6
     spsa_a: float = 0.1  # SPSA parameters
     spsa_c: float = 0.1
+    shot_budget: int | None = None  # Total shots across all iterations
+
+    # Shot-Adaptive Strategies
+    adaptive_shots: bool = False
+    min_shots: int = 100
+    max_shots: int = 1024
 
 
 @dataclass
@@ -95,28 +101,45 @@ class HybridVQEOptimizer:
         
         history = OptimizationHistory()
         quantum_results: list[QuantumExecutionResult] = []
+        total_shots_used = 0
         iteration = 0
+        function_evals = 0
+        gradient_evals = 0
         
         metrics = get_metrics()
         tenant_id = context.get("tenant_id", "anonymous")
         job_id = context.get("job_id", "unknown")
         
+        def get_current_shots(iter_count: int) -> int:
+            if self.config.adaptive_shots:
+                progress = min(1.0, iter_count / self.config.max_iterations)
+                return int(
+                    self.config.min_shots + (self.config.max_shots - self.config.min_shots) * progress
+                )
+            return self.config.shots
+
         def energy_function(params: NDArray) -> float:
             """Compute energy expectation value."""
-            nonlocal iteration
+            nonlocal iteration, total_shots_used, function_evals
+            
+            current_shots = get_current_shots(iteration)
+
+            # Check shot budget
+            if self.config.shot_budget and (total_shots_used + current_shots) > self.config.shot_budget:
+                return float('inf')
             
             loop_start = time.time()
             circuit = self._build_ansatz(n_qubits, params)
             
-            # Measure in computational basis
-            # Quantum time is measured inside backend.run, but we want classical time too
             classical_start = time.time()
             result = self.backend.run(
                 circuit,
-                shots=self.config.shots,
+                shots=current_shots,
                 options=context.get("backend_options", {}),
             )
             quantum_end = time.time()
+            
+            total_shots_used += current_shots
             
             # Compute expectation value of Hamiltonian
             energy = self._compute_energy(result, problem)
@@ -131,10 +154,7 @@ class HybridVQEOptimizer:
                 job_id=job_id
             ).set(energy)
             
-            # Classical time is everything except quantum execution
-            # Wait, backend.run is synchronous here usually, but it might involve network
-            # We'll treat backend.run as quantum time for this simplified metric
-            quantum_time = result.get("metadata", {}).get("execution_time", quantum_end - classical_start)
+            quantum_time = result.execution_time_seconds if result.execution_time_seconds > 0 else (quantum_end - classical_start)
             classical_time = (energy_end - loop_start) - quantum_time
             
             metrics.classical_execution_time.labels(
@@ -150,55 +170,79 @@ class HybridVQEOptimizer:
             ).observe(energy_end - loop_start)
             
             quantum_results.append(QuantumExecutionResult(
-                counts=result.get("counts", {}),
-                shots=self.config.shots,
+                counts=result.counts,
+                shots=current_shots,
                 metadata={"params": params.tolist(), "iteration": iteration},
+                measurements=result.measurements,
             ))
             
             history.record(energy, params.tolist())
+            function_evals += 1
+            # We only increment iteration on full function calls that might be "major" steps
+            # though minimize calls this many times. To keep it simple, we increment here.
             iteration += 1
             
             return energy
         
         # Compute gradient if using gradient-based optimizer
-        gradient_func = None
-        if self.config.gradient_method == GradientMethod.PARAMETER_SHIFT:
-            gradient_func = lambda p: self._parameter_shift_gradient(
-                p, n_qubits, problem, context
-            )
-        elif self.config.gradient_method == GradientMethod.SPSA:
-            gradient_func = lambda p: self._spsa_gradient(
-                p, n_qubits, problem, context, iteration
-            )
-        
+        def gradient_wrapper(p: NDArray) -> NDArray:
+            nonlocal gradient_evals, total_shots_used
+            current_shots = get_current_shots(iteration)
+            
+            # Check shot budget
+            if self.config.shot_budget and (total_shots_used + current_shots) > self.config.shot_budget:
+                return np.zeros_like(p)
+            
+            if self.config.gradient_method == GradientMethod.PARAMETER_SHIFT:
+                grad = self._parameter_shift_gradient(p, n_qubits, problem, context, current_shots)
+                # Parameter shift uses 2 * n_params backend calls
+                total_shots_used += 2 * len(p) * (current_shots // 2)
+            elif self.config.gradient_method == GradientMethod.SPSA:
+                grad = self._spsa_gradient(p, n_qubits, problem, context, iteration, current_shots)
+                # SPSA uses 2 backend calls
+                total_shots_used += 2 * (current_shots // 2)
+            else:
+                grad = np.zeros_like(p)
+            
+            gradient_evals += 1
+            return grad
+
         # Run optimization
-        if gradient_func and self.config.optimizer in ["L-BFGS-B", "BFGS", "CG"]:
-            result = minimize(
-                energy_function,
-                initial_params,
-                method=self.config.optimizer,
-                jac=gradient_func,
-                options={"maxiter": self.config.max_iterations},
-            )
-        else:
-            result = minimize(
-                energy_function,
-                initial_params,
-                method=self.config.optimizer,
-                options={"maxiter": self.config.max_iterations},
-            )
+        start_time = time.time()
+        
+        minimize_kwargs = {
+            "fun": energy_function,
+            "x0": initial_params,
+            "method": self.config.optimizer,
+            "options": {"maxiter": self.config.max_iterations},
+        }
+        
+        if self.config.gradient_method != GradientMethod.FINITE_DIFFERENCE and self.config.optimizer in ["L-BFGS-B", "BFGS", "CG", "SLSQP"]:
+            minimize_kwargs["jac"] = gradient_wrapper
+            
+        result = minimize(**minimize_kwargs)
+        
+        wall_time = time.time() - start_time
         
         return OptimizationResult(
             optimal_value=float(result.fun),
-            optimal_parameters=result.x.tolist(),
-            iterations=iteration,
-            converged=result.success if hasattr(result, 'success') else True,
-            history=history.to_dict(),
+            optimal_parameters={f"p{i}": float(v) for i, v in enumerate(result.x)},
+            iterations=result.nit if hasattr(result, 'nit') else iteration,
+            function_evaluations=function_evals,
+            gradient_evaluations=gradient_evals,
+            convergence=ConvergenceInfo(
+                converged=result.success if hasattr(result, 'success') else True,
+                iterations_to_converge=iteration
+            ),
+            objective_history=tuple(history.fx_history),
+            wall_time_seconds=wall_time,
             metadata={
                 "algorithm": self.name,
                 "ansatz": self.config.ansatz_type.value,
                 "layers": self.config.ansatz_layers,
                 "n_qubits": n_qubits,
+                "total_shots": total_shots_used,
+                "variational_parameters": result.x.tolist(),
             },
         )
     
@@ -228,8 +272,9 @@ class HybridVQEOptimizer:
             # Single-qubit rotations
             for q in range(n_qubits):
                 if self.config.ansatz_type in [AnsatzType.RY, AnsatzType.HARDWARE_EFFICIENT]:
-                    qc.ry(params[param_idx], q)
-                    param_idx += 1
+                    if param_idx < len(params):
+                        qc.ry(params[param_idx], q)
+                        param_idx += 1
                 
                 if self.config.ansatz_type in [AnsatzType.RY_RZ, AnsatzType.HARDWARE_EFFICIENT]:
                     if param_idx < len(params):
@@ -244,9 +289,9 @@ class HybridVQEOptimizer:
         qc.measure_all()
         return qc
     
-    def _compute_energy(self, result: dict, problem: OptimizationProblem) -> float:
+    def _compute_energy(self, result: QuantumExecutionResult, problem: OptimizationProblem) -> float:
         """Compute energy expectation from measurements."""
-        counts = result.get("counts", {})
+        counts = result.counts
         total = sum(counts.values())
         
         energy = 0.0
@@ -264,6 +309,7 @@ class HybridVQEOptimizer:
         n_qubits: int,
         problem: OptimizationProblem,
         context: dict,
+        current_shots: int,
     ) -> NDArray:
         """Compute gradient using parameter shift rule."""
         gradient = np.zeros_like(params)
@@ -276,7 +322,7 @@ class HybridVQEOptimizer:
             circuit_plus = self._build_ansatz(n_qubits, params_plus)
             result_plus = self.backend.run(
                 circuit_plus,
-                shots=self.config.shots // 2,
+                shots=current_shots // 2,
                 options=context.get("backend_options", {}),
             )
             energy_plus = self._compute_energy(result_plus, problem)
@@ -287,7 +333,7 @@ class HybridVQEOptimizer:
             circuit_minus = self._build_ansatz(n_qubits, params_minus)
             result_minus = self.backend.run(
                 circuit_minus,
-                shots=self.config.shots // 2,
+                shots=current_shots // 2,
                 options=context.get("backend_options", {}),
             )
             energy_minus = self._compute_energy(result_minus, problem)
@@ -303,6 +349,7 @@ class HybridVQEOptimizer:
         problem: OptimizationProblem,
         context: dict,
         iteration: int,
+        current_shots: int,
     ) -> NDArray:
         """Compute gradient using SPSA."""
         # Decay parameters
@@ -317,7 +364,7 @@ class HybridVQEOptimizer:
         circuit_plus = self._build_ansatz(n_qubits, params_plus)
         result_plus = self.backend.run(
             circuit_plus,
-            shots=self.config.shots // 2,
+            shots=current_shots // 2,
             options=context.get("backend_options", {}),
         )
         energy_plus = self._compute_energy(result_plus, problem)
@@ -326,7 +373,7 @@ class HybridVQEOptimizer:
         circuit_minus = self._build_ansatz(n_qubits, params_minus)
         result_minus = self.backend.run(
             circuit_minus,
-            shots=self.config.shots // 2,
+            shots=current_shots // 2,
             options=context.get("backend_options", {}),
         )
         energy_minus = self._compute_energy(result_minus, problem)
@@ -357,7 +404,7 @@ class NoisyVQEOptimizer(HybridVQEOptimizer):
         self.backend = backend
         self.error_mitigation = error_mitigation
     
-    def _compute_energy(self, result: dict, problem: OptimizationProblem) -> float:
+    def _compute_energy(self, result: QuantumExecutionResult, problem: OptimizationProblem) -> float:
         """Compute energy with error mitigation."""
         energy = super()._compute_energy(result, problem)
         
@@ -376,7 +423,7 @@ class NoisyVQEOptimizer(HybridVQEOptimizer):
     def _measurement_error_mitigation(
         self,
         energy: float,
-        result: dict,
+        result: QuantumExecutionResult,
     ) -> float:
         """Apply measurement error mitigation."""
         # Simplified - would use calibration matrix
