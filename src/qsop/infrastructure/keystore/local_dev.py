@@ -132,6 +132,8 @@ class LocalDevKeyStore:
             status=KeyStatus(kd["status"]),
             created_at=datetime.fromisoformat(kd["created_at"]),
             expires_at=datetime.fromisoformat(kd["expires_at"]) if kd["expires_at"] else None,
+            rotated_from=kd.get("rotated_from") or kd.get("custom_data", {}).get("rotated_from"),
+            rotated_to=kd.get("rotated_to"),
             owner_id=kd.get("owner_id"),
             usage_count=kd.get("usage_count", 0),
             last_used_at=datetime.fromisoformat(kd["last_used_at"]) if kd.get("last_used_at") else None,
