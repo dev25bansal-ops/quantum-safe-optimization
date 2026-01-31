@@ -10,11 +10,15 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
 from qsop import __version__
 from qsop.settings import get_settings
+from qsop.infrastructure.observability.metrics import get_metrics
+from qsop.api.routers import create_api_router
+from qsop.api.middleware.authn import AuthenticationMiddleware
+from qsop.api.middleware.request_id import RequestIDMiddleware
 
 settings = get_settings()
 
@@ -41,17 +45,6 @@ structlog.configure(
 
 logger = structlog.get_logger()
 
-REQUEST_COUNT = Counter(
-    "qsop_http_requests_total",
-    "Total HTTP requests",
-    ["method", "endpoint", "status"],
-)
-REQUEST_LATENCY = Histogram(
-    "qsop_http_request_duration_seconds",
-    "HTTP request latency",
-    ["method", "endpoint"],
-)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -76,6 +69,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors.origins,
@@ -84,8 +78,13 @@ app.add_middleware(
     allow_headers=settings.cors.allow_headers,
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(
+    AuthenticationMiddleware,
+    jwt_secret=settings.secret_key.get_secret_value(),
+)
 
-
+# Metrics Middleware (must be after Auth to have tenant_id)
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
     """Collect request metrics."""
@@ -96,14 +95,19 @@ async def metrics_middleware(request: Request, call_next):
     duration = time.perf_counter() - start_time
 
     endpoint = request.url.path
-    REQUEST_COUNT.labels(
+    tenant_id = getattr(request.state, "tenant_id", "anonymous")
+    
+    metrics = get_metrics()
+    metrics.api_requests.labels(
         method=request.method,
         endpoint=endpoint,
-        status=response.status_code,
+        status_code=str(response.status_code),
+        tenant_id=tenant_id
     ).inc()
-    REQUEST_LATENCY.labels(
+    metrics.api_latency.labels(
         method=request.method,
         endpoint=endpoint,
+        tenant_id=tenant_id
     ).observe(duration)
 
     return response
@@ -114,9 +118,10 @@ async def logging_middleware(request: Request, call_next):
     """Structured request logging."""
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(
-        request_id=request.headers.get("x-request-id", ""),
+        request_id=getattr(request.state, "request_id", ""),
         method=request.method,
         path=request.url.path,
+        tenant_id=getattr(request.state, "tenant_id", "anonymous"),
     )
 
     response = await call_next(request)
@@ -128,6 +133,7 @@ async def logging_middleware(request: Request, call_next):
     return response
 
 
+# Exception handlers
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Global exception handler."""
@@ -136,6 +142,10 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "Internal server error"},
     )
+
+
+# Routers
+app.include_router(create_api_router(), prefix="/api/v1")
 
 
 @app.get("/health", tags=["Health"])

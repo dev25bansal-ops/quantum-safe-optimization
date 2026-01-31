@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable
 
+import time
 import numpy as np
 from numpy.typing import NDArray
 
@@ -17,6 +18,7 @@ from ...domain.models.result import OptimizationResult, QuantumExecutionResult
 from ...domain.ports.optimizer import Optimizer
 from ...domain.ports.quantum_backend import QuantumBackend
 from ..classical.base import OptimizationHistory
+from ...infrastructure.observability.metrics import get_metrics
 
 if TYPE_CHECKING:
     from ..quantum.qaoa import QAOACircuitBuilder
@@ -91,6 +93,10 @@ class HybridQAOAOptimizer:
         total_shots_used = 0
         iteration = 0
         
+        metrics = get_metrics()
+        tenant_id = context.get("tenant_id", "anonymous")
+        job_id = context.get("job_id", "unknown")
+        
         def cost_function(params: NDArray) -> float:
             """Evaluate cost using quantum circuit."""
             nonlocal total_shots_used, iteration
@@ -99,19 +105,47 @@ class HybridQAOAOptimizer:
             if self.config.shot_budget and total_shots_used >= self.config.shot_budget:
                 return float('inf')
             
+            loop_start = time.time()
             # Build and run circuit
             circuit = self._build_circuit(problem, params)
             
+            classical_start = time.time()
             result = self.backend.run(
                 circuit,
                 shots=self.config.shots,
                 options=context.get("backend_options", {}),
             )
+            quantum_end = time.time()
             
             total_shots_used += self.config.shots
             
             # Compute expectation value
             expectation = self._compute_expectation(result, problem)
+            
+            cost_end = time.time()
+            
+            # Metrics
+            metrics.hybrid_iteration_value.labels(
+                algorithm=self.name,
+                backend=self.backend.name if self.backend else "unknown",
+                tenant_id=tenant_id,
+                job_id=job_id
+            ).set(expectation)
+            
+            quantum_time = result.get("metadata", {}).get("execution_time", quantum_end - classical_start)
+            classical_time = (cost_end - loop_start) - quantum_time
+            
+            metrics.classical_execution_time.labels(
+                algorithm=self.name,
+                backend=self.backend.name if self.backend else "unknown",
+                tenant_id=tenant_id
+            ).observe(max(0, classical_time))
+            
+            metrics.hybrid_loop_duration.labels(
+                algorithm=self.name,
+                backend=self.backend.name if self.backend else "unknown",
+                tenant_id=tenant_id
+            ).observe(cost_end - loop_start)
             
             quantum_results.append(QuantumExecutionResult(
                 counts=result.get("counts", {}),
