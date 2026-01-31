@@ -15,10 +15,10 @@ class TestStatevectorSimulator:
     
     def test_capabilities(self, simulator):
         """Test simulator capabilities."""
-        caps = simulator.capabilities()
+        caps = simulator.capabilities
         
-        assert caps["max_qubits"] > 0
-        assert caps["supports_statevector"] is True
+        assert caps.num_qubits > 0
+        assert caps.simulator is True
     
     def test_simple_circuit(self, simulator):
         """Test running a simple circuit."""
@@ -30,11 +30,11 @@ class TestStatevectorSimulator:
         
         result = simulator.run(circuit, shots=1000)
         
-        assert result["success"] is True
-        assert "counts" in result
+        assert result.counts is not None
+        assert len(result.counts) <= 2
         
         # Should be roughly 50/50 distribution
-        counts = result["counts"]
+        counts = result.counts
         assert len(counts) <= 2
     
     def test_bell_state(self, simulator):
@@ -48,7 +48,7 @@ class TestStatevectorSimulator:
         
         result = simulator.run(circuit, shots=1000)
         
-        counts = result["counts"]
+        counts = result.counts
         # Bell state should only give 00 or 11
         for bitstring in counts:
             assert bitstring in ["00", "11"]
@@ -65,8 +65,7 @@ class TestStatevectorSimulator:
         
         result = simulator.run(circuit, shots=1000)
         
-        assert result["success"] is True
-        assert len(result["counts"]) > 0
+        assert len(result.counts) > 0
     
     def test_deterministic_seed(self, simulator):
         """Test that seeding gives reproducible results."""
@@ -77,10 +76,10 @@ class TestStatevectorSimulator:
             ("MEASURE", 1, []),
         ]
         
-        result1 = simulator.run(circuit, shots=100, options={"seed": 42})
-        result2 = simulator.run(circuit, shots=100, options={"seed": 42})
+        result1 = simulator.run(circuit, shots=100, seed=42)
+        result2 = simulator.run(circuit, shots=100, seed=42)
         
-        assert result1["counts"] == result2["counts"]
+        assert result1.counts == result2.counts
     
     def test_multi_qubit(self, simulator):
         """Test multi-qubit circuit."""
@@ -96,7 +95,7 @@ class TestStatevectorSimulator:
         result = simulator.run(circuit, shots=1000)
         
         # Should get roughly uniform distribution over 8 states
-        assert len(result["counts"]) > 4
+        assert len(result.counts) > 4
 
 
 class TestQAOACircuitGeneration:
