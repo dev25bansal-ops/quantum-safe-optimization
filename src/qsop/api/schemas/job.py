@@ -21,6 +21,8 @@ class JobStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+from .crypto import CryptoSettings
+
 class JobCreate(BaseModel):
     """Request body for creating a new job."""
 
@@ -37,6 +39,10 @@ class JobCreate(BaseModel):
     parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Algorithm-specific parameters",
+    )
+    crypto: CryptoSettings = Field(
+        default_factory=CryptoSettings,
+        description="Cryptographic settings for the job",
     )
     problem_data: dict[str, Any] = Field(
         ...,
