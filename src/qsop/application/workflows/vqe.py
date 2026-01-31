@@ -16,6 +16,8 @@ from numpy.typing import NDArray
 from ...domain.models.problem import OptimizationProblem
 from ...domain.models.result import OptimizationResult, ConvergenceInfo, QuantumExecutionResult
 from ...domain.ports.quantum_backend import QuantumBackend
+from ...domain.ports.transpilation import TranspilationService
+from ...backends.mitigation import ReadoutMitigatedBackend, ZNEMitigatedBackend
 
 
 class AnsatzType(str, Enum):
@@ -83,6 +85,9 @@ class VQEWorkflowConfig:
     optimizer: str = "COBYLA"
     max_iterations: int = 100
     grouping: bool = True  # Group commuting Pauli terms
+    enable_readout_mitigation: bool = False
+    enable_zne: bool = False
+    optimization_level: int = 1
 
 
 class VQEWorkflow:
@@ -97,9 +102,20 @@ class VQEWorkflow:
         self,
         config: VQEWorkflowConfig | None = None,
         backend: QuantumBackend | None = None,
+        transpiler: TranspilationService | None = None,
     ):
         self.config = config or VQEWorkflowConfig()
-        self.backend = backend
+        self.backend = self._apply_mitigation(backend) if backend else None
+        self.transpiler = transpiler
+
+    def _apply_mitigation(self, backend: QuantumBackend) -> QuantumBackend:
+        """Apply configured error mitigation to the backend."""
+        mitigated = backend
+        if self.config.enable_readout_mitigation:
+            mitigated = ReadoutMitigatedBackend(mitigated)
+        if self.config.enable_zne:
+            mitigated = ZNEMitigatedBackend(mitigated)
+        return mitigated
     
     def run(self, hamiltonian: Hamiltonian) -> OptimizationResult:
         """Execute VQE workflow."""
@@ -177,6 +193,14 @@ class VQEWorkflow:
             circuit = self._build_ansatz_circuit(hamiltonian.n_qubits, params)
             self._add_measurement_rotations(circuit, term.pauli_string)
             
+            # Hardware-aware transpilation
+            if self.transpiler and self.backend:
+                circuit = self.transpiler.transpile_for_backend(
+                    circuit,
+                    self.backend.capabilities,
+                    optimization_level=self.config.optimization_level
+                )
+            
             result = self.backend.run(circuit, shots=self.config.shots)
             expectation = self._compute_pauli_expectation(
                 result, term.pauli_string
@@ -199,6 +223,14 @@ class VQEWorkflow:
         for basis, terms in groups.items():
             circuit = self._build_ansatz_circuit(hamiltonian.n_qubits, params)
             self._add_measurement_rotations(circuit, basis)
+            
+            # Hardware-aware transpilation
+            if self.transpiler and self.backend:
+                circuit = self.transpiler.transpile_for_backend(
+                    circuit,
+                    self.backend.capabilities,
+                    optimization_level=self.config.optimization_level
+                )
             
             result = self.backend.run(circuit, shots=self.config.shots)
             
