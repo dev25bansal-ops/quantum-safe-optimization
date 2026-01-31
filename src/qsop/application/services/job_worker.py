@@ -11,7 +11,9 @@ import asyncio
 from qsop.domain.models.job import JobStatus, JobResult
 from qsop.domain.ports.event_bus import EventBus, DomainEvent, EventTypes
 from qsop.domain.ports.job_store import JobStore
+from qsop.domain.ports.artifact_store import ArtifactStore
 from .workflow_service import WorkflowService, WorkflowContext
+from .crypto_service import CryptoService
 from ..workflows.registry import WorkflowRegistry
 
 logger = logging.getLogger(__name__)
@@ -28,11 +30,15 @@ class JobWorker:
         job_store: JobStore,
         workflow_service: WorkflowService,
         registry: WorkflowRegistry,
+        crypto_service: Optional[CryptoService] = None,
+        artifact_store: Optional[ArtifactStore] = None,
     ):
         self._event_bus = event_bus
         self._job_store = job_store
         self._workflow_service = workflow_service
         self._registry = registry
+        self._crypto = crypto_service
+        self._artifact_store = artifact_store
         self._is_running = False
     
     async def start(self):
@@ -89,14 +95,19 @@ class JobWorker:
                 parameters=spec.algorithm.algorithm_params,
                 metadata={
                     "job_id": str(job_id),
-                    "backend": spec.backend.backend_name if spec.backend else "classical"
+                    "backend": spec.backend.backend_name if spec.backend else "classical",
+                    "encrypt_key_id": spec.crypto.key_id if spec.crypto else None,
+                    "sign_key_id": "platform-sign-key" # Default platform signing key for now
                 }
             )
             
             # 5. Execute workflow
             # Note: In a production system, this might be handled by a separate process or task queue.
             # Here we bridge it directly.
-            executor = executor_cls()
+            executor = executor_cls(
+                crypto_service=self._crypto,
+                artifact_store=self._artifact_store
+            )
             
             # We start the workflow and wait for completion
             # In start_workflow, it creates an internal task
@@ -107,16 +118,31 @@ class JobWorker:
             
             if result and result.success:
                 # 6. Update JobStore with success
-                # In a real system, we'd store the actual result artifact
+                # The executor result now contains artifact info if secured
+                res_val = result.value
+                artifact_id = None
+                signature = None
+                metadata = {"workflow_result": str(res_val)}
+                
+                if isinstance(res_val, dict):
+                    artifact_id = res_val.get("artifact_id")
+                    signature = res_val.get("signature")
+                    if "value" in res_val:
+                        metadata["workflow_result"] = str(res_val["value"])
+                    if "signature_bundle" in res_val:
+                        metadata["signature_bundle"] = res_val["signature_bundle"]
+                
                 job_result = JobResult(
                     job_id=job_id,
                     status=JobStatus.COMPLETED,
+                    result_artifact_id=artifact_id,
+                    signature=signature,
                     execution_time_seconds=result.execution_time_seconds,
-                    metadata={"workflow_result": str(result.value)}
+                    metadata=metadata
                 )
                 await self._job_store.update_result(job_id, job_result)
                 await self._job_store.update_status(job_id, JobStatus.COMPLETED)
-                logger.info(f"Job {job_id} completed successfully")
+                logger.info(f"Job {job_id} completed successfully with artifact {artifact_id}")
             else:
                 # 7. Update JobStore with failure
                 error_msg = result.error if result else "Unknown error"

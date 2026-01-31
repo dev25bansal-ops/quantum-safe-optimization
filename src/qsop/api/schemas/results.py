@@ -94,6 +94,12 @@ class JobResultsResponse(BaseModel):
     circuit_diagram_url: str | None = None
     results_file_url: str | None = None
     
+    # Security
+    result_artifact_id: UUID | None = None
+    signature: str | None = Field(None, description="Hex-encoded signature of the result")
+    is_verified: bool = False
+    is_encrypted: bool = True
+    
     # Reproducibility
     random_seed: int | None = None
     backend_version: str | None = None
