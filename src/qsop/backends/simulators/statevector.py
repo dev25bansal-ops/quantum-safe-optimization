@@ -6,11 +6,16 @@ A lightweight numpy-based simulator for testing and small circuits.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
+
+from qsop.domain.ports.quantum_backend import BackendCapabilities, QuantumBackend
+from qsop.domain.models.result import QuantumExecutionResult, MeasurementResult
 
 
 # Basic gate matrices
@@ -76,35 +81,47 @@ class StatevectorSimulator:
         default_factory=lambda: np.random.default_rng(),
         repr=False,
     )
+    _pending_jobs: dict[str, QuantumExecutionResult] = field(
+        default_factory=dict,
+        repr=False,
+    )
     
-    def capabilities(self) -> dict:
+    @property
+    def capabilities(self) -> BackendCapabilities:
         """Return backend capabilities."""
-        return {
-            "max_qubits": 20,  # Limited by memory
-            "max_shots": 100000,
-            "supports_statevector": True,
-            "supports_density_matrix": False,
-            "noise_model": False,
-            "gpu_acceleration": False,
-        }
+        return BackendCapabilities(
+            name=self.name,
+            num_qubits=20,
+            basis_gates=frozenset(["i", "x", "y", "z", "h", "s", "t", "rx", "ry", "rz", "u", "u3", "cx", "cz", "swap"]),
+            max_shots=100000,
+            simulator=True,
+            local=True,
+            metadata={
+                "supports_statevector": True,
+                "supports_density_matrix": False,
+                "gpu_acceleration": False,
+            }
+        )
     
-    def compile(self, circuit: Any, *, options: dict | None = None) -> Any:
+    def transpile(self, circuit: Any, optimization_level: int = 1, **options: Any) -> Any:
         """No compilation needed for this simulator."""
         return circuit
+    
+    def compile(self, circuit: Any, *, options: dict | None = None) -> Any:
+        """Legacy compilation method."""
+        return self.transpile(circuit)
     
     def run(
         self,
         circuit: Any,
-        *,
         shots: int = 1024,
-        options: dict | None = None,
-    ) -> dict:
+        **options: Any,
+    ) -> QuantumExecutionResult:
         """
         Run circuit and return measurement results.
         
         Supports Qiskit circuits or internal circuit format.
         """
-        options = options or {}
         seed = options.get("seed")
         if seed is not None:
             self._rng = np.random.default_rng(seed)
@@ -116,9 +133,10 @@ class StatevectorSimulator:
         # Internal format: list of (gate_name, qubits, params)
         return self._run_internal_circuit(circuit, shots)
     
-    def _run_qiskit_circuit(self, circuit: Any, shots: int) -> dict:
+    def _run_qiskit_circuit(self, circuit: Any, shots: int) -> QuantumExecutionResult:
         """Execute a Qiskit circuit."""
         n_qubits = circuit.num_qubits
+        start_time = datetime.utcnow()
         state = self._initialize_state(n_qubits)
         
         # Execute gates
@@ -131,19 +149,34 @@ class StatevectorSimulator:
         
         # Measure
         counts = self._measure(state, shots, n_qubits)
+        end_time = datetime.utcnow()
         
-        return {
-            "counts": counts,
-            "shots": shots,
-            "success": True,
-            "metadata": {"backend": self.name},
-        }
+        total_shots = sum(counts.values())
+        measurements = tuple(
+            MeasurementResult(
+                bitstring=bs,
+                count=cnt,
+                probability=cnt / total_shots if total_shots > 0 else 0.0
+            )
+            for bs, cnt in counts.items()
+        )
+        
+        return QuantumExecutionResult(
+            measurements=measurements,
+            counts=counts,
+            num_qubits=n_qubits,
+            shots=shots,
+            execution_time_seconds=(end_time - start_time).total_seconds(),
+            backend_name=self.name,
+            timestamp=start_time,
+            metadata={"backend": self.name}
+        )
     
     def _run_internal_circuit(
         self,
         circuit: list[tuple],
         shots: int,
-    ) -> dict:
+    ) -> QuantumExecutionResult:
         """Execute internal circuit format."""
         # Infer number of qubits
         n_qubits = 0
@@ -153,6 +186,7 @@ class StatevectorSimulator:
             else:
                 n_qubits = max(n_qubits, max(qubits) + 1)
         
+        start_time = datetime.utcnow()
         state = self._initialize_state(n_qubits)
         
         for gate_name, qubits, params in circuit:
@@ -161,13 +195,28 @@ class StatevectorSimulator:
             state = self._apply_gate(state, gate_name, qubits, params, n_qubits)
         
         counts = self._measure(state, shots, n_qubits)
+        end_time = datetime.utcnow()
         
-        return {
-            "counts": counts,
-            "shots": shots,
-            "success": True,
-            "metadata": {"backend": self.name},
-        }
+        total_shots = sum(counts.values())
+        measurements = tuple(
+            MeasurementResult(
+                bitstring=bs,
+                count=cnt,
+                probability=cnt / total_shots if total_shots > 0 else 0.0
+            )
+            for bs, cnt in counts.items()
+        )
+        
+        return QuantumExecutionResult(
+            measurements=measurements,
+            counts=counts,
+            num_qubits=n_qubits,
+            shots=shots,
+            execution_time_seconds=(end_time - start_time).total_seconds(),
+            backend_name=self.name,
+            timestamp=start_time,
+            metadata={"backend": self.name}
+        )
     
     def _initialize_state(self, n_qubits: int) -> NDArray:
         """Initialize |0...0> state."""
@@ -326,23 +375,34 @@ class StatevectorSimulator:
     def submit(
         self,
         circuit: Any,
-        *,
         shots: int = 1024,
-        options: dict | None = None,
+        **options: Any,
     ) -> str:
         """Submit for async execution."""
-        import uuid
         job_id = str(uuid.uuid4())
-        self._pending = getattr(self, "_pending", {})
-        self._pending[job_id] = self.run(circuit, shots=shots, options=options)
+        # For simulator, we run synchronously but store in pending
+        result = self.run(circuit, shots=shots, **options)
+        self._pending_jobs[job_id] = result
         return job_id
     
-    def get_result(self, job_id: str) -> dict:
+    def get_result(self, job_id: str) -> QuantumExecutionResult:
         """Get result of submitted job."""
-        pending = getattr(self, "_pending", {})
-        if job_id not in pending:
+        if job_id not in self._pending_jobs:
             raise ValueError(f"Job {job_id} not found")
-        return pending.pop(job_id)
+        return self._pending_jobs.pop(job_id)
+    
+    def get_job_status(self, job_id: str) -> str:
+        """Get status of a submitted job."""
+        if job_id in self._pending_jobs:
+            return "DONE"
+        return "NOT_FOUND"
+    
+    def cancel_job(self, job_id: str) -> bool:
+        """Cancel a submitted job."""
+        if job_id in self._pending_jobs:
+            self._pending_jobs.pop(job_id)
+            return True
+        return False
     
     def get_statevector(self, circuit: Any) -> NDArray:
         """Get final statevector without measurement."""

@@ -170,7 +170,7 @@ class TestEndToEndOptimization:
             result = simulator.run(circuit, shots=100)
             
             # Cost based on measurement
-            counts = result["counts"]
+            counts = result.counts
             prob_1 = counts.get("1", 0) / 100
             cost = problem.evaluate([prob_1 * 4 - 2])  # Map to [-2, 2]
             
