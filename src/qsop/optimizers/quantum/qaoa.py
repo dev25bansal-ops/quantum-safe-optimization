@@ -145,6 +145,43 @@ class QuantumBackend(Protocol):
         ...
 
 
+def build_qaoa_circuit(problem: Any, params: NDArray, p: int) -> QuantumCircuit:
+    """
+    Helper function to build a QAOA circuit for hybrid optimization.
+    
+    Args:
+        problem: Problem definition (OptimizationProblem or QAOAProblem).
+        params: Variational parameters [gammas, betas].
+        p: Number of layers.
+        
+    Returns:
+        Built and parameterized QuantumCircuit.
+    """
+    if hasattr(problem, "variables"):
+        n_qubits = len(problem.variables)
+    elif hasattr(problem, "num_qubits"):
+        n_qubits = problem.num_qubits
+    else:
+        n_qubits = len(params) // 2
+
+    circuit = QuantumCircuit(n_qubits, n_qubits)
+    circuit.h(range(n_qubits))
+    
+    gammas = params[:p]
+    betas = params[p:]
+    
+    for layer in range(p):
+        # Cost layer (simplified RZ for each qubit)
+        for i in range(n_qubits):
+            circuit.rz(2 * gammas[layer], i)
+        # Mixer layer
+        for i in range(n_qubits):
+            circuit.rx(2 * betas[layer], i)
+            
+    circuit.measure(range(n_qubits), range(n_qubits))
+    return circuit
+
+
 class QAOAOptimizer:
     """QAOA optimizer for combinatorial optimization problems.
     

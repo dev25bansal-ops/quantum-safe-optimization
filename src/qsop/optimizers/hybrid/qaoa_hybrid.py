@@ -35,6 +35,11 @@ class HybridQAOAConfig:
     shot_budget: int | None = None  # Total shots across all iterations
     param_bounds: tuple[float, float] = (0.0, 2 * np.pi)
 
+    # Shot-Adaptive Strategies
+    adaptive_shots: bool = False
+    min_shots: int = 100
+    max_shots: int = 1024
+
 
 @dataclass
 class HybridQAOAOptimizer:
@@ -101,8 +106,18 @@ class HybridQAOAOptimizer:
             """Evaluate cost using quantum circuit."""
             nonlocal total_shots_used, iteration
             
+            # Determine shot count for this iteration
+            if self.config.adaptive_shots:
+                # Progress-based shot adjustment (linear increase)
+                progress = min(1.0, iteration / self.config.max_iterations)
+                current_shots = int(
+                    self.config.min_shots + (self.config.max_shots - self.config.min_shots) * progress
+                )
+            else:
+                current_shots = self.config.shots
+
             # Check shot budget
-            if self.config.shot_budget and total_shots_used >= self.config.shot_budget:
+            if self.config.shot_budget and (total_shots_used + current_shots) > self.config.shot_budget:
                 return float('inf')
             
             loop_start = time.time()
@@ -112,12 +127,12 @@ class HybridQAOAOptimizer:
             classical_start = time.time()
             result = self.backend.run(
                 circuit,
-                shots=self.config.shots,
+                shots=current_shots,
                 options=context.get("backend_options", {}),
             )
             quantum_end = time.time()
             
-            total_shots_used += self.config.shots
+            total_shots_used += current_shots
             
             # Compute expectation value
             expectation = self._compute_expectation(result, problem)
@@ -132,7 +147,7 @@ class HybridQAOAOptimizer:
                 job_id=job_id
             ).set(expectation)
             
-            quantum_time = result.get("metadata", {}).get("execution_time", quantum_end - classical_start)
+            quantum_time = result.execution_time_seconds if result.execution_time_seconds > 0 else (quantum_end - classical_start)
             classical_time = (cost_end - loop_start) - quantum_time
             
             metrics.classical_execution_time.labels(
@@ -148,9 +163,10 @@ class HybridQAOAOptimizer:
             ).observe(cost_end - loop_start)
             
             quantum_results.append(QuantumExecutionResult(
-                counts=result.get("counts", {}),
-                shots=self.config.shots,
+                counts=result.counts,
+                shots=current_shots,
                 metadata={"params": params.tolist(), "iteration": iteration},
+                measurements=result.measurements, # Maintain measurements
             ))
             
             history.record(expectation, params.tolist())
@@ -171,15 +187,28 @@ class HybridQAOAOptimizer:
         # Extract best solution from measurement results
         best_solution = self._extract_best_solution(quantum_results, problem)
         
+        # Decode best_bitstring to optimal_parameters dict
+        optimal_params_dict = {}
+        if best_solution:
+            for i, var in enumerate(problem.variables):
+                if i < len(best_solution):
+                    optimal_params_dict[var.name] = float(best_solution[i])
+        
+        from ...domain.models.result import ConvergenceInfo
+        
         return OptimizationResult(
             optimal_value=float(result.fun),
-            optimal_parameters=result.x.tolist(),
+            optimal_parameters=optimal_params_dict,
             iterations=result.nit if hasattr(result, 'nit') else iteration,
-            converged=result.success if hasattr(result, 'success') else True,
-            history=history.to_dict(),
+            convergence=ConvergenceInfo(
+                converged=result.success if hasattr(result, 'success') else True,
+                iterations_to_converge=iteration
+            ),
+            objective_history=tuple(history.fx_history),
             metadata={
                 "algorithm": self.name,
                 "p_layers": self.config.p_layers,
+                "variational_parameters": result.x.tolist(),
                 "total_shots": total_shots_used,
                 "best_bitstring": best_solution,
                 "quantum_results_count": len(quantum_results),
@@ -196,11 +225,11 @@ class HybridQAOAOptimizer:
     
     def _compute_expectation(
         self,
-        result: dict,
+        result: QuantumExecutionResult,
         problem: OptimizationProblem,
     ) -> float:
         """Compute expectation value from measurement results."""
-        counts = result.get("counts", {})
+        counts = result.counts
         total = sum(counts.values())
         
         expectation = 0.0
