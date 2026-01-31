@@ -9,6 +9,8 @@ from uuid import UUID
 from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from qsop.domain.models.job import JobResult, JobSpec, JobStatus, AlgorithmSettings, BackendSettings, CryptoSettings
+from qsop.domain.models.problem import OptimizationProblem
 from .models import JobModel
 
 
@@ -18,6 +20,50 @@ class SQLAlchemyJobRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    def _to_domain_spec(self, model: JobModel) -> JobSpec:
+        """Map ORM model to domain JobSpec."""
+        return JobSpec(
+            id=model.id,
+            problem=OptimizationProblem(
+                problem_type=model.parameters.get("problem_type", "unknown"),
+                data=model.problem_data,
+            ),
+            algorithm=AlgorithmSettings(
+                algorithm_name=model.algorithm,
+                max_iterations=model.parameters.get("max_iterations", 100),
+                convergence_threshold=model.parameters.get("convergence_threshold", 1e-6),
+                algorithm_params=model.parameters,
+            ),
+            backend=BackendSettings(
+                backend_name=model.backend,
+            ) if model.backend else None,
+            priority=model.priority,
+            owner_id=model.tenant_id,
+            created_at=model.created_at,
+            metadata={
+                "name": model.name,
+                "callback_url": model.callback_url,
+                "progress": model.progress,
+            }
+        )
+
+    def _to_domain_result(self, model: JobModel) -> JobResult | None:
+        """Map ORM model to domain JobResult."""
+        if model.status != "completed" and model.status != "failed":
+            return None
+        
+        return JobResult(
+            job_id=model.id,
+            status=JobStatus(model.status),
+            error_message=model.error_message,
+            started_at=model.started_at,
+            completed_at=model.completed_at,
+            metadata={
+                "progress": model.progress,
+            }
+        )
+
+    # API Router compatibility methods
     async def create(
         self,
         tenant_id: str,
@@ -96,15 +142,45 @@ class SQLAlchemyJobRepository:
         
         return jobs, total
 
+    # JobStore Port Implementation
+    async def create_job(self, spec: JobSpec) -> UUID:
+        """Create a new job from a specification."""
+        job = await self.create(
+            tenant_id=spec.owner_id or "default",
+            algorithm=spec.algorithm.algorithm_name,
+            backend=spec.backend.backend_name if spec.backend else "simulator",
+            parameters=spec.algorithm.algorithm_params,
+            problem_data=spec.problem.data,
+            name=spec.metadata.get("name"),
+            priority=spec.priority,
+            callback_url=spec.metadata.get("callback_url"),
+        )
+        return job.id
+
+    async def get_spec(self, job_id: UUID) -> JobSpec:
+        """Retrieve a job specification."""
+        job = await self.get_by_id(job_id)
+        if not job:
+            raise ValueError(f"Job {job_id} not found")
+        return self._to_domain_spec(job)
+
+    async def get_status(self, job_id: UUID) -> JobStatus:
+        """Get the current status of a job."""
+        job = await self.get_by_id(job_id)
+        if not job:
+            raise ValueError(f"Job {job_id} not found")
+        return JobStatus(job.status)
+
     async def update_status(
         self,
         job_id: UUID,
-        status: str,
+        status: JobStatus | str,
         error_message: str | None = None,
         progress: float | None = None,
     ) -> JobModel | None:
         """Update job status."""
-        update_data: dict[str, Any] = {"status": status}
+        status_val = status.value if isinstance(status, JobStatus) else status
+        update_data: dict[str, Any] = {"status": status_val}
         
         if error_message is not None:
             update_data["error_message"] = error_message
@@ -113,9 +189,9 @@ class SQLAlchemyJobRepository:
         
         # Set timing fields based on status
         now = datetime.utcnow()
-        if status == "running":
+        if status_val == "running":
             update_data["started_at"] = now
-        elif status in ("completed", "failed", "cancelled"):
+        elif status_val in ("completed", "failed", "cancelled"):
             update_data["completed_at"] = now
         
         stmt = (
@@ -127,6 +203,100 @@ class SQLAlchemyJobRepository:
         result = await self.session.execute(stmt)
         await self.session.flush()
         return result.scalar_one_or_none()
+
+    async def store_result(self, result: JobResult) -> None:
+        """Store a job result."""
+        await self.update_status(
+            job_id=result.job_id,
+            status=result.status,
+            error_message=result.error_message,
+        )
+
+    async def get_result(self, job_id: UUID) -> JobResult | None:
+        """Retrieve a job result."""
+        job = await self.get_by_id(job_id)
+        if not job:
+            return None
+        return self._to_domain_result(job)
+
+    async def list_jobs(
+        self,
+        status: JobStatus | None = None,
+        owner_id: str | None = None,
+        tags: tuple[str, ...] | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[JobSpec]:
+        """List jobs matching the given criteria."""
+        stmt = select(JobModel).where(JobModel.deleted_at.is_(None))
+        
+        if status:
+            stmt = stmt.where(JobModel.status == status.value)
+        if owner_id:
+            stmt = stmt.where(JobModel.tenant_id == owner_id)
+        if created_after:
+            stmt = stmt.where(JobModel.created_at >= created_after)
+        if created_before:
+            stmt = stmt.where(JobModel.created_at < created_before)
+            
+        stmt = stmt.order_by(JobModel.created_at.desc()).limit(limit).offset(offset)
+        result = await self.session.execute(stmt)
+        return [self._to_domain_spec(row) for row in result.scalars().all()]
+
+    async def count_jobs(
+        self,
+        status: JobStatus | None = None,
+        owner_id: str | None = None,
+    ) -> int:
+        """Count jobs matching criteria."""
+        stmt = select(func.count()).select_from(JobModel).where(JobModel.deleted_at.is_(None))
+        if status:
+            stmt = stmt.where(JobModel.status == status.value)
+        if owner_id:
+            stmt = stmt.where(JobModel.tenant_id == owner_id)
+        
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
+    async def delete_job(self, job_id: UUID) -> None:
+        """Delete a job and its associated data."""
+        stmt = update(JobModel).where(JobModel.id == job_id).values(deleted_at=datetime.utcnow())
+        await self.session.execute(stmt)
+        await self.session.flush()
+
+    async def get_next_pending(self, priority_order: bool = True) -> JobSpec | None:
+        """Get the next pending job for execution."""
+        stmt = select(JobModel).where(
+            JobModel.status == "pending",
+            JobModel.deleted_at.is_(None),
+        )
+        if priority_order:
+            stmt = stmt.order_by(JobModel.priority.desc(), JobModel.created_at.asc())
+        else:
+            stmt = stmt.order_by(JobModel.created_at.asc())
+        
+        stmt = stmt.limit(1)
+        result = await self.session.execute(stmt)
+        job = result.scalar_one_or_none()
+        return self._to_domain_spec(job) if job else None
+
+    async def mark_started(self, job_id: UUID) -> datetime:
+        """Mark a job as started."""
+        now = datetime.utcnow()
+        await self.update_status(job_id, JobStatus.RUNNING, progress=0.0)
+        return now
+
+    async def mark_completed(
+        self,
+        job_id: UUID,
+        result_artifact_id: UUID | None = None,
+    ) -> datetime:
+        """Mark a job as completed."""
+        now = datetime.utcnow()
+        await self.update_status(job_id, JobStatus.COMPLETED, progress=100.0)
+        return now
 
     async def update_progress(
         self,

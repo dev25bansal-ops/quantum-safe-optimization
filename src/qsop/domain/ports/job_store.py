@@ -21,7 +21,7 @@ class JobStore(Protocol):
     and results.
     """
 
-    def create_job(self, spec: JobSpec) -> UUID:
+    async def create_job(self, spec: JobSpec) -> UUID:
         """
         Create a new job from a specification.
 
@@ -36,7 +36,7 @@ class JobStore(Protocol):
         """
         ...
 
-    def get_spec(self, job_id: UUID) -> JobSpec:
+    async def get_spec(self, job_id: UUID) -> JobSpec:
         """
         Retrieve a job specification.
 
@@ -51,7 +51,7 @@ class JobStore(Protocol):
         """
         ...
 
-    def get_status(self, job_id: UUID) -> JobStatus:
+    async def get_status(self, job_id: UUID) -> JobStatus:
         """
         Get the current status of a job.
 
@@ -66,7 +66,7 @@ class JobStore(Protocol):
         """
         ...
 
-    def update_status(
+    async def update_status(
         self,
         job_id: UUID,
         status: JobStatus,
@@ -85,7 +85,7 @@ class JobStore(Protocol):
         """
         ...
 
-    def store_result(self, result: JobResult) -> None:
+    async def store_result(self, result: JobResult) -> None:
         """
         Store a job result.
 
@@ -97,7 +97,7 @@ class JobStore(Protocol):
         """
         ...
 
-    def get_result(self, job_id: UUID) -> JobResult | None:
+    async def get_result(self, job_id: UUID) -> JobResult | None:
         """
         Retrieve a job result.
 
@@ -112,7 +112,7 @@ class JobStore(Protocol):
         """
         ...
 
-    def list_jobs(
+    async def list_jobs(
         self,
         status: JobStatus | None = None,
         owner_id: str | None = None,
@@ -142,7 +142,7 @@ class JobStore(Protocol):
         """
         ...
 
-    def count_jobs(
+    async def count_jobs(
         self,
         status: JobStatus | None = None,
         owner_id: str | None = None,
@@ -162,7 +162,7 @@ class JobStore(Protocol):
         """
         ...
 
-    def delete_job(self, job_id: UUID) -> None:
+    async def delete_job(self, job_id: UUID) -> None:
         """
         Delete a job and its associated data.
 
@@ -174,7 +174,7 @@ class JobStore(Protocol):
         """
         ...
 
-    def get_next_pending(self, priority_order: bool = True) -> JobSpec | None:
+    async def get_next_pending(self, priority_order: bool = True) -> JobSpec | None:
         """
         Get the next pending job for execution.
 
@@ -189,7 +189,7 @@ class JobStore(Protocol):
         """
         ...
 
-    def mark_started(self, job_id: UUID) -> datetime:
+    async def mark_started(self, job_id: UUID) -> datetime:
         """
         Mark a job as started.
 
@@ -206,7 +206,7 @@ class JobStore(Protocol):
         """
         ...
 
-    def mark_completed(
+    async def mark_completed(
         self,
         job_id: UUID,
         result_artifact_id: UUID | None = None,
