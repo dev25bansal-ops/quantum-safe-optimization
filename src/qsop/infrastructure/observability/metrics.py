@@ -43,6 +43,13 @@ class MetricsRegistry:
     api_requests: Counter = field(init=False)
     api_latency: Histogram = field(init=False)
     
+    # Workflow metrics
+    workflows_started: Counter = field(init=False)
+    workflows_completed: Counter = field(init=False)
+    workflow_duration: Histogram = field(init=False)
+    workflow_step_duration: Histogram = field(init=False)
+    workflow_steps_total: Counter = field(init=False)
+    
     def __post_init__(self) -> None:
         """Initialize all metrics."""
         # Job metrics
@@ -129,6 +136,39 @@ class MetricsRegistry:
             "API request latency",
             ["method", "endpoint"],
             buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+        )
+        
+        # Workflow metrics
+        self.workflows_started = Counter(
+            f"{self.prefix}_workflows_started_total",
+            "Total workflows started",
+            ["definition_id", "name"],
+        )
+        
+        self.workflows_completed = Counter(
+            f"{self.prefix}_workflows_completed_total",
+            "Total workflows completed",
+            ["definition_id", "name", "status"],
+        )
+        
+        self.workflow_duration = Histogram(
+            f"{self.prefix}_workflow_duration_seconds",
+            "Workflow execution duration",
+            ["definition_id", "name", "status"],
+            buckets=[1, 5, 10, 30, 60, 120, 300, 600, 1800, 3600],
+        )
+        
+        self.workflow_step_duration = Histogram(
+            f"{self.prefix}_workflow_step_duration_seconds",
+            "Workflow step duration",
+            ["definition_id", "step_id", "status"],
+            buckets=[0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300],
+        )
+        
+        self.workflow_steps_total = Counter(
+            f"{self.prefix}_workflow_steps_total",
+            "Total workflow steps executed",
+            ["definition_id", "step_id", "status"],
         )
 
 
