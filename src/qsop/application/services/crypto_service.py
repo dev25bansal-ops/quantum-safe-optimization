@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ...domain.ports.keystore import KeyStore, KeyType, KeyStatus
 from ...crypto.envelopes.envelope import (
     EnvelopeEncryptor,
     EnvelopeDecryptor,
@@ -37,7 +38,6 @@ class KeyMaterial:
     algorithm: str = ""
 
 
-@dataclass
 class CryptoService:
     """
     Service for cryptographic operations on optimization artifacts.
@@ -46,9 +46,9 @@ class CryptoService:
     digital signatures using post-quantum signature schemes.
     """
     
-    policy: CryptoPolicy = field(default_factory=CryptoPolicy)
-    _kem_keys: dict[str, KeyMaterial] = field(default_factory=dict)
-    _sig_keys: dict[str, KeyMaterial] = field(default_factory=dict)
+    def __init__(self, keystore: KeyStore, policy: CryptoPolicy | None = None):
+        self.keystore = keystore
+        self.policy = policy or CryptoPolicy()
     
     def generate_kem_keypair(self, key_id: str) -> KeyMaterial:
         """Generate a new KEM keypair for encryption."""
@@ -57,29 +57,39 @@ class CryptoService:
         kem = get_kem(self.policy.kem_algorithm)
         public_key, private_key = kem.keygen()
         
-        key_material = KeyMaterial(
+        actual_key_id = self.keystore.store_key(
+            key_type=KeyType.KEM,
+            algorithm=self.policy.kem_algorithm.value,
+            public_key=public_key,
+            secret_key=private_key,
             key_id=key_id,
+        )
+        
+        return KeyMaterial(
+            key_id=actual_key_id,
             public_key=public_key,
             private_key=private_key,
             algorithm=self.policy.kem_algorithm.value,
         )
-        
-        self._kem_keys[key_id] = key_material
-        return key_material
     
     def generate_signing_keypair(self, key_id: str) -> KeyMaterial:
         """Generate a new signing keypair."""
         public_key, private_key = generate_keypair(self.policy.signature_algorithm)
         
-        key_material = KeyMaterial(
+        actual_key_id = self.keystore.store_key(
+            key_type=KeyType.SIGNATURE,
+            algorithm=self.policy.signature_algorithm.value,
+            public_key=public_key,
+            secret_key=private_key,
             key_id=key_id,
+        )
+        
+        return KeyMaterial(
+            key_id=actual_key_id,
             public_key=public_key,
             private_key=private_key,
             algorithm=self.policy.signature_algorithm.value,
         )
-        
-        self._sig_keys[key_id] = key_material
-        return key_material
     
     def encrypt_artifact(
         self,
@@ -98,16 +108,14 @@ class CryptoService:
         Returns:
             Encrypted envelope containing the ciphertext
         """
-        key_material = self._kem_keys.get(recipient_key_id)
-        if key_material is None:
-            raise ValueError(f"Unknown key ID: {recipient_key_id}")
+        public_key = self.keystore.get_public_key(recipient_key_id)
         
         encryptor = EnvelopeEncryptor(
             kem_algorithm=self.policy.kem_algorithm,
         )
         
         recipient = RecipientInfo(
-            public_key=key_material.public_key,
+            public_key=public_key,
             key_id=recipient_key_id,
         )
         
@@ -128,15 +136,13 @@ class CryptoService:
         Returns:
             Decrypted plaintext
         """
-        key_material = self._kem_keys.get(key_id)
-        if key_material is None or key_material.private_key is None:
-            raise ValueError(f"Private key not available for: {key_id}")
+        private_key = self.keystore.get_secret_key(key_id)
         
         decryptor = EnvelopeDecryptor()
         
         return decryptor.decrypt(
             envelope,
-            secret_key=key_material.private_key,
+            secret_key=private_key,
             key_id=key_id,
         )
     
@@ -155,13 +161,11 @@ class CryptoService:
         Returns:
             Signature bundle
         """
-        key_material = self._sig_keys.get(key_id)
-        if key_material is None or key_material.private_key is None:
-            raise ValueError(f"Signing key not available for: {key_id}")
+        private_key = self.keystore.get_secret_key(key_id)
         
         signer = Signer(
             algorithm=self.policy.signature_algorithm,
-            private_key=key_material.private_key,
+            private_key=private_key,
             key_id=key_id,
         )
         
@@ -182,13 +186,14 @@ class CryptoService:
         Returns:
             True if signature is valid
         """
-        key_material = self._sig_keys.get(bundle.key_id)
-        if key_material is None:
+        try:
+            public_key = self.keystore.get_public_key(bundle.key_id)
+        except Exception:
             return False
         
         verifier = Verifier(
             algorithm=bundle.algorithm,
-            public_key=key_material.public_key,
+            public_key=public_key,
         )
         
         return verifier.verify(data, bundle)
@@ -253,18 +258,15 @@ class CryptoService:
         algorithm: str,
     ) -> None:
         """Register an external public key."""
-        key_material = KeyMaterial(
-            key_id=key_id,
-            public_key=public_key,
-            algorithm=algorithm,
-        )
+        ktype = KeyType.KEM if key_type == "kem" else KeyType.SIGNATURE
         
-        if key_type == "kem":
-            self._kem_keys[key_id] = key_material
-        elif key_type == "signature":
-            self._sig_keys[key_id] = key_material
-        else:
-            raise ValueError(f"Unknown key type: {key_type}")
+        self.keystore.store_key(
+            key_type=ktype,
+            algorithm=algorithm,
+            public_key=public_key,
+            secret_key=b"",  # No secret key for external public keys
+            key_id=key_id,
+        )
 
 
 class SecureJobHandler:
