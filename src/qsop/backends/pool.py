@@ -41,12 +41,47 @@ class BackendPool:
         """Retrieve a backend by name."""
         return self._backends.get(name)
         
-    def list_backends(self, only_online: bool = False) -> List[QuantumBackend]:
-        """List all registered backends."""
+    def list_backends(
+        self, 
+        only_online: bool = False,
+        simulator: Optional[bool] = None,
+        local: Optional[bool] = None,
+        min_qubits: Optional[int] = None
+    ) -> List[QuantumBackend]:
+        """
+        List registered backends with optional filtering.
+        """
         backends = list(self._backends.values())
+        
         if only_online:
-            return [b for b in backends if b.capabilities.online]
+            backends = [b for b in backends if b.capabilities.online]
+        if simulator is not None:
+            backends = [b for b in backends if b.capabilities.simulator == simulator]
+        if local is not None:
+            backends = [b for b in backends if b.capabilities.local == local]
+        if min_qubits is not None:
+            backends = [b for b in backends if b.capabilities.num_qubits >= min_qubits]
+            
         return backends
+        
+    def get_backends_by_capability(self, **criteria: Any) -> List[QuantumBackend]:
+        """
+        Find backends matching specific capability criteria.
+        
+        Example:
+            pool.get_backends_by_capability(num_qubits=5, simulator=False)
+        """
+        matches = []
+        for backend in self._backends.values():
+            caps = backend.capabilities
+            is_match = True
+            for key, value in criteria.items():
+                if not hasattr(caps, key) or getattr(caps, key) != value:
+                    is_match = False
+                    break
+            if is_match:
+                matches.append(backend)
+        return matches
         
     def __len__(self) -> int:
         return len(self._backends)
