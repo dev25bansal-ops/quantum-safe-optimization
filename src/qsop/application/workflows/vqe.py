@@ -14,7 +14,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ...domain.models.problem import OptimizationProblem
-from ...domain.models.result import OptimizationResult
+from ...domain.models.result import OptimizationResult, ConvergenceInfo, QuantumExecutionResult
 from ...domain.ports.quantum_backend import QuantumBackend
 
 
@@ -126,14 +126,18 @@ class VQEWorkflow:
         
         return OptimizationResult(
             optimal_value=float(result.fun),
-            optimal_parameters=result.x.tolist(),
-            iterations=len(history),
-            converged=result.success if hasattr(result, 'success') else True,
-            history={'energies': [h['energy'] for h in history]},
+            optimal_parameters={f"θ_{i}": val for i, val in enumerate(result.x)},
+            iterations=result.nit if hasattr(result, "nit") else len(history),
+            function_evaluations=result.nfev if hasattr(result, "nfev") else 0,
+            convergence=ConvergenceInfo(
+                converged=result.success if hasattr(result, "success") else True,
+                reason=result.message if hasattr(result, "message") else "",
+            ),
+            objective_history=tuple(h["energy"] for h in history),
             metadata={
-                'algorithm': 'vqe',
-                'ansatz': self.config.ansatz_type.value,
-                'layers': self.config.ansatz_layers,
+                "algorithm": "vqe",
+                "ansatz": self.config.ansatz_type.value,
+                "layers": self.config.ansatz_layers,
             },
         )
     
@@ -271,12 +275,12 @@ class VQEWorkflow:
     
     def _compute_pauli_expectation(
         self,
-        result: dict,
+        result: QuantumExecutionResult,
         pauli_string: str,
     ) -> float:
         """Compute Pauli expectation from measurement results."""
-        counts = result.get('counts', {})
-        total = sum(counts.values())
+        counts = result.counts
+        total = result.total_counts
         
         expectation = 0.0
         for bitstring, count in counts.items():
@@ -284,7 +288,9 @@ class VQEWorkflow:
             parity = 1
             for i, pauli in enumerate(pauli_string):
                 if pauli != 'I':
-                    if bitstring[i] == '1':
+                    # Qiskit uses little-endian for bitstrings (q0 is rightmost)
+                    # We need to check the bit corresponding to qubit i
+                    if bitstring[::-1][i] == '1':
                         parity *= -1
             
             expectation += parity * count / total

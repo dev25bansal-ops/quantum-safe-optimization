@@ -13,7 +13,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ...domain.models.problem import OptimizationProblem
-from ...domain.models.result import OptimizationResult
+from ...domain.models.result import (
+    OptimizationResult,
+    ConvergenceInfo,
+    QuantumExecutionResult,
+)
 from ...domain.ports.quantum_backend import QuantumBackend
 from .hybrid_loop import HybridOptimizationLoop, HybridLoopConfig
 
@@ -89,11 +93,13 @@ class QAOAWorkflow:
         initial_params = self._initialize_params()
         
         history = []
+        self._last_result = None
         
         def cost_function(params: NDArray) -> float:
             """Evaluate QAOA cost."""
             circuit = self._build_qaoa_circuit(problem, params, n_qubits)
             result = self.backend.run(circuit, shots=self.config.shots)
+            self._last_result = result
             
             cost = self._compute_expectation(result, problem)
             history.append({'params': params.tolist(), 'cost': cost})
@@ -113,16 +119,28 @@ class QAOAWorkflow:
         
         return OptimizationResult(
             optimal_value=float(result.fun),
-            optimal_parameters=result.x.tolist(),
-            iterations=len(history),
-            converged=result.success if hasattr(result, 'success') else True,
-            history={'costs': [h['cost'] for h in history]},
+            optimal_parameters=self._format_params(result.x),
+            iterations=result.nit if hasattr(result, "nit") else len(history),
+            function_evaluations=result.nfev if hasattr(result, "nfev") else 0,
+            convergence=ConvergenceInfo(
+                converged=result.success if hasattr(result, "success") else True,
+                reason=result.message if hasattr(result, "message") else "",
+            ),
+            objective_history=tuple(h["cost"] for h in history),
             metadata={
                 'algorithm': 'qaoa',
                 'p_layers': self.config.p_layers,
                 'best_bitstring': best_bitstring,
             },
         )
+    
+    def _format_params(self, params: NDArray) -> dict[str, float]:
+        """Format QAOA parameters into a dictionary."""
+        formatted = {}
+        for p in range(self.config.p_layers):
+            formatted[f"γ_{p}"] = float(params[2 * p])
+            formatted[f"β_{p}"] = float(params[2 * p + 1])
+        return formatted
     
     def _initialize_params(self) -> NDArray:
         """Initialize QAOA parameters."""
@@ -202,16 +220,17 @@ class QAOAWorkflow:
     
     def _compute_expectation(
         self,
-        result: dict,
+        result: QuantumExecutionResult,
         problem: OptimizationProblem,
     ) -> float:
         """Compute cost expectation from measurements."""
-        counts = result.get('counts', {})
-        total = sum(counts.values())
+        counts = result.counts
+        total = result.total_counts
         
         expectation = 0.0
         for bitstring, count in counts.items():
-            solution = [int(b) for b in bitstring]
+            # Qiskit uses little-endian for bitstrings
+            solution = [int(b) for b in bitstring[::-1]]
             cost = problem.evaluate(solution)
             expectation += cost * count / total
         
@@ -219,8 +238,21 @@ class QAOAWorkflow:
     
     def _extract_best(self, problem: OptimizationProblem) -> str:
         """Extract best solution found."""
-        # Would track best from measurements
-        return ""
+        if self._last_result is None:
+            return ""
+        
+        best_bitstring = ""
+        min_cost = float('inf')
+        
+        for bitstring, count in self._last_result.counts.items():
+            # Qiskit uses little-endian for bitstrings
+            solution = [int(b) for b in bitstring[::-1]]
+            cost = problem.evaluate(solution)
+            if cost < min_cost:
+                min_cost = cost
+                best_bitstring = bitstring
+        
+        return best_bitstring
 
 
 def solve_maxcut(
