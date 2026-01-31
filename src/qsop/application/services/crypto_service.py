@@ -18,6 +18,8 @@ from ...crypto.envelopes.envelope import (
 )
 from ...crypto.signing.signatures import Signer, Verifier, SignatureBundle, generate_keypair
 from ...crypto.pqc import KEMAlgorithm, SignatureAlgorithm
+from ...security.audit import AuditLogger
+from ...security.compliance import ComplianceChecker, CompliancePolicy
 
 
 @dataclass
@@ -46,9 +48,38 @@ class CryptoService:
     digital signatures using post-quantum signature schemes.
     """
     
-    def __init__(self, keystore: KeyStore, policy: CryptoPolicy | None = None):
+    def __init__(
+        self,
+        keystore: KeyStore,
+        policy: CryptoPolicy | None = None,
+        audit_logger: AuditLogger | None = None,
+        compliance_policy: CompliancePolicy | None = None,
+    ):
         self.keystore = keystore
         self.policy = policy or CryptoPolicy()
+        self.audit_logger = audit_logger
+        self.compliance_policy = compliance_policy or CompliancePolicy.nist_l3()
+        
+        # Verify compliance of the current crypto policy
+        self._verify_compliance()
+    
+    def _verify_compliance(self) -> None:
+        """Verify that the current crypto policy meets compliance requirements."""
+        checker = ComplianceChecker(self.compliance_policy)
+        
+        result = checker.check_operation(
+            operation="initialize",
+            kem_algorithm=self.policy.kem_algorithm,
+            signature_algorithm=self.policy.signature_algorithm,
+        )
+        
+        if not result.compliant:
+            if self.audit_logger:
+                self.audit_logger.log_compliance_violation(
+                    violation_type="POLICY_INCOMPATIBLE",
+                    description=f"Crypto policy does not meet compliance requirements: {'; '.join(result.issues)}",
+                )
+            result.raise_if_non_compliant()
     
     def generate_kem_keypair(self, key_id: str) -> KeyMaterial:
         """Generate a new KEM keypair for encryption."""
@@ -96,6 +127,7 @@ class CryptoService:
         data: bytes,
         recipient_key_id: str,
         aad: bytes | None = None,
+        actor_id: str = "system",
     ) -> EncryptedEnvelope:
         """
         Encrypt an artifact using envelope encryption.
@@ -104,27 +136,51 @@ class CryptoService:
             data: The plaintext data to encrypt
             recipient_key_id: ID of the recipient's KEM public key
             aad: Additional authenticated data
+            actor_id: ID of the actor performing the operation
             
         Returns:
             Encrypted envelope containing the ciphertext
         """
-        public_key = self.keystore.get_public_key(recipient_key_id)
-        
-        encryptor = EnvelopeEncryptor(
-            kem_algorithm=self.policy.kem_algorithm,
-        )
-        
-        recipient = RecipientInfo(
-            public_key=public_key,
-            key_id=recipient_key_id,
-        )
-        
-        return encryptor.encrypt(data, recipients=[recipient])
-    
+        try:
+            public_key = self.keystore.get_public_key(recipient_key_id)
+            
+            encryptor = EnvelopeEncryptor(
+                kem_algorithm=self.policy.kem_algorithm,
+            )
+            
+            recipient = RecipientInfo(
+                public_key=public_key,
+                key_id=recipient_key_id,
+            )
+            
+            envelope = encryptor.encrypt(data, recipients=[recipient])
+            
+            if self.audit_logger:
+                self.audit_logger.log_crypto_operation(
+                    operation="encapsulate",
+                    actor_id=actor_id,
+                    key_id=recipient_key_id,
+                    success=True,
+                    details={"algorithm": self.policy.kem_algorithm.value},
+                )
+            
+            return envelope
+        except Exception as e:
+            if self.audit_logger:
+                self.audit_logger.log_crypto_operation(
+                    operation="encapsulate",
+                    actor_id=actor_id,
+                    key_id=recipient_key_id,
+                    success=False,
+                    details={"error": str(e)},
+                )
+            raise
+
     def decrypt_artifact(
         self,
         envelope: EncryptedEnvelope,
         key_id: str,
+        actor_id: str = "system",
     ) -> bytes:
         """
         Decrypt an artifact.
@@ -132,24 +188,47 @@ class CryptoService:
         Args:
             envelope: The encrypted envelope
             key_id: ID of the decryption key
+            actor_id: ID of the actor performing the operation
             
         Returns:
             Decrypted plaintext
         """
-        private_key = self.keystore.get_secret_key(key_id)
-        
-        decryptor = EnvelopeDecryptor()
-        
-        return decryptor.decrypt(
-            envelope,
-            secret_key=private_key,
-            key_id=key_id,
-        )
-    
+        try:
+            private_key = self.keystore.get_secret_key(key_id)
+            
+            decryptor = EnvelopeDecryptor()
+            
+            plaintext = decryptor.decrypt(
+                envelope,
+                secret_key=private_key,
+                key_id=key_id,
+            )
+            
+            if self.audit_logger:
+                self.audit_logger.log_crypto_operation(
+                    operation="decapsulate",
+                    actor_id=actor_id,
+                    key_id=key_id,
+                    success=True,
+                )
+            
+            return plaintext
+        except Exception as e:
+            if self.audit_logger:
+                self.audit_logger.log_crypto_operation(
+                    operation="decapsulate",
+                    actor_id=actor_id,
+                    key_id=key_id,
+                    success=False,
+                    details={"error": str(e)},
+                )
+            raise
+
     def sign_artifact(
         self,
         data: Any,
         key_id: str,
+        actor_id: str = "system",
     ) -> SignatureBundle:
         """
         Sign an artifact.
@@ -157,24 +236,48 @@ class CryptoService:
         Args:
             data: Data to sign (will be canonicalized)
             key_id: ID of the signing key
+            actor_id: ID of the actor performing the operation
             
         Returns:
             Signature bundle
         """
-        private_key = self.keystore.get_secret_key(key_id)
-        
-        signer = Signer(
-            algorithm=self.policy.signature_algorithm,
-            private_key=private_key,
-            key_id=key_id,
-        )
-        
-        return signer.sign(data)
-    
+        try:
+            private_key = self.keystore.get_secret_key(key_id)
+            
+            signer = Signer(
+                algorithm=self.policy.signature_algorithm,
+                private_key=private_key,
+                key_id=key_id,
+            )
+            
+            bundle = signer.sign(data)
+            
+            if self.audit_logger:
+                self.audit_logger.log_crypto_operation(
+                    operation="sign",
+                    actor_id=actor_id,
+                    key_id=key_id,
+                    success=True,
+                    details={"algorithm": self.policy.signature_algorithm.value},
+                )
+            
+            return bundle
+        except Exception as e:
+            if self.audit_logger:
+                self.audit_logger.log_crypto_operation(
+                    operation="sign",
+                    actor_id=actor_id,
+                    key_id=key_id,
+                    success=False,
+                    details={"error": str(e)},
+                )
+            raise
+
     def verify_signature(
         self,
         data: Any,
         bundle: SignatureBundle,
+        actor_id: str = "system",
     ) -> bool:
         """
         Verify a signature.
@@ -182,21 +285,41 @@ class CryptoService:
         Args:
             data: The signed data
             bundle: The signature bundle
+            actor_id: ID of the actor performing the operation
             
         Returns:
             True if signature is valid
         """
         try:
             public_key = self.keystore.get_public_key(bundle.key_id)
-        except Exception:
+            
+            verifier = Verifier(
+                algorithm=bundle.algorithm,
+                public_key=public_key,
+            )
+            
+            is_valid = verifier.verify(data, bundle)
+            
+            if self.audit_logger:
+                self.audit_logger.log_crypto_operation(
+                    operation="verify",
+                    actor_id=actor_id,
+                    key_id=bundle.key_id,
+                    success=is_valid,
+                    details={"algorithm": bundle.algorithm},
+                )
+            
+            return is_valid
+        except Exception as e:
+            if self.audit_logger:
+                self.audit_logger.log_crypto_operation(
+                    operation="verify",
+                    actor_id=actor_id,
+                    key_id=bundle.key_id,
+                    success=False,
+                    details={"error": str(e)},
+                )
             return False
-        
-        verifier = Verifier(
-            algorithm=bundle.algorithm,
-            public_key=public_key,
-        )
-        
-        return verifier.verify(data, bundle)
     
     def encrypt_and_sign(
         self,

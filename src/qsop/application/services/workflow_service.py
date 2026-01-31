@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
 from uuid import UUID, uuid4
+
+from ...infrastructure.observability.metrics import get_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -366,6 +369,12 @@ class WorkflowService:
         )
         self._running_workflows[workflow_id] = task
         
+        # Record metric
+        get_metrics().workflows_started.labels(
+            definition_id=definition.id,
+            name=definition.name
+        ).inc()
+        
         return workflow_id
     
     async def _run_workflow(
@@ -376,7 +385,8 @@ class WorkflowService:
     ) -> WorkflowResult[Any]:
         """Run workflow with error handling and checkpointing."""
         workflow_id = context.workflow_id
-        start_time = datetime.now(timezone.utc)
+        start_time = time.time()
+        status = WorkflowStatus.FAILED
         
         try:
             # Check for recovery from checkpoint
@@ -389,8 +399,9 @@ class WorkflowService:
             result = await executor.execute(context.parameters, context)
             
             self._workflow_status[workflow_id] = WorkflowStatus.COMPLETED
+            status = WorkflowStatus.COMPLETED
             
-            elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+            elapsed = time.time() - start_time
             
             logger.info(f"Workflow {workflow_id} completed in {elapsed:.2f}s")
             
@@ -403,12 +414,14 @@ class WorkflowService:
             
         except asyncio.CancelledError:
             self._workflow_status[workflow_id] = WorkflowStatus.CANCELLED
+            status = WorkflowStatus.CANCELLED
             logger.info(f"Workflow {workflow_id} cancelled")
             raise
             
         except Exception as e:
             self._workflow_status[workflow_id] = WorkflowStatus.FAILED
-            elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+            status = WorkflowStatus.FAILED
+            elapsed = time.time() - start_time
             
             logger.error(f"Workflow {workflow_id} failed: {e}")
             
@@ -420,6 +433,21 @@ class WorkflowService:
             )
             
         finally:
+            elapsed = time.time() - start_time
+            
+            # Record metrics
+            get_metrics().workflows_completed.labels(
+                definition_id=definition.id,
+                name=definition.name,
+                status=status.value,
+            ).inc()
+            
+            get_metrics().workflow_duration.labels(
+                definition_id=definition.id,
+                name=definition.name,
+                status=status.value,
+            ).observe(elapsed)
+            
             # Cleanup
             self._running_workflows.pop(workflow_id, None)
             self._pause_events.pop(workflow_id, None)
@@ -464,40 +492,61 @@ class WorkflowService:
             workflow_id, step.id, StepStatus.RUNNING
         )
         
-        while True:
-            try:
-                result = await step_fn(*args, **kwargs)
-                
-                # Save checkpoint
-                await self._checkpoint_store.save(Checkpoint(
-                    workflow_id=workflow_id,
-                    step_id=step.id,
-                    state=context.state,
-                    created_at=datetime.now(timezone.utc),
-                ))
-                
-                await self._progress_tracker.update_step(
-                    workflow_id, step.id, StepStatus.COMPLETED, result=result
-                )
-                
-                return result
-                
-            except Exception as e:
-                step.retries += 1
-                
-                if await self._recovery_strategy.should_retry(step, e):
-                    delay = await self._recovery_strategy.get_retry_delay(step)
-                    logger.warning(
-                        f"Step {step.id} failed, retrying in {delay}s "
-                        f"(attempt {step.retries}/{step.max_retries})"
-                    )
-                    await asyncio.sleep(delay)
-                else:
-                    await self._recovery_strategy.on_recovery_failed(step, e, context)
+        start_time = time.time()
+        status = StepStatus.FAILED
+        
+        try:
+            while True:
+                try:
+                    result = await step_fn(*args, **kwargs)
+                    
+                    # Save checkpoint
+                    await self._checkpoint_store.save(Checkpoint(
+                        workflow_id=workflow_id,
+                        step_id=step.id,
+                        state=context.state,
+                        created_at=datetime.now(timezone.utc),
+                    ))
+                    
                     await self._progress_tracker.update_step(
-                        workflow_id, step.id, StepStatus.FAILED, error=str(e)
+                        workflow_id, step.id, StepStatus.COMPLETED, result=result
                     )
-                    raise
+                    
+                    status = StepStatus.COMPLETED
+                    return result
+                    
+                except Exception as e:
+                    step.retries += 1
+                    
+                    if await self._recovery_strategy.should_retry(step, e):
+                        delay = await self._recovery_strategy.get_retry_delay(step)
+                        logger.warning(
+                            f"Step {step.id} failed, retrying in {delay}s "
+                            f"(attempt {step.retries}/{step.max_retries})"
+                        )
+                        await asyncio.sleep(delay)
+                    else:
+                        await self._recovery_strategy.on_recovery_failed(step, e, context)
+                        await self._progress_tracker.update_step(
+                            workflow_id, step.id, StepStatus.FAILED, error=str(e)
+                        )
+                        status = StepStatus.FAILED
+                        raise
+        finally:
+            elapsed = time.time() - start_time
+            
+            # Record metrics
+            get_metrics().workflow_steps_total.labels(
+                definition_id=context.metadata.get("definition_id", "unknown"),
+                step_id=step.id,
+                status=status.value,
+            ).inc()
+            
+            get_metrics().workflow_step_duration.labels(
+                definition_id=context.metadata.get("definition_id", "unknown"),
+                step_id=step.id,
+                status=status.value,
+            ).observe(elapsed)
     
     async def get_progress(self, workflow_id: UUID) -> Optional[WorkflowProgress]:
         """Get workflow progress."""

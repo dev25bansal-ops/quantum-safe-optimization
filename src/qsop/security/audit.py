@@ -43,6 +43,8 @@ class AuditEventType(Enum):
     CRYPTO_DECRYPT = auto()
     CRYPTO_SIGN = auto()
     CRYPTO_VERIFY = auto()
+    CRYPTO_KEM_ENCAPSULATE = auto()
+    CRYPTO_KEM_DECAPSULATE = auto()
     
     # Data events
     DATA_ACCESSED = auto()
@@ -565,6 +567,8 @@ class AuditLogger:
             "decrypt": AuditEventType.CRYPTO_DECRYPT,
             "sign": AuditEventType.CRYPTO_SIGN,
             "verify": AuditEventType.CRYPTO_VERIFY,
+            "encapsulate": AuditEventType.CRYPTO_KEM_ENCAPSULATE,
+            "decapsulate": AuditEventType.CRYPTO_KEM_DECAPSULATE,
         }
         return self.log(
             event_type=event_map.get(operation, AuditEventType.CRYPTO_ENCRYPT),
