@@ -19,6 +19,8 @@ from ...domain.models.result import (
     QuantumExecutionResult,
 )
 from ...domain.ports.quantum_backend import QuantumBackend
+from ...domain.ports.transpilation import TranspilationService
+from ...backends.mitigation import ReadoutMitigatedBackend, ZNEMitigatedBackend
 from .hybrid_loop import HybridOptimizationLoop, HybridLoopConfig
 
 
@@ -37,11 +39,11 @@ class MaxCutProblem:
             for i in range(self.n_nodes)
         ]
         
-        def objective(x: list) -> float:
+        def objective(x: dict[str, float]) -> float:
             """MaxCut objective (negative for minimization)."""
             cut_value = 0.0
             for i, j, w in self.edges:
-                if x[i] != x[j]:
+                if x[f"x_{i}"] != x[f"x_{j}"]:
                     cut_value += w
             return -cut_value  # Minimize negative = maximize
         
@@ -61,6 +63,9 @@ class QAOAWorkflowConfig:
     max_iterations: int = 100
     initial_gamma: float | None = None
     initial_beta: float | None = None
+    enable_readout_mitigation: bool = False
+    enable_zne: bool = False
+    optimization_level: int = 1
 
 
 class QAOAWorkflow:
@@ -78,10 +83,21 @@ class QAOAWorkflow:
         self,
         config: QAOAWorkflowConfig | None = None,
         backend: QuantumBackend | None = None,
+        transpiler: TranspilationService | None = None,
     ):
         self.config = config or QAOAWorkflowConfig()
-        self.backend = backend
-    
+        self.backend = self._apply_mitigation(backend) if backend else None
+        self.transpiler = transpiler
+
+    def _apply_mitigation(self, backend: QuantumBackend) -> QuantumBackend:
+        """Apply configured error mitigation to the backend."""
+        mitigated = backend
+        if self.config.enable_readout_mitigation:
+            mitigated = ReadoutMitigatedBackend(mitigated)
+        if self.config.enable_zne:
+            mitigated = ZNEMitigatedBackend(mitigated)
+        return mitigated
+
     def run(self, problem: OptimizationProblem) -> OptimizationResult:
         """Execute QAOA workflow."""
         from scipy.optimize import minimize
@@ -98,6 +114,15 @@ class QAOAWorkflow:
         def cost_function(params: NDArray) -> float:
             """Evaluate QAOA cost."""
             circuit = self._build_qaoa_circuit(problem, params, n_qubits)
+            
+            # Hardware-aware transpilation
+            if self.transpiler and self.backend:
+                circuit = self.transpiler.optimize_qaoa_layout(
+                    circuit, 
+                    self.backend.capabilities,
+                    optimization_level=self.config.optimization_level
+                )
+                
             result = self.backend.run(circuit, shots=self.config.shots)
             self._last_result = result
             
