@@ -1,0 +1,28 @@
+{
+  "name": "Portfolio Optimization",
+  "type": "qubo",
+  "description": "Mean-variance portfolio optimization with 4 assets",
+  "assets": [
+    {"name": "Asset A", "expected_return": 0.12, "risk": 0.15},
+    {"name": "Asset B", "expected_return": 0.08, "risk": 0.08},
+    {"name": "Asset C", "expected_return": 0.15, "risk": 0.22},
+    {"name": "Asset D", "expected_return": 0.10, "risk": 0.12}
+  ],
+  "covariance_matrix": [
+    [0.0225, 0.0045, 0.0090, 0.0036],
+    [0.0045, 0.0064, 0.0032, 0.0024],
+    [0.0090, 0.0032, 0.0484, 0.0066],
+    [0.0036, 0.0024, 0.0066, 0.0144]
+  ],
+  "risk_aversion": 0.5,
+  "budget_constraint": 2,
+  "variables": [
+    {"name": "asset_0", "type": "binary"},
+    {"name": "asset_1", "type": "binary"},
+    {"name": "asset_2", "type": "binary"},
+    {"name": "asset_3", "type": "binary"}
+  ],
+  "metadata": {
+    "problem_class": "quadratic_unconstrained_binary_optimization"
+  }
+}
