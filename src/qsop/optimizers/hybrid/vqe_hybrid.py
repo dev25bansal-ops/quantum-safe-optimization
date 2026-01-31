@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+import time
 import numpy as np
 from numpy.typing import NDArray
 
@@ -17,6 +18,7 @@ from ...domain.models.problem import OptimizationProblem
 from ...domain.models.result import OptimizationResult, QuantumExecutionResult
 from ...domain.ports.quantum_backend import QuantumBackend
 from ..classical.base import OptimizationHistory
+from ...infrastructure.observability.metrics import get_metrics
 
 if TYPE_CHECKING:
     pass
@@ -95,21 +97,57 @@ class HybridVQEOptimizer:
         quantum_results: list[QuantumExecutionResult] = []
         iteration = 0
         
+        metrics = get_metrics()
+        tenant_id = context.get("tenant_id", "anonymous")
+        job_id = context.get("job_id", "unknown")
+        
         def energy_function(params: NDArray) -> float:
             """Compute energy expectation value."""
             nonlocal iteration
             
+            loop_start = time.time()
             circuit = self._build_ansatz(n_qubits, params)
             
             # Measure in computational basis
+            # Quantum time is measured inside backend.run, but we want classical time too
+            classical_start = time.time()
             result = self.backend.run(
                 circuit,
                 shots=self.config.shots,
                 options=context.get("backend_options", {}),
             )
+            quantum_end = time.time()
             
             # Compute expectation value of Hamiltonian
             energy = self._compute_energy(result, problem)
+            
+            energy_end = time.time()
+            
+            # Metrics
+            metrics.hybrid_iteration_value.labels(
+                algorithm=self.name,
+                backend=self.backend.name if self.backend else "unknown",
+                tenant_id=tenant_id,
+                job_id=job_id
+            ).set(energy)
+            
+            # Classical time is everything except quantum execution
+            # Wait, backend.run is synchronous here usually, but it might involve network
+            # We'll treat backend.run as quantum time for this simplified metric
+            quantum_time = result.get("metadata", {}).get("execution_time", quantum_end - classical_start)
+            classical_time = (energy_end - loop_start) - quantum_time
+            
+            metrics.classical_execution_time.labels(
+                algorithm=self.name,
+                backend=self.backend.name if self.backend else "unknown",
+                tenant_id=tenant_id
+            ).observe(max(0, classical_time))
+            
+            metrics.hybrid_loop_duration.labels(
+                algorithm=self.name,
+                backend=self.backend.name if self.backend else "unknown",
+                tenant_id=tenant_id
+            ).observe(energy_end - loop_start)
             
             quantum_results.append(QuantumExecutionResult(
                 counts=result.get("counts", {}),

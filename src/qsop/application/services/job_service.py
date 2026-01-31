@@ -21,6 +21,7 @@ from qsop.application.services.crypto_service import CryptoService
 from qsop.crypto.envelopes.envelope import EncryptedEnvelope
 from qsop.crypto.signing.signatures import SignatureBundle
 
+from qsop.infrastructure.observability.metrics import get_metrics
 logger = logging.getLogger(__name__)
 
 
@@ -190,6 +191,13 @@ class JobService:
         
         job_id = await self._repository.create_job(processed_spec)
         logger.info(f"Job {job_id} submitted successfully")
+        
+        # Record metric
+        get_metrics().jobs_submitted.labels(
+            algorithm=processed_spec.algorithm.algorithm_name,
+            backend=processed_spec.backend.backend_name if processed_spec.backend else "default",
+            tenant_id=tenant_id
+        ).inc()
         
         # Publish JOB_CREATED event
         await self._event_bus.publish(DomainEvent(

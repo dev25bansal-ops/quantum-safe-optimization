@@ -372,7 +372,8 @@ class WorkflowService:
         # Record metric
         get_metrics().workflows_started.labels(
             definition_id=definition.id,
-            name=definition.name
+            name=definition.name,
+            tenant_id=context.tenant_id
         ).inc()
         
         return workflow_id
@@ -440,12 +441,14 @@ class WorkflowService:
                 definition_id=definition.id,
                 name=definition.name,
                 status=status.value,
+                tenant_id=context.tenant_id,
             ).inc()
             
             get_metrics().workflow_duration.labels(
                 definition_id=definition.id,
                 name=definition.name,
                 status=status.value,
+                tenant_id=context.tenant_id,
             ).observe(elapsed)
             
             # Cleanup
@@ -540,12 +543,14 @@ class WorkflowService:
                 definition_id=context.metadata.get("definition_id", "unknown"),
                 step_id=step.id,
                 status=status.value,
+                tenant_id=context.tenant_id,
             ).inc()
             
             get_metrics().workflow_step_duration.labels(
                 definition_id=context.metadata.get("definition_id", "unknown"),
                 step_id=step.id,
                 status=status.value,
+                tenant_id=context.tenant_id,
             ).observe(elapsed)
     
     async def get_progress(self, workflow_id: UUID) -> Optional[WorkflowProgress]:
