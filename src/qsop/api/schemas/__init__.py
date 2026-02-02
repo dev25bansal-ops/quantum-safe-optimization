@@ -1,8 +1,14 @@
 """Pydantic schemas for API models."""
 
-from .job import JobCreate, JobResponse, JobListResponse, JobStatus
+from .crypto import (
+    CryptoSettings,
+    KeyCreate,
+    KeyListResponse,
+    KeyResponse,
+    KeyRotateResponse,
+)
+from .job import JobCreate, JobListResponse, JobResponse, JobStatus
 from .results import JobResultsResponse, OptimizationResult, QuantumMetrics
-from .crypto import KeyCreate, KeyResponse, KeyListResponse, KeyRotateResponse
 
 __all__ = [
     "JobCreate",
@@ -16,4 +22,5 @@ __all__ = [
     "KeyResponse",
     "KeyListResponse",
     "KeyRotateResponse",
+    "CryptoSettings",
 ]

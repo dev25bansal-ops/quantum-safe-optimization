@@ -18,7 +18,7 @@ from starlette.responses import Response
 from qsop import __version__
 from qsop.settings import get_settings
 from qsop.infrastructure.observability.metrics import get_metrics
-from qsop.api.routers import create_api_router
+from qsop.api.routers import create_api_router, auth_router
 from qsop.api.middleware.authn import AuthenticationMiddleware
 from qsop.api.middleware.request_id import RequestIDMiddleware
 from qsop.api.middleware.compliance import ComplianceMiddleware
@@ -115,6 +115,11 @@ async def metrics_middleware(request: Request, call_next):
     ).observe(duration)
 
     return response
+
+
+# API Routers
+app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+app.include_router(create_api_router(), prefix="/api/v1")
 
 
 @app.middleware("http")
