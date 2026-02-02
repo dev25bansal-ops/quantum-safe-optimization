@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
@@ -147,10 +148,6 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     )
 
 
-# Routers
-app.include_router(create_api_router(), prefix="/api/v1")
-
-
 @app.get("/health", tags=["Health"])
 async def health_check() -> dict:
     """Health check endpoint."""
@@ -186,6 +183,10 @@ async def api_info() -> dict:
         "pqc_sig_algorithm": settings.crypto.sig_algorithm.value,
         "quantum_backend": settings.quantum.backend.value,
     }
+
+
+# Static Files (Frontend) - Must be after all other routes
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 
 def run() -> None:

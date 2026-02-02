@@ -45,7 +45,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Response]
     ) -> Response:
-        if request.url.path in SKIP_AUTH_PATHS:
+        path = request.url.path
+        if path in SKIP_AUTH_PATHS or not path.startswith("/api/v1"):
             request.state.auth_context = None
             request.state.tenant_id = "anonymous"
             return await call_next(request)
