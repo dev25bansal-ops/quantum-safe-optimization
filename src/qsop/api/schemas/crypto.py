@@ -86,6 +86,27 @@ class KeyCreate(BaseModel):
     )
 
 
+class CryptoSettings(BaseModel):
+    """Cryptographic settings for a job."""
+
+    kem_algorithm: KeyAlgorithm = Field(
+        default=KeyAlgorithm.KYBER768,
+        description="KEM algorithm for key exchange",
+    )
+    sig_algorithm: KeyAlgorithm = Field(
+        default=KeyAlgorithm.DILITHIUM3,
+        description="Signature algorithm for results",
+    )
+    hybrid_mode: bool = Field(
+        default=True,
+        description="Whether to use hybrid quantum-classical mode",
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Whether encryption is enabled for this job",
+    )
+
+
 class KeyResponse(BaseModel):
     """Response model for key details."""
 
