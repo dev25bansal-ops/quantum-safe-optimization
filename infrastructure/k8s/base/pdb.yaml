@@ -1,0 +1,30 @@
+# Pod Disruption Budget for Quantum API
+# Ensures high availability during voluntary disruptions (node drains, upgrades)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: quantum-api
+  namespace: quantum-platform
+  labels:
+    app: quantum-api
+    component: api
+spec:
+  # At least 2 pods must be available at all times
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: quantum-api
+      component: api
+---
+# Alternative: maxUnavailable-based PDB
+# Use this if you prefer percentage-based availability
+# apiVersion: policy/v1
+# kind: PodDisruptionBudget
+# metadata:
+#   name: quantum-api-percent
+#   namespace: quantum-platform
+# spec:
+#   maxUnavailable: "33%"
+#   selector:
+#     matchLabels:
+#       app: quantum-api

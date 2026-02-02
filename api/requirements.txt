@@ -1,0 +1,61 @@
+# Quantum-Safe Optimization Platform - API Requirements
+# Python 3.11+
+
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+starlette>=0.35.0
+
+# Async support
+httpx>=0.26.0
+aiofiles>=23.2.1
+aiohttp>=3.9.0
+
+# Validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+email-validator>=2.1.0
+
+# Azure Cosmos DB
+azure-cosmos>=4.5.0
+azure-identity>=1.15.0
+
+# Azure Key Vault
+azure-keyvault-secrets>=4.7.0
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# Task Queue
+celery[redis]>=5.3.0
+redis>=5.0.0
+
+# Security & Rate Limiting
+cryptography>=41.0.0
+slowapi>=0.1.9
+
+# Logging & Monitoring
+structlog>=23.3.0
+opentelemetry-api>=1.22.0
+opentelemetry-sdk>=1.22.0
+opentelemetry-instrumentation-fastapi>=0.43b0
+opentelemetry-instrumentation-httpx>=0.43b0
+opentelemetry-instrumentation-redis>=0.43b0
+opentelemetry-exporter-otlp-proto-grpc>=1.22.0
+azure-monitor-opentelemetry>=1.2.0
+
+# Testing (dev dependencies)
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+httpx>=0.26.0
+
+# Development tools
+black>=23.12.0
+ruff>=0.1.0
+mypy>=1.8.0
+
+# Quantum optimization (installed from local package)
+# quantum-optimization @ file:../optimization

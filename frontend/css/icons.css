@@ -1,0 +1,128 @@
+/**
+ * Font Awesome Subset - Only icons used in dashboard
+ * Reduces ~100KB+ full library to ~15KB
+ * 
+ * Icons used: search, moon, sun, bell, bell-slash, trash-alt, sync-alt,
+ * sign-in-alt, sign-out-alt, cog, server, bolt, atom, wave-square, 
+ * magic, project-diagram, flask, th, route, chart-pie, plus-circle,
+ * sliders-h, flag, times, download, plus, hashtag, info-circle, lock,
+ * clock, ellipsis-h, inbox, spinner, calendar, chart-line, chart-area,
+ * arrow-left, angle-left, angle-right, angle-double-left, angle-double-right,
+ * eye, check-circle, times-circle, layer-group, user-lock, user-plus,
+ * key, cloud-upload-alt, microchip, exclamation-triangle, paper-plane, redo,
+ * aws (brand), microsoft (brand)
+ */
+
+/* Font Awesome 6 Free - Subset loader */
+@font-face {
+    font-family: 'Font Awesome 6 Free';
+    font-style: normal;
+    font-weight: 900;
+    font-display: swap;
+    src: url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/webfonts/fa-solid-900.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Font Awesome 6 Brands';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/webfonts/fa-brands-400.woff2') format('woff2');
+}
+
+/* Base icon styles */
+.fas, .fa-solid {
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    font-style: normal;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    display: inline-block;
+    line-height: 1;
+}
+
+.fab, .fa-brands {
+    font-family: 'Font Awesome 6 Brands';
+    font-weight: 400;
+    font-style: normal;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    display: inline-block;
+    line-height: 1;
+}
+
+/* Icon sizes */
+.fa-3x { font-size: 3em; }
+.fa-2x { font-size: 2em; }
+.fa-lg { font-size: 1.25em; }
+.fa-sm { font-size: 0.875em; }
+
+/* Animations */
+.fa-spin {
+    animation: fa-spin 1s infinite linear;
+}
+
+@keyframes fa-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Individual icon definitions - Unicode mappings */
+.fa-search::before { content: "\f002"; }
+.fa-moon::before { content: "\f186"; }
+.fa-sun::before { content: "\f185"; }
+.fa-bell::before { content: "\f0f3"; }
+.fa-bell-slash::before { content: "\f1f6"; }
+.fa-trash-alt::before { content: "\f2ed"; }
+.fa-sync-alt::before { content: "\f2f1"; }
+.fa-sign-in-alt::before { content: "\f2f6"; }
+.fa-sign-out-alt::before { content: "\f2f5"; }
+.fa-cog::before { content: "\f013"; }
+.fa-server::before { content: "\f233"; }
+.fa-bolt::before { content: "\f0e7"; }
+.fa-atom::before { content: "\f5d2"; }
+.fa-wave-square::before { content: "\f83e"; }
+.fa-magic::before { content: "\f0d0"; }
+.fa-project-diagram::before { content: "\f542"; }
+.fa-flask::before { content: "\f0c3"; }
+.fa-th::before { content: "\f00a"; }
+.fa-route::before { content: "\f4d7"; }
+.fa-chart-pie::before { content: "\f200"; }
+.fa-plus-circle::before { content: "\f055"; }
+.fa-sliders-h::before { content: "\f1de"; }
+.fa-flag::before { content: "\f024"; }
+.fa-times::before { content: "\f00d"; }
+.fa-download::before { content: "\f019"; }
+.fa-plus::before { content: "\f067"; }
+.fa-hashtag::before { content: "\f292"; }
+.fa-info-circle::before { content: "\f05a"; }
+.fa-lock::before { content: "\f023"; }
+.fa-clock::before { content: "\f017"; }
+.fa-ellipsis-h::before { content: "\f141"; }
+.fa-inbox::before { content: "\f01c"; }
+.fa-spinner::before { content: "\f110"; }
+.fa-calendar::before { content: "\f133"; }
+.fa-chart-line::before { content: "\f201"; }
+.fa-chart-area::before { content: "\f1fe"; }
+.fa-arrow-left::before { content: "\f060"; }
+.fa-angle-left::before { content: "\f104"; }
+.fa-angle-right::before { content: "\f105"; }
+.fa-angle-double-left::before { content: "\f100"; }
+.fa-angle-double-right::before { content: "\f101"; }
+.fa-eye::before { content: "\f06e"; }
+.fa-check-circle::before { content: "\f058"; }
+.fa-times-circle::before { content: "\f057"; }
+.fa-layer-group::before { content: "\f5fd"; }
+.fa-user-lock::before { content: "\f502"; }
+.fa-user-plus::before { content: "\f234"; }
+.fa-key::before { content: "\f084"; }
+.fa-cloud-upload-alt::before { content: "\f382"; }
+.fa-microchip::before { content: "\f2db"; }
+.fa-exclamation-triangle::before { content: "\f071"; }
+.fa-paper-plane::before { content: "\f1d8"; }
+.fa-redo::before { content: "\f01e"; }.fa-columns::before { content: "\\f0db"; }
+.fa-wifi::before { content: "\\f1eb"; }
+.fa-envelope::before { content: "\\f0e0"; }
+/* Brand icons */
+.fa-aws::before { content: "\f375"; }
+.fa-microsoft::before { content: "\f3ca"; }

@@ -1,0 +1,8 @@
+# Namespace for Quantum Platform
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quantum-platform
+  labels:
+    app.kubernetes.io/name: quantum-platform
+    istio-injection: enabled

@@ -1,189 +1,172 @@
-# Quantum-Safe Secure Optimization Platform (QSOP)
+# Quantum-Safe Secure Optimization Platform
 
-A production-ready platform for quantum-safe cryptography and quantum-inspired optimization algorithms.
+A production-ready platform integrating **Post-Quantum Cryptography (PQC)** with **Quantum Optimization Algorithms** (QAOA, VQE, Quantum Annealing).
 
-## Overview
-
-QSOP provides:
-
-- **Post-Quantum Cryptography**: CRYSTALS-Kyber, CRYSTALS-Dilithium, and other NIST-approved algorithms via liboqs
-- **Quantum Optimization**: QAOA, VQE, and quantum annealing simulations via Qiskit
-- **Hybrid Algorithms**: Classical-quantum hybrid solvers for combinatorial optimization
-- **Enterprise Security**: End-to-end encryption with quantum-resistant key exchange
-
-## Architecture
+## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      API Gateway                             │
-│                   (FastAPI + ASGI)                          │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │   Crypto    │  │ Optimization│  │    Observability    │  │
-│  │   Service   │  │   Engine    │  │  (OTEL + Prometheus)│  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │   liboqs    │  │   Qiskit    │  │       Redis         │  │
-│  │  (PQC Lib)  │  │  (Quantum)  │  │      (Cache)        │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-├─────────────────────────────────────────────────────────────┤
-│                    PostgreSQL / SQLite                       │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     Client Applications                         │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │ HTTPS (TLS 1.3 + ML-KEM hybrid)
+┌─────────────────────────▼───────────────────────────────────────┐
+│                    API Gateway (FastAPI)                        │
+│  • PQC Authentication (ML-DSA signed JWTs)                      │
+│  • Rate Limiting • Request Validation                           │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────────┐
+│               Optimization Service Layer                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │ QAOA Runner  │  │ VQE Runner   │  │ Annealing Runner     │  │
+│  │ (MaxCut,     │  │ (Molecular   │  │ (QUBO, D-Wave)       │  │
+│  │  Portfolio)  │  │  Hamiltonians│  │                      │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────────┐
+│             Quantum Backend Abstraction Layer                   │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌──────────────┐ │
+│  │IBM Quantum │ │AWS Braket  │ │Azure       │ │D-Wave Leap   │ │
+│  │ (Qiskit)   │ │            │ │Quantum     │ │              │ │
+│  └────────────┘ └────────────┘ └────────────┘ └──────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+## 🔐 Security Features
+
+- **ML-KEM-768**: NIST FIPS 203 key encapsulation for data encryption
+- **ML-DSA-65**: NIST FIPS 204 digital signatures for authentication
+- **Hybrid TLS**: X25519 + ML-KEM for defense-in-depth
+- **Encrypted Storage**: AES-256-GCM with PQC key wrapping
+
+## 📁 Project Structure
+
+```
+quantum-safe-optimization/
+├── crypto/                    # Rust PQC cryptography core
+│   ├── Cargo.toml
+│   ├── src/
+│   │   ├── lib.rs            # Main library exports
+│   │   ├── kem.rs            # ML-KEM key encapsulation
+│   │   ├── signatures.rs     # ML-DSA digital signatures
+│   │   └── encryption.rs     # Hybrid encryption utilities
+│   └── python/               # PyO3 Python bindings
+│
+├── optimization/             # Quantum optimization algorithms
+│   ├── pyproject.toml
+│   └── src/
+│       ├── backends/         # Quantum backend abstractions
+│       ├── qaoa/             # QAOA implementations
+│       ├── vqe/              # VQE implementations
+│       └── annealing/        # Quantum annealing (D-Wave)
+│
+├── api/                      # FastAPI REST service
+│   ├── main.py
+│   ├── routers/
+│   ├── models/
+│   └── auth/
+│
+├── infrastructure/           # Deployment configurations
+│   ├── terraform/
+│   └── docker/
+│
+└── tests/                    # Test suites
+```
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
 - Python 3.11+
-- Docker & Docker Compose (optional)
-- Redis (for caching)
+- Rust 1.75+ (for crypto module)
+- Docker & Docker Compose
+- Azure subscription (for Cosmos DB)
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/quantum-secure-opt.git
-cd quantum-secure-opt
+# Clone repository
+git clone https://github.com/your-org/quantum-safe-optimization.git
+cd quantum-safe-optimization
 
-# Create virtual environment
+# Set up Python environment
 python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# or: .venv\Scripts\activate  # Windows
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install -e ./optimization
+pip install -r api/requirements.txt
 
-# Install dependencies
-pip install -e ".[dev]"
+# Build Rust crypto module
+cd crypto
+cargo build --release
+maturin develop  # Install Python bindings
 
-# Copy environment config
+# Configure environment
 cp .env.example .env
+# Edit .env with your credentials
 
-# Run the development server
-uvicorn qsop.main:app --reload
+# Start services
+docker-compose up -d redis
+uvicorn api.main:app --reload
 ```
 
-### Using Docker
+## 📖 API Usage
+
+### Submit Optimization Job
 
 ```bash
-docker-compose up -d
+curl -X POST http://localhost:8000/api/v1/jobs \
+  -H "Authorization: Bearer <pqc-signed-jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "problem_type": "QAOA",
+    "problem_config": {
+      "type": "maxcut",
+      "graph": {"edges": [[0,1], [1,2], [2,0]], "weights": [1,1,1]}
+    },
+    "parameters": {
+      "layers": 3,
+      "optimizer": "COBYLA",
+      "shots": 1000,
+      "backend": "ibm_quantum"
+    }
+  }'
 ```
 
-The API will be available at `http://localhost:8000`.
+### Check Job Status
 
-## Configuration
+```bash
+curl http://localhost:8000/api/v1/jobs/{job_id} \
+  -H "Authorization: Bearer <pqc-signed-jwt>"
+```
 
-All configuration is managed via environment variables. See `.env.example` for all options.
+## 🔧 Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `QSOP_ENV` | Environment (dev/staging/prod) | `dev` |
-| `QSOP_DEBUG` | Enable debug mode | `false` |
-| `QSOP_API_HOST` | API bind host | `0.0.0.0` |
-| `QSOP_API_PORT` | API bind port | `8000` |
-| `QSOP_PQC_ALGORITHM` | Default PQC algorithm | `Kyber512` |
-| `QSOP_DATABASE_URL` | Database connection string | `sqlite+aiosqlite:///./qsop.db` |
+| `COSMOS_DB_URI` | Azure Cosmos DB connection string | - |
+| `COSMOS_DB_DATABASE` | Database name | `quantum_optimization` |
+| `IBM_QUANTUM_TOKEN` | IBM Quantum API token | - |
+| `AWS_BRAKET_REGION` | AWS Braket region | `us-east-1` |
+| `DWAVE_API_TOKEN` | D-Wave Leap API token | - |
+| `PQC_KEY_PATH` | Path to PQC key files | `./keys` |
 
-## API Endpoints
+## 📊 Supported Problem Types
 
-### Health & Status
+### QAOA
+- MaxCut
+- Portfolio Optimization
+- Traveling Salesman (TSP)
+- Graph Coloring
 
-- `GET /health` - Health check
-- `GET /ready` - Readiness probe
-- `GET /metrics` - Prometheus metrics
+### VQE
+- Molecular Ground State Energy
+- Electronic Structure Calculations
 
-### Cryptography
+### Quantum Annealing
+- QUBO (Quadratic Unconstrained Binary Optimization)
+- Ising Model
 
-- `POST /api/v1/crypto/keygen` - Generate quantum-safe keypair
-- `POST /api/v1/crypto/encrypt` - Encrypt data with PQC
-- `POST /api/v1/crypto/decrypt` - Decrypt data
-- `POST /api/v1/crypto/sign` - Digital signature
-- `POST /api/v1/crypto/verify` - Verify signature
-
-### Optimization
-
-- `POST /api/v1/optimize/qaoa` - QAOA optimization
-- `POST /api/v1/optimize/vqe` - VQE solver
-- `POST /api/v1/optimize/classical` - Classical fallback
-
-## Development
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# With coverage
-pytest --cov=src/qsop --cov-report=html
-
-# Run specific test file
-pytest tests/test_crypto.py -v
-```
-
-### Code Quality
-
-```bash
-# Format code
-black src tests
-
-# Lint
-ruff check src tests
-
-# Type checking
-mypy src
-```
-
-### Pre-commit Hooks
-
-```bash
-pre-commit install
-pre-commit run --all-files
-```
-
-## Security
-
-### Post-Quantum Algorithms
-
-| Algorithm | Type | Security Level |
-|-----------|------|----------------|
-| Kyber512 | KEM | NIST Level 1 |
-| Kyber768 | KEM | NIST Level 3 |
-| Kyber1024 | KEM | NIST Level 5 |
-| Dilithium2 | Signature | NIST Level 2 |
-| Dilithium3 | Signature | NIST Level 3 |
-| Dilithium5 | Signature | NIST Level 5 |
-
-### Security Best Practices
-
-- All secrets are managed via environment variables
-- TLS 1.3 required in production
-- Rate limiting enabled by default
-- Audit logging for all cryptographic operations
-
-## Deployment
-
-### Production Checklist
-
-- [ ] Set `QSOP_ENV=prod`
-- [ ] Disable debug mode
-- [ ] Configure proper database URL
-- [ ] Set up Redis cluster
-- [ ] Enable TLS termination
-- [ ] Configure log aggregation
-- [ ] Set up monitoring dashboards
-
-### Kubernetes
-
-Helm charts are available in the `deploy/helm` directory.
-
-```bash
-helm install qsop ./deploy/helm/qsop -f values.prod.yaml
-```
-
-## License
+## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.

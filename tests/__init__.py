@@ -1,1 +1,1 @@
-"""Test suite for the quantum-safe optimization platform."""
+"""Test package."""

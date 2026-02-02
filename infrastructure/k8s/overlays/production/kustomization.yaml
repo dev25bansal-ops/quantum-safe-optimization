@@ -1,0 +1,107 @@
+# Kustomize overlay for production environment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: quantum-platform
+
+resources:
+  - ../../base
+
+# Production-specific name prefix (none for production)
+# namePrefix: prod-
+
+# Production labels
+commonLabels:
+  environment: production
+  tier: production
+
+# Production annotations
+commonAnnotations:
+  deployment.kubernetes.io/revision: "production"
+
+# Image configuration for production
+images:
+  - name: ghcr.io/quantum-platform/quantum-api
+    newTag: latest  # This will be overridden by CI/CD with specific version
+
+# Production-specific patches
+patches:
+  # Production replicas and resources
+  - target:
+      kind: Deployment
+      name: quantum-api
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 5
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "1Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "2000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "4Gi"
+
+  # Production HPA settings
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: quantum-api
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 5
+      - op: replace
+        path: /spec/maxReplicas
+        value: 50
+      - op: replace
+        path: /spec/metrics/0/resource/target/averageUtilization
+        value: 60
+
+  # Production PDB - higher availability
+  - target:
+      kind: PodDisruptionBudget
+      name: quantum-api
+    patch: |
+      - op: replace
+        path: /spec/minAvailable
+        value: 3
+
+  # Production Ingress
+  - target:
+      kind: Ingress
+      name: quantum-api
+    patch: |
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: api.quantum-platform.example.com
+      - op: replace
+        path: /spec/tls/0/secretName
+        value: quantum-api-prod-tls
+      - op: replace
+        path: /spec/rules/0/host
+        value: api.quantum-platform.example.com
+
+# Production ConfigMap patches
+configMapGenerator:
+  - name: quantum-api-config
+    behavior: merge
+    literals:
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - CORS_ORIGINS=https://app.quantum-platform.example.com
+      - OTEL_TRACES_SAMPLER_ARG=0.1
+      - RATE_LIMIT_DEFAULT=100/minute
+      - FEATURE_RESULT_ENCRYPTION=true
+
+# Production secrets reference (external secrets in production)
+# secretGenerator:
+#   - name: quantum-api-secrets
+#     behavior: replace
+#     options:
+#       disableNameSuffixHash: true
