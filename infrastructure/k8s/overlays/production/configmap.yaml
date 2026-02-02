@@ -1,0 +1,60 @@
+# Production ConfigMap for Quantum-Safe Optimization Platform
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quantum-api-config-production
+  namespace: quantum-platform
+  labels:
+    app: quantum-api
+    environment: production
+data:
+  # Application
+  APP_ENV: "production"
+  APP_VERSION: "0.1.0"
+  DEBUG: "false"
+  
+  # Server
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  API_WORKERS: "4"
+  
+  # Logging - JSON format for log aggregation
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  
+  # Azure Cosmos DB
+  COSMOS_ENDPOINT: "https://qsop-prod-cosmos.documents.azure.com:443/"
+  COSMOS_DATABASE: "quantum_optimization"
+  USE_MANAGED_IDENTITY: "true"
+  
+  # Azure Key Vault
+  KEY_VAULT_URI: "https://qsop-prod-kv.vault.azure.net/"
+  
+  # Redis (Azure Cache for Redis)
+  REDIS_URL: "rediss://qsop-prod-redis.redis.cache.windows.net:6380"
+  REDIS_SSL: "true"
+  
+  # CORS - Production domains only
+  CORS_ORIGINS: "https://app.quantum-platform.example.com,https://admin.quantum-platform.example.com"
+  
+  # Rate Limiting
+  RATE_LIMIT_REQUESTS: "100"
+  RATE_LIMIT_WINDOW: "60"
+  
+  # OpenTelemetry
+  OTEL_ENABLED: "true"
+  OTEL_SERVICE_NAME: "quantum-api-production"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+  OTEL_TRACES_SAMPLER_ARG: "0.1"  # 10% sampling in production
+  OTEL_CONSOLE_EXPORT: "false"
+  
+  # Feature Flags
+  ENABLE_QUANTUM_BACKENDS: "true"
+  ENABLE_PQC_ENCRYPTION: "true"
+  ENABLE_AUDIT_LOGGING: "true"
+  ENABLE_WEBSOCKET: "true"
+  ENABLE_RATE_LIMITING: "true"
+  
+  # Security
+  ACCESS_TOKEN_EXPIRE: "3600"
+  REFRESH_TOKEN_EXPIRE: "604800"

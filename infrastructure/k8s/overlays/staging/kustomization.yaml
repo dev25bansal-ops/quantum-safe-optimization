@@ -1,0 +1,98 @@
+# Kustomize overlay for staging environment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: quantum-platform-staging
+
+resources:
+  - ../../base
+
+# Staging-specific name prefix
+namePrefix: staging-
+
+# Staging labels
+commonLabels:
+  environment: staging
+  tier: non-production
+
+# Staging annotations
+commonAnnotations:
+  deployment.kubernetes.io/revision: "staging"
+
+# Image configuration for staging
+images:
+  - name: ghcr.io/quantum-platform/quantum-api
+    newTag: develop
+
+# Staging-specific patches
+patches:
+  # Reduce replicas for staging
+  - target:
+      kind: Deployment
+      name: quantum-api
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "100m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "256Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "1Gi"
+
+  # Reduce HPA for staging
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: quantum-api
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 5
+
+  # Reduce PDB for staging
+  - target:
+      kind: PodDisruptionBudget
+      name: quantum-api
+    patch: |
+      - op: replace
+        path: /spec/minAvailable
+        value: 1
+
+  # Update Ingress host for staging
+  - target:
+      kind: Ingress
+      name: quantum-api
+    patch: |
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: api-staging.quantum-platform.example.com
+      - op: replace
+        path: /spec/tls/0/secretName
+        value: quantum-api-staging-tls
+      - op: replace
+        path: /spec/rules/0/host
+        value: api-staging.quantum-platform.example.com
+      - op: replace
+        path: /metadata/annotations/cert-manager.io~1cluster-issuer
+        value: letsencrypt-staging
+
+# Staging ConfigMap patches
+configMapGenerator:
+  - name: quantum-api-config
+    behavior: merge
+    literals:
+      - APP_ENV=staging
+      - LOG_LEVEL=DEBUG
+      - CORS_ORIGINS=https://app-staging.quantum-platform.example.com
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+      - RATE_LIMIT_DEFAULT=1000/minute

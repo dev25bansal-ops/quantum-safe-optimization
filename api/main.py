@@ -1,0 +1,345 @@
+"""
+Quantum-Safe Secure Optimization Platform - FastAPI Backend
+
+Main application entry point with PQC-secured endpoints.
+Features:
+- Post-Quantum Cryptography (ML-KEM-768, ML-DSA-65)
+- Celery task queue for distributed job processing
+- WebSocket for real-time job progress streaming
+- Connection pooling for Cosmos DB
+- API versioning (/api/v1/)
+- Structured logging with structlog
+- Distributed tracing with OpenTelemetry
+"""
+
+import os
+from contextlib import asynccontextmanager
+from typing import Optional
+from pathlib import Path
+
+from fastapi import FastAPI, Request, APIRouter
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+from api.routers import jobs, auth, health
+from api.routers.websocket import router as websocket_router, init_websocket_manager, close_websocket_manager
+from api.routers.metrics import router as metrics_router, MetricsMiddleware
+from api.routers.costs import router as costs_router
+from api.routers.backends import router as backends_router
+from api.db.cosmos import init_cosmos, close_cosmos
+from api.security.rate_limiter import limiter
+from api.security.token_revocation import init_token_revocation, close_token_revocation
+from api.security.secrets_manager import init_secrets_manager, close_secrets_manager
+from api.security.middleware import (
+    SecurityHeadersMiddleware,
+    RequestIDMiddleware,
+    AuditLoggingMiddleware,
+    RequestValidationMiddleware,
+)
+from api.logging_config import setup_logging, get_logger
+from api.telemetry import (
+    setup_telemetry,
+    instrument_fastapi,
+    instrument_dependencies,
+    TelemetryConfig,
+    get_current_span,
+    add_span_attributes,
+)
+from pydantic import BaseModel
+from typing import Optional
+
+# Initialize structured logging
+logger = setup_logging(
+    log_level=os.getenv("LOG_LEVEL", "INFO"),
+    log_format=os.getenv("LOG_FORMAT", "json"),
+    service_name="quantum-api",
+)
+
+# Initialize OpenTelemetry tracing (disabled by default for local dev)
+if os.getenv("OTEL_ENABLED", "false").lower() == "true":
+    telemetry_config = TelemetryConfig(
+        service_name=os.getenv("OTEL_SERVICE_NAME", "quantum-api"),
+        service_version="0.1.0",
+        environment=os.getenv("APP_ENV", "development"),
+        otlp_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+        sample_rate=float(os.getenv("OTEL_TRACES_SAMPLER_ARG", "1.0")),
+        console_export=os.getenv("OTEL_CONSOLE_EXPORT", "false").lower() == "true",
+    )
+    setup_telemetry(telemetry_config)
+    instrument_dependencies()
+    logger.info("telemetry_initialized", endpoint=telemetry_config.otlp_endpoint)
+
+# API Version
+API_VERSION = "v1"
+
+
+class ErrorResponse(BaseModel):
+    """Standard error response."""
+    error: str
+    message: str
+    request_id: Optional[str] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager."""
+    # Startup
+    logger.info("application_starting", platform="Quantum-Safe Optimization Platform")
+    logger.info("crypto_initializing", subsystem="PQC")
+    
+    # Initialize Secrets Manager first (needed by other services)
+    try:
+        await init_secrets_manager()
+        logger.info("secrets_manager_initialized")
+    except Exception as e:
+        logger.warning("secrets_manager_init_failed", error=str(e), fallback="environment")
+    
+    # Initialize Cosmos DB connection with pooling
+    try:
+        await init_cosmos()
+        logger.info("cosmos_connected", feature="connection_pooling")
+    except Exception as e:
+        logger.warning("cosmos_init_failed", error=str(e), fallback="in-memory")
+    
+    # Initialize token revocation service
+    try:
+        await init_token_revocation()
+        logger.info("token_revocation_initialized")
+    except Exception as e:
+        logger.warning("token_revocation_init_failed", error=str(e))
+    
+    # Initialize WebSocket manager for real-time updates
+    try:
+        await init_websocket_manager()
+        logger.info("websocket_manager_initialized")
+    except Exception as e:
+        logger.warning("websocket_manager_init_failed", error=str(e))
+    
+    # Initialize server signing key for PQC tokens
+    from quantum_safe_crypto import SigningKeyPair
+    app.state.signing_keypair = SigningKeyPair()
+    logger.info("pqc_keys_initialized", algorithm="ML-DSA-65")
+    
+    # Check Celery status if enabled
+    if os.getenv("USE_CELERY", "false").lower() == "true":
+        try:
+            from api.tasks.celery_app import get_celery_status
+            status = get_celery_status()
+            if status.get("status") == "connected":
+                logger.info("celery_connected", workers=status.get("workers", []))
+            else:
+                logger.warning("celery_not_connected", fallback="sync_execution")
+        except Exception as e:
+            logger.warning("celery_status_check_failed", error=str(e))
+    
+    logger.info("application_started")
+    yield
+    
+    # Shutdown
+    logger.info("application_stopping")
+    try:
+        await close_websocket_manager()
+        logger.info("websocket_manager_closed")
+    except Exception as e:
+        logger.warning("websocket_manager_close_error", error=str(e))
+    try:
+        await close_token_revocation()
+        logger.info("token_revocation_closed")
+    except Exception as e:
+        logger.warning("token_revocation_close_error", error=str(e))
+    try:
+        await close_cosmos()
+        logger.info("cosmos_connection_closed")
+    except Exception as e:
+        logger.warning("cosmos_close_error", error=str(e))
+    
+    try:
+        await close_secrets_manager()
+        logger.info("secrets_manager_closed")
+    except Exception as e:
+        logger.warning("secrets_manager_close_error", error=str(e))
+    
+    logger.info("application_stopped")
+
+
+app = FastAPI(
+    title="Quantum-Safe Secure Optimization Platform",
+    description="""
+    A production-ready platform integrating Post-Quantum Cryptography (PQC) 
+    with Quantum Optimization Algorithms.
+    
+    ## Features
+    
+    * **QAOA** - Quantum Approximate Optimization Algorithm for combinatorial problems
+    * **VQE** - Variational Quantum Eigensolver for quantum chemistry
+    * **Quantum Annealing** - D-Wave integration for QUBO problems
+    * **PQC Security** - ML-KEM-768 encryption and ML-DSA-65 signatures
+    
+    ## Security
+    
+    All endpoints are secured with:
+    - ML-DSA-65 signed JWT tokens
+    - ML-KEM-768 encrypted payloads (optional)
+    - Hybrid TLS (X25519 + ML-KEM)
+    """,
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
+
+# Instrument FastAPI with OpenTelemetry
+if os.getenv("OTEL_ENABLED", "true").lower() == "true":
+    instrument_fastapi(app)
+
+# Add production security middleware (order matters - outermost first)
+is_production = os.getenv("APP_ENV") == "production"
+
+# Security headers (always enabled)
+app.add_middleware(SecurityHeadersMiddleware, enable_hsts=is_production)
+
+# Request ID tracking for distributed tracing
+app.add_middleware(RequestIDMiddleware)
+
+# Audit logging for security compliance
+if os.getenv("ENABLE_AUDIT_LOGGING", "true").lower() == "true":
+    app.add_middleware(AuditLoggingMiddleware, logger=logger)
+
+# Request validation (content type, size limits, etc.)
+app.add_middleware(RequestValidationMiddleware)
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS configuration - stricter in production
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000,http://localhost:3000,http://localhost:8080")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in cors_origins.split(",")],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-API-Key"],
+    max_age=3600,
+)
+
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Handle uncaught exceptions."""
+    request_id = request.headers.get("X-Request-ID") or getattr(request.state, "request_id", None)
+    
+    # Log the exception with full context
+    logger.exception(
+        "unhandled_exception",
+        error=str(exc),
+        error_type=type(exc).__name__,
+        path=request.url.path,
+        method=request.method,
+        request_id=request_id,
+    )
+    
+    # Add error to current trace span
+    try:
+        from api.telemetry import record_exception
+        record_exception(exc)
+    except Exception:
+        pass
+    
+    return JSONResponse(
+        status_code=500,
+        content=ErrorResponse(
+            error="internal_server_error",
+            message=str(exc) if os.getenv("DEBUG") else "An internal error occurred",
+            request_id=request_id,
+        ).model_dump(),
+    )
+
+
+# Create versioned API router
+api_v1_router = APIRouter(prefix=f"/api/{API_VERSION}")
+
+# Include routers under versioned prefix
+api_v1_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+api_v1_router.include_router(jobs.router, prefix="/jobs", tags=["Optimization Jobs"])
+api_v1_router.include_router(websocket_router, prefix="/ws", tags=["WebSocket"])
+api_v1_router.include_router(costs_router, tags=["Cost Estimation"])
+api_v1_router.include_router(backends_router, tags=["Quantum Backends"])
+
+# Mount versioned API
+app.include_router(api_v1_router)
+
+# Metrics endpoint at root level (for Prometheus scraping)
+app.include_router(metrics_router, tags=["Metrics"])
+
+# Add metrics middleware for automatic request tracking
+app.add_middleware(MetricsMiddleware)
+
+# Health endpoints at root level (for load balancers/orchestrators)
+app.include_router(health.router, tags=["Health"])
+
+# Legacy routes (deprecated, will be removed in future versions)
+# These mirror the v1 routes for backward compatibility
+app.include_router(auth.router, prefix="/auth", tags=["Authentication (Legacy)"], deprecated=True)
+app.include_router(jobs.router, prefix="/jobs", tags=["Optimization Jobs (Legacy)"], deprecated=True)
+app.include_router(websocket_router, prefix="/ws", tags=["WebSocket (Legacy)"], deprecated=True)
+app.include_router(costs_router, tags=["Cost Estimation (Legacy)"], deprecated=True)
+
+
+# Serve frontend static files
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+if FRONTEND_DIR.exists():
+    # Mount static assets (CSS, JS)
+    app.mount("/css", StaticFiles(directory=FRONTEND_DIR / "css"), name="css")
+    app.mount("/js", StaticFiles(directory=FRONTEND_DIR / "js"), name="js")
+    
+    @app.get("/", response_class=FileResponse)
+    async def serve_frontend():
+        """Serve the frontend landing page."""
+        return FileResponse(FRONTEND_DIR / "index.html")
+    
+    @app.get("/index.html", response_class=FileResponse)
+    async def serve_index_html():
+        """Serve the frontend landing page (explicit .html)."""
+        return FileResponse(FRONTEND_DIR / "index.html")
+    
+    @app.get("/dashboard", response_class=FileResponse)
+    async def serve_dashboard():
+        """Serve the dashboard page."""
+        return FileResponse(FRONTEND_DIR / "dashboard.html")
+    
+    @app.get("/dashboard.html", response_class=FileResponse)
+    async def serve_dashboard_html():
+        """Serve the dashboard page (explicit .html)."""
+        return FileResponse(FRONTEND_DIR / "dashboard.html")
+else:
+    @app.get("/")
+    async def root():
+        """Root endpoint (API info when no frontend)."""
+        return {
+            "name": "Quantum-Safe Secure Optimization Platform",
+            "version": "0.1.0",
+            "api_version": API_VERSION,
+            "status": "operational",
+            "endpoints": {
+                "api": f"/api/{API_VERSION}",
+                "docs": "/docs",
+                "health": "/health",
+            },
+            "deprecation_notice": "Root-level /auth and /jobs endpoints are deprecated. Use /api/v1/ prefix.",
+        }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        "main:app",
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=int(os.getenv("PORT", 8000)),
+        reload=os.getenv("DEBUG", "false").lower() == "true",
+    )

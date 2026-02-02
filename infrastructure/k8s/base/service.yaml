@@ -1,0 +1,43 @@
+# Service for Quantum-Safe Optimization Platform API
+apiVersion: v1
+kind: Service
+metadata:
+  name: quantum-api
+  namespace: quantum-platform
+  labels:
+    app: quantum-api
+    component: api
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+spec:
+  type: ClusterIP
+  selector:
+    app: quantum-api
+    component: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+# Headless service for direct pod access (useful for WebSocket connections)
+apiVersion: v1
+kind: Service
+metadata:
+  name: quantum-api-headless
+  namespace: quantum-platform
+  labels:
+    app: quantum-api
+    component: api
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: quantum-api
+    component: api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP

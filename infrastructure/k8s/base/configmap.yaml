@@ -1,0 +1,51 @@
+# ConfigMap for Quantum-Safe Optimization Platform
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quantum-api-config
+  namespace: quantum-platform
+data:
+  # Application settings
+  APP_ENV: "production"
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  
+  # API settings
+  API_VERSION: "v1"
+  API_TITLE: "Quantum-Safe Optimization Platform"
+  
+  # CORS settings
+  CORS_ORIGINS: "https://app.quantum-platform.example.com"
+  CORS_ALLOW_CREDENTIALS: "true"
+  
+  # Rate limiting
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_DEFAULT: "100/minute"
+  
+  # Celery settings
+  USE_CELERY: "true"
+  CELERY_BROKER_URL: "redis://redis-master:6379/0"
+  CELERY_RESULT_BACKEND: "redis://redis-master:6379/1"
+  
+  # Redis settings
+  REDIS_URL: "redis://redis-master:6379/2"
+  
+  # OpenTelemetry settings
+  OTEL_ENABLED: "true"
+  OTEL_SERVICE_NAME: "quantum-api"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+  OTEL_TRACES_SAMPLER: "parentbased_traceidratio"
+  OTEL_TRACES_SAMPLER_ARG: "0.1"
+  
+  # Health check settings
+  HEALTH_CHECK_INTERVAL: "30"
+  
+  # Optimization settings
+  MAX_QUBITS: "20"
+  DEFAULT_SHOTS: "1000"
+  MAX_ITERATIONS: "500"
+  
+  # Feature flags
+  FEATURE_WEBSOCKET_ENABLED: "true"
+  FEATURE_RESULT_ENCRYPTION: "true"
+  FEATURE_WEBHOOKS_ENABLED: "true"
