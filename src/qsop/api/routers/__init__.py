@@ -6,6 +6,7 @@ from .health import router as health_router
 from .jobs import router as jobs_router
 from .algorithms import router as algorithms_router
 from .keys import router as keys_router
+from .auth import router as auth_router
 
 
 def create_api_router() -> APIRouter:
@@ -26,4 +27,5 @@ __all__ = [
     "jobs_router",
     "algorithms_router",
     "keys_router",
+    "auth_router",
 ]
