@@ -1,6 +1,44 @@
 /* ===========================
    Dashboard Layout
    =========================== */
+
+/* Skip to content link for keyboard accessibility */
+.skip-to-content {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--primary);
+    color: #fff;
+    padding: 8px 16px;
+    z-index: 1000;
+    transition: top var(--transition-fast);
+    font-size: 0.875rem;
+    border-radius: 0 0 var(--radius-sm) 0;
+}
+
+.skip-to-content:focus {
+    top: 0;
+}
+
+/* Custom scrollbar for dashboard */
+.dashboard-body ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.dashboard-body ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dashboard-body ::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.dashboard-body ::-webkit-scrollbar-thumb:hover {
+    background: var(--border-light);
+}
+
 .dashboard-body {
     display: flex;
     min-height: 100vh;
