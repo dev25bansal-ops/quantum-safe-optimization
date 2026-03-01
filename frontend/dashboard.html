@@ -15,6 +15,9 @@
     <meta name="theme-color" content="#6366f1">
     <meta name="color-scheme" content="dark light">
 
+    <!-- PWA Support -->
+    <link rel="manifest" href="manifest.json">
+
     <!-- Open Graph / Social Media -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="QuantumSafe Optimize - Quantum Optimization Dashboard">
@@ -59,11 +62,14 @@
 </head>
 
 <body class="dashboard-body">
+    <!-- Skip to content for keyboard users -->
+    <a href="#main-dashboard" class="skip-to-content">Skip to main content</a>
+
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" role="navigation" aria-label="Main navigation">
         <div class="sidebar-header">
-            <a href="index.html" class="logo">
-                <span class="logo-icon">⚛</span>
+            <a href="index.html" class="logo" aria-label="QuantumSafe Optimize home">
+                <span class="logo-icon" aria-hidden="true">⚛</span>
                 <span class="logo-text">QS<span class="accent">O</span></span>
             </a>
         </div>
@@ -158,9 +164,9 @@
     <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
     <!-- Main Content -->
-    <main class="main-content">
+    <main class="main-content" role="main" aria-label="Dashboard content" id="main-dashboard">
         <!-- Top Bar -->
-        <header class="topbar">
+        <header class="topbar" role="banner">
             <div class="topbar-left">
                 <button class="sidebar-toggle" id="sidebar-toggle">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2610,6 +2616,17 @@ J = {(0,1): -1, (1,2): -1}</code></pre>
 
             console.log('✅ AI Optimization Suggestions initialized');
         });
+    </script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                    .then(reg => console.log('[SW] Registered:', reg.scope))
+                    .catch(err => console.warn('[SW] Registration failed:', err));
+            });
+        }
     </script>
 </body>
 

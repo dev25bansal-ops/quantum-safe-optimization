@@ -3,18 +3,49 @@
  * Handles navigation, animations, auth modal, and interactive elements
  */
 
+// Performance: Throttle utility for scroll/resize handlers
+function throttle(fn, delay) {
+    let last = 0;
+    let timer = null;
+    return function(...args) {
+        const now = Date.now();
+        if (now - last >= delay) {
+            last = now;
+            fn.apply(this, args);
+        } else {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                last = Date.now();
+                fn.apply(this, args);
+            }, delay - (now - last));
+        }
+    };
+}
+
+// Performance: Check for reduced motion preference
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initAlgorithmTabs();
     initScrollAnimations();
     initEnhancedScrollReveal();
-    initParticles();
+    if (!prefersReducedMotion) {
+        initParticles();
+        initMagneticButtons();
+        initParallaxEffects();
+    }
     initCopyButtons();
-    initMagneticButtons();
-    initParallaxEffects();
     initCounters();
     initNewsletter();
     initFAQ();
+
+    // Defer non-critical work
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => {
+            initWebVitals();
+        });
+    }
 });
 
 /**
@@ -33,7 +64,7 @@ function initNavigation() {
     // Scroll effect
     let lastScroll = 0;
 
-    window.addEventListener('scroll', () => {
+    window.addEventListener('scroll', throttle(() => {
         const currentScroll = window.pageYOffset;
 
         // Add scrolled class for background and hide announcement
@@ -52,7 +83,7 @@ function initNavigation() {
         }
 
         lastScroll = currentScroll;
-    });
+    }, 16)); // ~60fps throttle
 
     // Mobile menu toggle
     if (mobileMenuBtn) {
@@ -268,17 +299,22 @@ function initEnhancedScrollReveal() {
 }
 
 /**
- * Floating Particles - Background animation
+ * Floating Particles - Background animation (reduced on mobile)
  */
 function initParticles() {
     const container = document.getElementById('particles');
     if (!container) return;
 
-    const particleCount = 30;
+    // Reduce particles on mobile for performance
+    const isMobile = window.innerWidth < 768;
+    const particleCount = isMobile ? 12 : 30;
 
+    // Use DocumentFragment for batch DOM insertion
+    const fragment = document.createDocumentFragment();
     for (let i = 0; i < particleCount; i++) {
-        createParticle(container);
+        createParticle(fragment);
     }
+    container.appendChild(fragment);
 }
 
 function createParticle(container) {
@@ -878,19 +914,20 @@ function initMagneticButtons() {
 }
 
 /**
- * Parallax Effects
+ * Parallax Effects (throttled for performance)
  */
 function initParallaxEffects() {
     const parallaxElements = document.querySelectorAll('.gradient-orb, .quantum-visual');
+    if (!parallaxElements.length) return;
 
-    window.addEventListener('scroll', () => {
+    window.addEventListener('scroll', throttle(() => {
         const scrollY = window.pageYOffset;
 
         parallaxElements.forEach((el, index) => {
             const speed = 0.05 * (index + 1);
             el.style.transform = `translateY(${scrollY * speed}px)`;
         });
-    });
+    }, 16)); // ~60fps
 }
 
 /**
@@ -1415,3 +1452,47 @@ console.log(`
     'font-size: 10px; color: #666; font-style: italic;'
 );
 
+/**
+ * Web Vitals Tracking
+ * Monitors LCP, FID, CLS for performance insights
+ */
+function initWebVitals() {
+    // Largest Contentful Paint (LCP)
+    if ('PerformanceObserver' in window) {
+        try {
+            const lcpObserver = new PerformanceObserver((list) => {
+                const entries = list.getEntries();
+                const lastEntry = entries[entries.length - 1];
+                console.log(`[Perf] LCP: ${Math.round(lastEntry.startTime)}ms`);
+            });
+            lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true });
+
+            // Cumulative Layout Shift (CLS)
+            let clsValue = 0;
+            const clsObserver = new PerformanceObserver((list) => {
+                for (const entry of list.getEntries()) {
+                    if (!entry.hadRecentInput) {
+                        clsValue += entry.value;
+                    }
+                }
+            });
+            clsObserver.observe({ type: 'layout-shift', buffered: true });
+
+            // First Input Delay (FID)
+            const fidObserver = new PerformanceObserver((list) => {
+                const entry = list.getEntries()[0];
+                console.log(`[Perf] FID: ${Math.round(entry.processingStart - entry.startTime)}ms`);
+            });
+            fidObserver.observe({ type: 'first-input', buffered: true });
+
+            // Report on page hide
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') {
+                    console.log(`[Perf] CLS: ${clsValue.toFixed(4)}`);
+                }
+            }, { once: true });
+        } catch (e) {
+            // PerformanceObserver type not supported
+        }
+    }
+}

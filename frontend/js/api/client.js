@@ -59,6 +59,16 @@ class QuantumSafeAPIClient {
 
     // Pending requests for deduplication
     this.pendingRequests = new Map();
+
+    // Offline tracking
+    this._online = navigator.onLine;
+    window.addEventListener('online', () => { this._online = true; });
+    window.addEventListener('offline', () => { this._online = false; });
+  }
+
+  /** Check if the client is currently online */
+  get isOnline() {
+    return this._online;
   }
 
   /**
@@ -93,7 +103,6 @@ class QuantumSafeAPIClient {
         const cachedResponse = this.config.cache.get(endpoint);
         if (cachedResponse && Date.now() - cachedResponse.timestamp < (opts.cacheTTL || 60000)) {
           this.config.metrics.cachedRequests++;
-          console.log(`[API] Cache hit for ${endpoint}`);
           return {
             data: cachedResponse.data,
             metadata: cachedResponse.metadata,
@@ -104,33 +113,48 @@ class QuantumSafeAPIClient {
         }
       }
 
-      // Execute request with retry logic
-      const response = await this.executeWithRetry(url, finalOptions, requestId);
-
-      // Apply response interceptors
-      let processedResponse = response;
-      for (const interceptor of this.config.interceptors.response) {
-        processedResponse = await interceptor(processedResponse);
+      // Deduplicate identical GET requests in-flight
+      const dedupeKey = opts.method === 'GET' ? `${opts.method}:${endpoint}` : null;
+      if (dedupeKey && this.pendingRequests.has(dedupeKey)) {
+        return this.pendingRequests.get(dedupeKey);
       }
 
-      // Cache successful GET responses
-      if (opts.cache && opts.method === 'GET' && response.ok) {
-        this.config.cache.set(endpoint, {
+      // Execute request with retry logic
+      const responsePromise = (async () => {
+        const response = await this.executeWithRetry(url, finalOptions, requestId);
+
+        // Apply response interceptors
+        let processedResponse = response;
+        for (const interceptor of this.config.interceptors.response) {
+          processedResponse = await interceptor(processedResponse);
+        }
+
+        // Cache successful GET responses
+        if (opts.cache && opts.method === 'GET' && response.ok) {
+          this.config.cache.set(endpoint, {
+            data: response.data,
+            metadata: processedResponse.metadata,
+            timestamp: Date.now()
+          });
+        }
+
+        this.config.metrics.successfulRequests++;
+
+        return {
           data: response.data,
           metadata: processedResponse.metadata,
-          timestamp: Date.now()
-        });
+          requestId,
+          duration: Date.now() - opts.metadata.startTime,
+          cached: false
+        };
+      })();
+
+      if (dedupeKey) {
+        this.pendingRequests.set(dedupeKey, responsePromise);
+        responsePromise.finally(() => this.pendingRequests.delete(dedupeKey));
       }
 
-      this.config.metrics.successfulRequests++;
-
-      return {
-        data: response.data,
-        metadata: processedResponse.metadata,
-        requestId,
-        duration: Date.now() - opts.metadata.startTime,
-        cached: false
-      };
+      return await responsePromise;
 
     } catch (error) {
       this.config.metrics.failedRequests++;

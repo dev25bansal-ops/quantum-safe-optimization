@@ -18,6 +18,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -202,6 +203,9 @@ is_production = os.getenv("APP_ENV") == "production"
 # Security headers (always enabled)
 app.add_middleware(SecurityHeadersMiddleware, enable_hsts=is_production)
 
+# GZip compression for responses > 500 bytes
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 # Request ID tracking for distributed tracing
 app.add_middleware(RequestIDMiddleware)
 
@@ -265,6 +269,37 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
+# Structured 404 handler
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc):
+    """Handle 404 Not Found with structured response."""
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=404,
+            content=ErrorResponse(
+                error="not_found",
+                message=f"Endpoint {request.method} {request.url.path} not found",
+                request_id=request.headers.get("X-Request-ID"),
+            ).model_dump(),
+        )
+    return JSONResponse(status_code=404, content={"error": "Not Found"})
+
+
+# Structured 422 handler for validation errors
+@app.exception_handler(422)
+async def validation_exception_handler(request: Request, exc):
+    """Handle validation errors with clearer messages."""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "validation_error",
+            "message": "Request validation failed. Check your request body and parameters.",
+            "details": exc.errors() if hasattr(exc, "errors") else str(exc),
+            "request_id": request.headers.get("X-Request-ID"),
+        },
+    )
+
+
 # Create versioned API router
 api_v1_router = APIRouter(prefix=f"/api/{API_VERSION}")
 
@@ -303,6 +338,27 @@ if FRONTEND_DIR.exists():
     # Mount static assets (CSS, JS)
     app.mount("/css", StaticFiles(directory=FRONTEND_DIR / "css"), name="css")
     app.mount("/js", StaticFiles(directory=FRONTEND_DIR / "js"), name="js")
+
+    @app.get("/manifest.json")
+    async def serve_manifest():
+        """Serve the PWA manifest with proper caching."""
+        response = FileResponse(
+            FRONTEND_DIR / "manifest.json",
+            media_type="application/manifest+json",
+        )
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
+
+    @app.get("/sw.js")
+    async def serve_service_worker():
+        """Serve the Service Worker with no-cache for instant updates."""
+        response = FileResponse(
+            FRONTEND_DIR / "sw.js",
+            media_type="application/javascript",
+        )
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Service-Worker-Allowed"] = "/"
+        return response
 
     @app.get("/", response_class=FileResponse)
     async def serve_frontend():

@@ -17,6 +17,8 @@ export class Component {
     this.children = [];
     this.subscribers = [];
     this.isMounted = false;
+    this._eventCleanups = []; // Track event listeners for cleanup
+    this._updateQueued = false; // Batch update flag
   }
 
   // Lifecycle hooks
@@ -32,7 +34,7 @@ export class Component {
     // Override in subclass
   }
 
-  // State management with reactivity
+  // State management with reactivity and batched updates
   setState(newState) {
     const prevState = { ...this.state };
     this.state = typeof newState === 'function'
@@ -42,10 +44,16 @@ export class Component {
     // Notify subscribers
     this.subscribers.forEach(callback => callback(this.state, prevState));
 
-    // Trigger update if mounted
-    if (this.isMounted) {
-      this.componentDidUpdate(this.props, prevState);
-      this.render();
+    // Batch updates: only render once per microtask
+    if (this.isMounted && !this._updateQueued) {
+      this._updateQueued = true;
+      queueMicrotask(() => {
+        this._updateQueued = false;
+        if (this.isMounted) {
+          this.componentDidUpdate(this.props, prevState);
+          this.render();
+        }
+      });
     }
   }
 
@@ -93,10 +101,17 @@ export class Component {
     }
   }
 
-  // Unmount component
+  // Unmount component with full cleanup
   unmount() {
     this.componentWillUnmount();
     this.isMounted = false;
+
+    // Clean up all tracked event listeners
+    this._eventCleanups.forEach(cleanup => cleanup());
+    this._eventCleanups = [];
+
+    // Clear subscribers
+    this.subscribers = [];
 
     // Unmount children
     this.children.forEach(child => {
@@ -111,10 +126,10 @@ export class Component {
     }
   }
 
-  // Event handler factory
+  // Event handler factory with automatic cleanup tracking
   addEvent(element, event, handler, options = {}) {
     const wrappedHandler = (e) => {
-      e.preventDefault();
+      if (!options.allowDefault) e.preventDefault();
       try {
         handler(e);
       } catch (error) {
@@ -124,7 +139,9 @@ export class Component {
     };
 
     element.addEventListener(event, wrappedHandler, options);
-    return () => element.removeEventListener(event, wrappedHandler, options);
+    const cleanup = () => element.removeEventListener(event, wrappedHandler, options);
+    this._eventCleanups.push(cleanup);
+    return cleanup;
   }
 
   // Error handling
