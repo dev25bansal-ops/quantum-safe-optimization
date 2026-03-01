@@ -112,7 +112,7 @@ class TokenResponse(BaseModel):
     """JWT token response."""
 
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 - Standard JWT token type
     expires_in: int
     refresh_token: str | None = None
     pqc_signature: str  # ML-DSA signature of the token

@@ -36,7 +36,7 @@ def demo_kem_encryption():
     alice_shared_secret = kem.decapsulate(ciphertext, alice_sk)
 
     # Verify they match
-    assert alice_shared_secret == bob_shared_secret
+    assert  # noqa: S101 - Valid in demo code alice_shared_secret == bob_shared_secret
 
     return alice_shared_secret
 
@@ -78,7 +78,7 @@ def demo_digital_signatures():
 
     is_valid_tampered = verifier.verify(tampered_message, bundle)
 
-    assert is_valid and not is_valid_tampered
+    assert  # noqa: S101 - Valid in demo code is_valid and not is_valid_tampered
 
 
 def demo_signed_encrypted_message():

@@ -97,7 +97,7 @@ class RedisSettings(BaseSettings):
 class SecuritySettings(BaseSettings):
     """Security configuration."""
 
-    jwt_secret: str = Field(
+    jwt_secret: str = Field(  # noqa: S105 - This is a configuration parameter name
         default="development-secret-change-in-production",
         alias="JWT_SECRET",
         description="JWT signing secret",
@@ -292,7 +292,7 @@ class AppSettings(BaseSettings):
     debug: bool = Field(default=False, alias="DEBUG")
 
     # Server settings
-    host: str = Field(default="0.0.0.0", alias="API_HOST")
+    host: str = Field(default="0.0.0.0", alias="API_HOST"),  # noqa: S104 - Accepting connections from all interfaces
     port: int = Field(default=8000, alias="API_PORT", ge=1, le=65535)
     workers: int = Field(default=4, alias="API_WORKERS", ge=1, le=32)
 
@@ -329,7 +329,7 @@ class AppSettings(BaseSettings):
             # Require managed identity or strong JWT secret
             if (
                 not self.database.use_managed_identity
-                and self.security.jwt_secret == "development-secret-change-in-production"
+                and self.security.jwt_secret == "development-secret-change-in-production"  # noqa: S105 - Comparing to default value
             ):
                 raise ValueError("Must change JWT_SECRET from default in production")
 

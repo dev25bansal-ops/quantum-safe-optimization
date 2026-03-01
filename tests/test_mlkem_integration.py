@@ -23,7 +23,7 @@ def test_mlkem_job_encryption():
 
     # 2. Login
     login_resp = requests.post(
-        f"{BASE_URL}/auth/login", json={"username": username, "password": "TestPassword123!"}
+        f"{BASE_URL}/auth/login", json={"username": username, "password": "TestPassword123!"}, timeout=5
     )
     assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
     token = login_resp.json()["access_token"]
@@ -40,6 +40,7 @@ def test_mlkem_job_encryption():
 
     # 4. Register public key for result encryption
     reg_key_resp = requests.put(
+        timeout=5,
         f"{BASE_URL}/auth/keys/encryption-key",
         headers=headers,
         json={"public_key": public_key, "key_type": "ML-KEM-768"},
@@ -67,7 +68,7 @@ def test_mlkem_job_encryption():
     # 6. Wait for job completion
     max_wait = 30
     for _i in range(max_wait):
-        status_resp = requests.get(f"{BASE_URL}/jobs/{job_id}", headers=headers)
+        status_resp = requests.get(f"{BASE_URL}/jobs/{job_id}", headers=headers, timeout=5)
         status = status_resp.json()["status"]
         if status == "completed":
             break
@@ -79,7 +80,7 @@ def test_mlkem_job_encryption():
         return False
 
     # 7. Get encrypted result
-    result_resp = requests.get(f"{BASE_URL}/jobs/{job_id}/result", headers=headers)
+    result_resp = requests.get(f"{BASE_URL}/jobs/{job_id}/result", headers=headers, timeout=5)
     assert result_resp.status_code == 200, f"Failed to get result: {result_resp.text}"
     result_data = result_resp.json()
 
@@ -92,7 +93,7 @@ def test_mlkem_job_encryption():
         pass
 
     # 8. Verify encryption info endpoint
-    info_resp = requests.get(f"{BASE_URL}/jobs/encryption/info")
+    info_resp = requests.get(f"{BASE_URL}/jobs/encryption/info", timeout=5)
     assert info_resp.status_code == 200
     info_resp.json()
 

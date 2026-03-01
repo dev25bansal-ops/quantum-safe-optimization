@@ -113,7 +113,7 @@ async def test_login_valid_credentials(client: AsyncClient):
     data = response.json()
     assert "access_token" in data
     assert "pqc_signature" in data
-    assert data["token_type"] == "bearer"
+    assert data["token_type"] == "bearer"  # noqa: S105 - JWT field name
     assert data["expires_in"] == 86400
     # Verify token structure (header.payload.signature)
     token_parts = data["access_token"].split(".")

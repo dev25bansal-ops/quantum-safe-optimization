@@ -166,7 +166,7 @@ async def check_crypto_health() -> ComponentHealth:
                 details={
                     "kem_algorithm": kem_keys.algorithm,
                     "signing_algorithm": sign_keys.algorithm,
-                    "supported_levels": [l[0] for l in levels],
+                    "supported_levels": [level[0] for level in levels],
                 },
             )
         else:

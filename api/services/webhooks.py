@@ -48,7 +48,7 @@ def _host_matches_allowlist(host: str, allowlist: list[str]) -> bool:
 
 def _is_blocked_hostname(host: str) -> bool:
     """Basic hostname blocklist for local/internal targets."""
-    blocked = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+    blocked = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}  # noqa: S104 - Localhost bindings
     if host in blocked:
         return True
     if host.endswith(".local") or host.endswith(".internal"):

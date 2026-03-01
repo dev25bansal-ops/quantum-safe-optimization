@@ -253,7 +253,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
         record_exception(exc)
     except Exception:
-        pass
+        logger.warning(f"Telemetry recording failed: {exc}")
 
     return JSONResponse(
         status_code=500,
@@ -347,7 +347,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "main:app",
-        host=os.getenv("HOST", "0.0.0.0"),
+        host=os.getenv("HOST", "0.0.0.0"),  # noqa: S104 - Accepting connections from all interfaces
         port=int(os.getenv("PORT", 8000)),
         reload=os.getenv("DEBUG", "false").lower() == "true",
     )

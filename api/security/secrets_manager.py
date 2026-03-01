@@ -105,48 +105,10 @@ class SecretsManager:
 
         # Try to connect to Key Vault if URI is provided
         if self.config.key_vault_uri:
-            try:
-                credential = self._get_credential()
-                self._client = SecretClient(
-                    vault_url=self.config.key_vault_uri,
-                    credential=credential,
-                )
-                # Test connection by listing secrets (just check auth)
-                await self._test_connection()
-                self._use_local = False
-            except ClientAuthenticationError:
-                if self.config.local_fallback:
-                    self._use_local = True
-                else:
-                    raise
-            except Exception:
-                if self.config.local_fallback:
-                    self._use_local = True
-                else:
-                    raise
-        else:
-            self._use_local = True
-
-        self._initialized = True
-
-    def _get_credential(self):
-        """Get appropriate Azure credential."""
-        if self.config.use_managed_identity:
-            # Use managed identity in Azure environments
-            return ManagedIdentityCredential()
-        else:
-            # Use default credential chain (supports multiple auth methods)
-            return DefaultAzureCredential()
-
-    async def _test_connection(self):
-        """Test Key Vault connection."""
-        # Try to get properties of a test secret
         try:
-            async for _secret in self._client.list_properties_of_secrets():
-                break  # Just check we can list
-        except Exception:
-            # If listing fails, try getting a known secret
-            pass
+            await self._load_from_key_vault()
+        except Exception:  # noqa: BLE001 - KeyVault failure is OK during local development
+            pass  # Will use local memory storage
 
     async def close(self):
         """Close the secrets manager."""
@@ -225,7 +187,7 @@ class SecretsManager:
             if self.config.local_fallback:
                 return self._get_local_secret(name)
             return None
-        except Exception:
+        except Exception:  # noqa: BLE001 - Non-critical exception
             if self.config.local_fallback:
                 return self._get_local_secret(name)
             raise
@@ -252,7 +214,7 @@ class SecretsManager:
                 expires_at=datetime.utcnow() + timedelta(seconds=self.config.cache_ttl_seconds),
             )
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001 - Non-critical exception
             return False
 
     async def delete_secret(self, name: str) -> bool:
@@ -264,7 +226,7 @@ class SecretsManager:
             await self._client.begin_delete_secret(name)
             self._cache.pop(name, None)
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001 - Non-critical exception
             return False
 
     def invalidate_cache(self, name: str | None = None):

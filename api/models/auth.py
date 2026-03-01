@@ -26,7 +26,7 @@ class TokenResponse(BaseModel):
 
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 - Standard JWT token type
     expires_in: int
     signature: str = Field(..., description="ML-DSA signature of the token")
     algorithm: str = Field(default="ML-DSA-65")

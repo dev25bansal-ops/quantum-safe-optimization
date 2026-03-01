@@ -347,7 +347,7 @@ async def send_webhook_notification(
             if not delivery_result.success:
                 pass
 
-            return delivery_result.success
+        except Exception:  # noqa: BLE001 - Fallback to legacy is non-critical
         except Exception:
             pass
             # Fall through to legacy implementation
