@@ -1,17 +1,20 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard | QuantumSafe Optimize</title>
-    
+
     <!-- Meta Tags -->
-    <meta name="description" content="Quantum-Safe Secure Optimization Platform - Run QAOA, VQE, and quantum annealing jobs with post-quantum cryptography protection.">
-    <meta name="keywords" content="quantum computing, optimization, QAOA, VQE, quantum annealing, post-quantum cryptography, ML-KEM">
+    <meta name="description"
+        content="Quantum-Safe Secure Optimization Platform - Run QAOA, VQE, and quantum annealing jobs with post-quantum cryptography protection.">
+    <meta name="keywords"
+        content="quantum computing, optimization, QAOA, VQE, quantum annealing, post-quantum cryptography, ML-KEM">
     <meta name="author" content="QuantumSafe Optimize">
     <meta name="theme-color" content="#6366f1">
     <meta name="color-scheme" content="dark light">
-    
+
     <!-- Open Graph / Social Media -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="QuantumSafe Optimize - Quantum Optimization Dashboard">
@@ -19,30 +22,34 @@
     <meta property="og:image" content="/assets/og-image.png">
     <meta property="og:url" content="/dashboard">
     <meta name="twitter:card" content="summary_large_image">
-    
+
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚛</text></svg>">
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚛</text></svg>">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
-    
+
     <!-- Stylesheets -->
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/components.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <!-- Font Awesome - only load essential icons via kit or subset -->
     <link rel="stylesheet" href="css/icons.css">
     <!-- Chart.js - lazy loaded when needed -->
     <script>
         // Lazy load Chart.js only when needed
-        window.loadChartJS = function() {
+        window.loadChartJS = function () {
             return new Promise((resolve, reject) => {
                 if (window.Chart) {
                     resolve(window.Chart);
                     return;
                 }
                 const script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+                script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
                 script.onload = () => resolve(window.Chart);
                 script.onerror = reject;
                 document.head.appendChild(script);
@@ -50,6 +57,7 @@
         };
     </script>
 </head>
+
 <body class="dashboard-body">
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -59,84 +67,85 @@
                 <span class="logo-text">QS<span class="accent">O</span></span>
             </a>
         </div>
-        
+
         <nav class="sidebar-nav">
             <div class="nav-section">
                 <span class="nav-section-title">Main</span>
                 <a href="#" class="nav-item active" data-section="overview">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"/>
-                        <rect x="14" y="3" width="7" height="7"/>
-                        <rect x="14" y="14" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/>
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
                     </svg>
                     <span>Overview</span>
                 </a>
                 <a href="#" class="nav-item" data-section="new-job">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"/>
-                        <line x1="12" y1="8" x2="12" y2="16"/>
-                        <line x1="8" y1="12" x2="16" y2="12"/>
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="16" />
+                        <line x1="8" y1="12" x2="16" y2="12" />
                     </svg>
                     <span>New Job</span>
                 </a>
                 <a href="#" class="nav-item" data-section="jobs">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="16" y1="13" x2="8" y2="13"/>
-                        <line x1="16" y1="17" x2="8" y2="17"/>
-                        <polyline points="10 9 9 9 8 9"/>
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                        <polyline points="10 9 9 9 8 9" />
                     </svg>
                     <span>My Jobs</span>
                     <span class="nav-badge" id="jobs-count">0</span>
                 </a>
             </div>
-            
+
             <div class="nav-section">
                 <span class="nav-section-title">Algorithms</span>
                 <a href="#" class="nav-item" data-section="qaoa">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-                        <polyline points="2 17 12 22 22 17"/>
-                        <polyline points="2 12 12 17 22 12"/>
+                        <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                        <polyline points="2 17 12 22 22 17" />
+                        <polyline points="2 12 12 17 22 12" />
                     </svg>
                     <span>QAOA</span>
                 </a>
                 <a href="#" class="nav-item" data-section="vqe">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3"/>
-                        <path d="M12 1v6m0 6v10"/>
-                        <path d="M1 12h6m6 0h10"/>
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M12 1v6m0 6v10" />
+                        <path d="M1 12h6m6 0h10" />
                     </svg>
                     <span>VQE</span>
                 </a>
                 <a href="#" class="nav-item" data-section="annealing">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                     </svg>
                     <span>Annealing</span>
                 </a>
             </div>
-            
+
             <div class="nav-section">
                 <span class="nav-section-title">System</span>
                 <a href="#" class="nav-item" data-section="security">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     </svg>
                     <span>Security</span>
                 </a>
                 <a href="#" class="nav-item" data-section="settings">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3"/>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                     </svg>
                     <span>Settings</span>
                 </a>
             </div>
         </nav>
-        
+
         <div class="sidebar-footer">
             <div class="api-status" id="api-status">
                 <span class="status-dot"></span>
@@ -155,9 +164,9 @@
             <div class="topbar-left">
                 <button class="sidebar-toggle" id="sidebar-toggle">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="3" y1="12" x2="21" y2="12"/>
-                        <line x1="3" y1="6" x2="21" y2="6"/>
-                        <line x1="3" y1="18" x2="21" y2="18"/>
+                        <line x1="3" y1="12" x2="21" y2="12" />
+                        <line x1="3" y1="6" x2="21" y2="6" />
+                        <line x1="3" y1="18" x2="21" y2="18" />
                     </svg>
                 </button>
                 <h1 class="page-title" id="page-title">Overview</h1>
@@ -169,8 +178,8 @@
                 </button>
                 <div class="search-box" id="search-box">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"/>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
                     <input type="text" placeholder="Search jobs..." id="search-input">
                 </div>
@@ -178,10 +187,11 @@
                     <i class="fas fa-moon"></i>
                 </button>
                 <div class="notification-menu" id="notification-menu">
-                    <button class="icon-btn" id="notification-btn" title="Notifications (N)" onclick="toggleNotifications(event)">
+                    <button class="icon-btn" id="notification-btn" title="Notifications (N)"
+                        onclick="toggleNotifications(event)">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                         </svg>
                         <span class="notification-badge" id="notification-badge" style="display: none;">0</span>
                     </button>
@@ -214,7 +224,8 @@
                         <a href="#" class="user-dropdown-item" id="btn-login" onclick="openAuthModal(event)">
                             <i class="fas fa-sign-in-alt"></i> Sign In
                         </a>
-                        <a href="#" class="user-dropdown-item" id="btn-logout" onclick="handleLogout(event)" style="display: none;">
+                        <a href="#" class="user-dropdown-item" id="btn-logout" onclick="handleLogout(event)"
+                            style="display: none;">
                             <i class="fas fa-sign-out-alt"></i> Sign Out
                         </a>
                         <a href="#" class="user-dropdown-item" data-section="settings">
@@ -233,8 +244,8 @@
                     <div class="stat-card">
                         <div class="stat-icon blue">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                <polyline points="14 2 14 8 20 8"/>
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
                             </svg>
                         </div>
                         <div class="stat-info">
@@ -245,8 +256,8 @@
                     <div class="stat-card">
                         <div class="stat-icon green">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                                <polyline points="22 4 12 14.01 9 11.01"/>
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                <polyline points="22 4 12 14.01 9 11.01" />
                             </svg>
                         </div>
                         <div class="stat-info">
@@ -257,8 +268,8 @@
                     <div class="stat-card">
                         <div class="stat-icon yellow">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"/>
-                                <polyline points="12 6 12 12 16 14"/>
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
                             </svg>
                         </div>
                         <div class="stat-info">
@@ -269,7 +280,7 @@
                     <div class="stat-card">
                         <div class="stat-icon purple">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                             </svg>
                         </div>
                         <div class="stat-info">
@@ -289,11 +300,12 @@
                             <div class="jobs-list" id="recent-jobs">
                                 <div class="empty-state">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                        <polyline points="14 2 14 8 20 8"/>
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                        <polyline points="14 2 14 8 20 8" />
                                     </svg>
                                     <p>No jobs yet</p>
-                                    <a href="#" class="btn btn-primary btn-sm" data-section="new-job">Create Your First Job</a>
+                                    <a href="#" class="btn btn-primary btn-sm" data-section="new-job">Create Your First
+                                        Job</a>
                                 </div>
                             </div>
                         </div>
@@ -322,9 +334,9 @@
                                 <button class="action-card" data-section="new-job" data-type="QAOA">
                                     <div class="action-icon">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-                                            <polyline points="2 17 12 22 22 17"/>
-                                            <polyline points="2 12 12 17 22 12"/>
+                                            <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                                            <polyline points="2 17 12 22 22 17" />
+                                            <polyline points="2 12 12 17 22 12" />
                                         </svg>
                                     </div>
                                     <span>New QAOA Job</span>
@@ -332,9 +344,9 @@
                                 <button class="action-card" data-section="new-job" data-type="VQE">
                                     <div class="action-icon">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <circle cx="12" cy="12" r="3"/>
-                                            <path d="M12 1v6m0 6v10"/>
-                                            <path d="M1 12h6m6 0h10"/>
+                                            <circle cx="12" cy="12" r="3" />
+                                            <path d="M12 1v6m0 6v10" />
+                                            <path d="M1 12h6m6 0h10" />
                                         </svg>
                                     </div>
                                     <span>New VQE Job</span>
@@ -342,7 +354,7 @@
                                 <button class="action-card" data-section="new-job" data-type="ANNEALING">
                                     <div class="action-icon">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                                         </svg>
                                     </div>
                                     <span>New Annealing Job</span>
@@ -532,7 +544,7 @@
                                         <option value="ANNEALING">Quantum Annealing</option>
                                     </select>
                                 </div>
-                                
+
                                 <div class="form-group">
                                     <label for="backend"><i class="fas fa-server"></i> Backend</label>
                                     <select id="backend" name="backend" required>
@@ -580,12 +592,14 @@
                                     </div>
                                     <div class="form-group">
                                         <label for="qaoa-shots">Shots (Measurements)</label>
-                                        <input type="number" id="qaoa-shots" value="1000" min="100" max="10000" step="100">
+                                        <input type="number" id="qaoa-shots" value="1000" min="100" max="10000"
+                                            step="100">
                                     </div>
                                 </div>
                                 <div class="form-group full-width">
                                     <label for="qaoa-graph">Graph Adjacency Matrix (JSON)</label>
-                                    <textarea id="qaoa-graph" rows="4" placeholder='[[0,1,1,0],[1,0,1,1],[1,1,0,1],[0,1,1,0]]'>[[0,1,1,0],[1,0,1,1],[1,1,0,1],[0,1,1,0]]</textarea>
+                                    <textarea id="qaoa-graph" rows="4"
+                                        placeholder='[[0,1,1,0],[1,0,1,1],[1,1,0,1],[0,1,1,0]]'>[[0,1,1,0],[1,0,1,1],[1,1,0,1],[0,1,1,0]]</textarea>
                                 </div>
                             </div>
 
@@ -627,7 +641,8 @@
                                     </div>
                                     <div class="form-group">
                                         <label for="vqe-shots">Shots</label>
-                                        <input type="number" id="vqe-shots" value="1000" min="100" max="10000" step="100">
+                                        <input type="number" id="vqe-shots" value="1000" min="100" max="10000"
+                                            step="100">
                                     </div>
                                 </div>
                             </div>
@@ -653,12 +668,14 @@
                                     </div>
                                     <div class="form-group">
                                         <label for="anneal-chain">Chain Strength</label>
-                                        <input type="number" id="anneal-chain" value="2.0" min="0.1" max="10" step="0.1">
+                                        <input type="number" id="anneal-chain" value="2.0" min="0.1" max="10"
+                                            step="0.1">
                                     </div>
                                 </div>
                                 <div class="form-group full-width">
                                     <label for="anneal-matrix">QUBO Matrix (JSON)</label>
-                                    <textarea id="anneal-matrix" rows="4" placeholder='[[-1, 2, 0], [2, -1, 2], [0, 2, -1]]'>[[-1, 2, 0], [2, -1, 2], [0, 2, -1]]</textarea>
+                                    <textarea id="anneal-matrix" rows="4"
+                                        placeholder='[[-1, 2, 0], [2, -1, 2], [0, 2, -1]]'>[[-1, 2, 0], [2, -1, 2], [0, 2, -1]]</textarea>
                                 </div>
                             </div>
 
@@ -733,8 +750,10 @@
                                         </select>
                                     </div>
                                     <div class="form-group">
-                                        <label for="callback-url"><i class="fas fa-bell"></i> Webhook Callback URL</label>
-                                        <input type="url" id="callback-url" placeholder="https://your-server.com/webhook" pattern="https?://.*">
+                                        <label for="callback-url"><i class="fas fa-bell"></i> Webhook Callback
+                                            URL</label>
+                                        <input type="url" id="callback-url"
+                                            placeholder="https://your-server.com/webhook" pattern="https?://.*">
                                         <small class="form-hint">Receive job status updates via webhook</small>
                                     </div>
                                 </div>
@@ -763,11 +782,20 @@
                                 </div>
                             </div>
 
+                            <!-- AI Optimization Suggestions -->
+                            <div id="ai-suggestions-container" class="ai-suggestions-section" style="display: none;">
+                                <div id="ai-suggestions-placeholder" class="ai-suggestions-placeholder">
+                                    <i class="fas fa-lightbulb"></i>
+                                    <h4>AI-Powered Optimization Suggestions</h4>
+                                    <p>Configure your job parameters above to receive intelligent recommendations based on historical performance.</p>
+                                </div>
+                            </div>
+
                             <div class="form-actions">
                                 <button type="button" class="btn btn-outline" id="preview-job">Preview JSON</button>
                                 <button type="submit" class="btn btn-primary btn-lg">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polygon points="5 3 19 12 5 21 5 3"/>
+                                        <polygon points="5 3 19 12 5 21 5 3" />
                                     </svg>
                                     Submit Job
                                 </button>
@@ -818,7 +846,8 @@
                         </div>
                     </div>
                     <div class="toolbar-right">
-                        <button class="btn btn-outline btn-sm compare-btn" id="compare-jobs-btn" onclick="openCompareModal()" title="Compare Selected Jobs" style="display: none;">
+                        <button class="btn btn-outline btn-sm compare-btn" id="compare-jobs-btn"
+                            onclick="openCompareModal()" title="Compare Selected Jobs" style="display: none;">
                             <i class="fas fa-columns"></i> Compare (<span id="compare-count">0</span>)
                         </button>
                         <button class="btn btn-outline btn-sm" onclick="exportAllJobs()" title="Export All">
@@ -835,7 +864,8 @@
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th class="checkbox-col"><input type="checkbox" id="select-all-jobs" title="Select all for comparison"></th>
+                                    <th class="checkbox-col"><input type="checkbox" id="select-all-jobs"
+                                            title="Select all for comparison"></th>
                                     <th><i class="fas fa-hashtag"></i> Job ID</th>
                                     <th><i class="fas fa-cog"></i> Type</th>
                                     <th><i class="fas fa-server"></i> Backend</th>
@@ -851,7 +881,8 @@
                                         <div class="empty-state">
                                             <i class="fas fa-inbox fa-3x"></i>
                                             <p>No jobs found</p>
-                                            <button class="btn btn-primary btn-sm" data-section="new-job">Create Your First Job</button>
+                                            <button class="btn btn-primary btn-sm" data-section="new-job">Create Your
+                                                First Job</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -864,100 +895,431 @@
                 </div>
             </section>
 
-            <!-- Job Details Section -->
+            <!-- Job Details Section - Professional Enterprise Design -->
             <section class="dashboard-section" id="section-job-details">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="job-details-header">
-                            <div>
-                                <h3 id="job-detail-title"><i class="fas fa-flask"></i> Job Details</h3>
-                                <span class="job-id" id="job-detail-id"></span>
+                <!-- Top Action Bar -->
+                <div class="job-details-topbar">
+                    <div class="topbar-breadcrumb">
+                        <button class="btn btn-ghost" data-section="jobs">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <span class="breadcrumb-text">Jobs</span>
+                        <i class="fas fa-chevron-right breadcrumb-separator"></i>
+                        <span class="breadcrumb-current" id="job-detail-breadcrumb">Job Details</span>
+                    </div>
+                    <div class="topbar-actions">
+                        <button class="btn btn-ghost btn-icon" id="refresh-job" title="Refresh">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <div class="dropdown-container">
+                            <button class="btn btn-ghost btn-icon dropdown-trigger" data-dropdown="job-actions-menu">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <div class="dropdown-panel" id="job-actions-menu">
+                                <button class="dropdown-option" onclick="cloneJob(STATE.selectedJobId)">
+                                    <i class="fas fa-clone"></i> Clone Job
+                                </button>
+                                <button class="dropdown-option" onclick="exportJob(STATE.selectedJobId, 'json')">
+                                    <i class="fas fa-file-code"></i> Export JSON
+                                </button>
+                                <button class="dropdown-option" onclick="exportJob(STATE.selectedJobId, 'csv')">
+                                    <i class="fas fa-file-csv"></i> Export CSV
+                                </button>
+                                <div class="dropdown-divider"></div>
+                                <button class="dropdown-option danger" id="cancel-job-menu" style="display: none;">
+                                    <i class="fas fa-stop-circle"></i> Cancel Job
+                                </button>
                             </div>
-                            <span class="status-badge" id="job-detail-status">Pending</span>
                         </div>
                     </div>
-                    <div class="card-body">
-                        <!-- Progress Section (for running jobs) -->
-                        <div class="progress-section" id="progress-section" style="display: none;">
-                            <div class="progress-header">
-                                <span class="progress-label"><i class="fas fa-spinner fa-spin"></i> Job Progress</span>
-                                <span class="progress-text" id="job-progress-text">Processing...</span>
-                            </div>
-                            <div class="progress-bar-container">
-                                <div class="progress-bar" id="job-progress-bar" style="width: 0%;"></div>
-                            </div>
-                        </div>
+                </div>
 
-                        <div class="job-details-grid">
-                            <div class="detail-item">
-                                <label><i class="fas fa-cog"></i> Problem Type</label>
-                                <span id="detail-type">-</span>
-                            </div>
-                            <div class="detail-item">
-                                <label><i class="fas fa-server"></i> Backend</label>
-                                <span id="detail-backend">-</span>
-                            </div>
-                            <div class="detail-item">
-                                <label><i class="fas fa-calendar"></i> Created</label>
-                                <span id="detail-created">-</span>
-                            </div>
-                            <div class="detail-item">
-                                <label><i class="fas fa-lock"></i> Encrypted</label>
-                                <span id="detail-encrypted">-</span>
-                            </div>
-                        </div>
-
-                        <div class="results-section" id="results-section" style="display: none;">
-                            <h4><i class="fas fa-chart-line"></i> Results</h4>
-                            <div class="results-content">
-                                <div class="result-item">
-                                    <label>Optimal Value</label>
-                                    <span class="result-value" id="result-optimal">-</span>
+                <!-- Main Content Grid -->
+                <div class="job-details-layout">
+                    <!-- Left Panel - Overview -->
+                    <div class="job-panel job-panel-main">
+                        <!-- Job Header Card -->
+                        <div class="pro-card job-header-card">
+                            <div class="job-header-content">
+                                <div class="job-type-badge" id="job-type-badge">
+                                    <span class="type-icon">⚛️</span>
+                                    <span class="type-label" id="detail-type-label">QAOA</span>
                                 </div>
-                                <div class="result-item">
-                                    <label>Optimal Solution</label>
-                                    <pre id="result-solution">-</pre>
+                                <div class="job-header-info">
+                                    <h2 class="job-title" id="job-detail-title">Quantum Optimization Job</h2>
+                                    <div class="job-meta-row">
+                                        <span class="job-id-badge" id="job-detail-id">
+                                            <i class="fas fa-fingerprint"></i>
+                                            <code>job_id</code>
+                                        </span>
+                                        <span class="status-pill" id="job-detail-status">
+                                            <span class="status-dot"></span>
+                                            <span class="status-text">Pending</span>
+                                        </span>
+                                    </div>
                                 </div>
-                                <div class="result-item">
-                                    <label>Iterations</label>
-                                    <span id="result-iterations">-</span>
+                            </div>
+                            <div class="job-header-meta">
+                                <div class="meta-item">
+                                    <span class="meta-label">Backend</span>
+                                    <span class="meta-value" id="detail-backend">local_simulator</span>
                                 </div>
-                                <div class="result-item">
-                                    <label>Execution Time</label>
-                                    <span id="result-time">-</span>
+                                <div class="meta-item">
+                                    <span class="meta-label">Created</span>
+                                    <span class="meta-value" id="detail-created">-</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Security</span>
+                                    <span class="meta-value security-badge" id="detail-encrypted">
+                                        <i class="fas fa-shield-alt"></i> PQC Enabled
+                                    </span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Convergence Chart Section -->
-                        <div class="chart-section" id="chart-section" style="display: none;">
-                            <h4><i class="fas fa-chart-area"></i> Convergence History</h4>
-                            <div class="chart-container">
-                                <canvas id="convergence-chart"></canvas>
+                        <!-- Execution Timeline -->
+                        <div class="pro-card">
+                            <div class="pro-card-header">
+                                <h3><i class="fas fa-stream"></i> Execution Pipeline</h3>
+                            </div>
+                            <div class="pro-card-body">
+                                <div class="execution-pipeline" id="job-timeline">
+                                    <div class="pipeline-stage" id="timeline-created" data-stage="created">
+                                        <div class="stage-indicator completed">
+                                            <div class="stage-icon"><i class="fas fa-file-alt"></i></div>
+                                            <div class="stage-ring"></div>
+                                        </div>
+                                        <div class="stage-info">
+                                            <span class="stage-name">Submitted</span>
+                                            <span class="stage-time" id="timeline-created-time">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="pipeline-connector" id="timeline-connector-1"></div>
+                                    <div class="pipeline-stage" id="timeline-queued" data-stage="queued">
+                                        <div class="stage-indicator">
+                                            <div class="stage-icon"><i class="fas fa-layer-group"></i></div>
+                                            <div class="stage-ring"></div>
+                                        </div>
+                                        <div class="stage-info">
+                                            <span class="stage-name">Queue</span>
+                                            <span class="stage-time" id="timeline-queued-time">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="pipeline-connector" id="timeline-connector-2"></div>
+                                    <div class="pipeline-stage" id="timeline-processing" data-stage="processing">
+                                        <div class="stage-indicator">
+                                            <div class="stage-icon"><i class="fas fa-microchip"></i></div>
+                                            <div class="stage-ring"></div>
+                                        </div>
+                                        <div class="stage-info">
+                                            <span class="stage-name">Execution</span>
+                                            <span class="stage-time" id="timeline-processing-time">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="pipeline-connector" id="timeline-connector-3"></div>
+                                    <div class="pipeline-stage" id="timeline-completed" data-stage="completed">
+                                        <div class="stage-indicator">
+                                            <div class="stage-icon"><i class="fas fa-check-double"></i></div>
+                                            <div class="stage-ring"></div>
+                                        </div>
+                                        <div class="stage-info">
+                                            <span class="stage-name">Complete</span>
+                                            <span class="stage-time" id="timeline-completed-time">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Live Progress (for running jobs) -->
+                                <div class="live-progress-panel" id="progress-section" style="display: none;">
+                                    <div class="progress-info">
+                                        <span class="progress-stage"><i class="fas fa-circle-notch fa-spin"></i> <span
+                                                id="job-progress-text">Processing...</span></span>
+                                        <span class="progress-percent" id="job-progress-percent">0%</span>
+                                    </div>
+                                    <div class="progress-track">
+                                        <div class="progress-fill" id="job-progress-bar"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="config-section-display">
-                            <h4><i class="fas fa-sliders-h"></i> Configuration</h4>
-                            <pre><code id="detail-config">{}</code></pre>
+                        <!-- Results Section -->
+                        <div class="pro-card results-card" id="results-section" style="display: none;">
+                            <div class="pro-card-header">
+                                <h3><i class="fas fa-chart-line"></i> Optimization Results</h3>
+                                <button class="btn btn-ghost btn-sm" onclick="exportChartAsPNG()"
+                                    title="Export Results">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </button>
+                            </div>
+                            <div class="pro-card-body">
+                                <!-- Key Metrics Grid -->
+                                <div class="metrics-grid">
+                                    <div class="metric-card highlight">
+                                        <div class="metric-icon gradient-primary">
+                                            <i class="fas fa-bullseye"></i>
+                                        </div>
+                                        <div class="metric-data">
+                                            <span class="metric-value" id="result-optimal">-</span>
+                                            <span class="metric-label">Optimal Value</span>
+                                        </div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-icon gradient-success">
+                                            <i class="fas fa-bolt"></i>
+                                        </div>
+                                        <div class="metric-data">
+                                            <span class="metric-value" id="result-time">-</span>
+                                            <span class="metric-label">Execution Time</span>
+                                        </div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-icon gradient-info">
+                                            <i class="fas fa-redo"></i>
+                                        </div>
+                                        <div class="metric-data">
+                                            <span class="metric-value" id="result-iterations">-</span>
+                                            <span class="metric-label">Iterations</span>
+                                        </div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-icon gradient-warning">
+                                            <i class="fas fa-chart-line"></i>
+                                        </div>
+                                        <div class="metric-data">
+                                            <span class="metric-value improvement" id="result-improvement">-</span>
+                                            <span class="metric-label">Improvement</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Solution Output -->
+                                <div class="solution-panel">
+                                    <div class="solution-header">
+                                        <h4><i class="fas fa-lightbulb"></i> Optimal Solution</h4>
+                                        <button class="btn btn-ghost btn-xs" onclick="copySolution()"
+                                            title="Copy to Clipboard">
+                                            <i class="fas fa-copy"></i> Copy
+                                        </button>
+                                    </div>
+                                    <div class="solution-output">
+                                        <pre><code id="result-solution">-</code></pre>
+                                    </div>
+                                </div>
+
+                                <!-- Solution Visualization -->
+                                <div class="viz-panel" id="solution-viz-section" style="display: none;">
+                                    <div class="viz-header">
+                                        <h4><i class="fas fa-th"></i> Solution Visualization</h4>
+                                        <div class="viz-tabs">
+                                            <button class="viz-tab active" data-viz="bitstring">Bitstring</button>
+                                            <button class="viz-tab" data-viz="heatmap">Heatmap</button>
+                                        </div>
+                                    </div>
+                                    <div class="viz-content">
+                                        <div class="bitstring-viz" id="bitstring-viz">
+                                            <!-- Bitstring visualization rendered here -->
+                                        </div>
+                                        <div class="viz-legend">
+                                            <span class="legend-item"><span class="legend-color on"></span> 1
+                                                (Selected)</span>
+                                            <span class="legend-item"><span class="legend-color off"></span> 0 (Not
+                                                Selected)</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Visualizations Grid -->
+                                <div class="viz-grid" id="viz-grid-section" style="display: none;">
+                                    <!-- Convergence Chart -->
+                                    <div class="viz-card">
+                                        <div class="viz-card-header">
+                                            <h5><i class="fas fa-chart-line"></i> Convergence History</h5>
+                                        </div>
+                                        <div class="viz-card-body">
+                                            <canvas id="convergence-chart"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <!-- Energy Distribution -->
+                                    <div class="viz-card">
+                                        <div class="viz-card-header">
+                                            <h5><i class="fas fa-chart-bar"></i> Energy Distribution</h5>
+                                        </div>
+                                        <div class="viz-card-body">
+                                            <canvas id="energy-distribution-chart"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <!-- Probability Distribution -->
+                                    <div class="viz-card">
+                                        <div class="viz-card-header">
+                                            <h5><i class="fas fa-percentage"></i> State Probabilities</h5>
+                                        </div>
+                                        <div class="viz-card-body">
+                                            <canvas id="probability-chart"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <!-- Parameter Landscape -->
+                                    <div class="viz-card">
+                                        <div class="viz-card-header">
+                                            <h5><i class="fas fa-mountain"></i> Parameter Space</h5>
+                                        </div>
+                                        <div class="viz-card-body">
+                                            <canvas id="parameter-chart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Graph Visualization (for MaxCut/QAOA) -->
+                                <div class="graph-viz-panel" id="graph-viz-section" style="display: none;">
+                                    <div class="viz-header">
+                                        <h4><i class="fas fa-project-diagram"></i> Graph Solution</h4>
+                                        <div class="graph-controls">
+                                            <button class="btn btn-ghost btn-xs" onclick="resetGraphView()"
+                                                title="Reset View">
+                                                <i class="fas fa-compress-arrows-alt"></i>
+                                            </button>
+                                            <button class="btn btn-ghost btn-xs" onclick="toggleGraphLabels()"
+                                                title="Toggle Labels">
+                                                <i class="fas fa-tag"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="graph-container">
+                                        <canvas id="graph-canvas"></canvas>
+                                    </div>
+                                    <div class="graph-legend">
+                                        <div class="graph-legend-item">
+                                            <span class="node-sample set-a"></span> Set A (1)
+                                        </div>
+                                        <div class="graph-legend-item">
+                                            <span class="node-sample set-b"></span> Set B (0)
+                                        </div>
+                                        <div class="graph-legend-item">
+                                            <span class="edge-sample cut"></span> Cut Edge
+                                        </div>
+                                        <div class="graph-legend-item">
+                                            <span class="edge-sample same"></span> Same Set Edge
+                                        </div>
+                                    </div>
+                                    <div class="graph-stats">
+                                        <div class="graph-stat">
+                                            <span class="graph-stat-label">Cut Value</span>
+                                            <span class="graph-stat-value" id="graph-cut-value">-</span>
+                                        </div>
+                                        <div class="graph-stat">
+                                            <span class="graph-stat-label">Nodes</span>
+                                            <span class="graph-stat-value" id="graph-node-count">-</span>
+                                        </div>
+                                        <div class="graph-stat">
+                                            <span class="graph-stat-label">Edges</span>
+                                            <span class="graph-stat-value" id="graph-edge-count">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Extended Statistics -->
+                                <div class="extended-stats" id="additional-stats" style="display: none;">
+                                    <h4><i class="fas fa-chart-pie"></i> Statistical Analysis</h4>
+                                    <div class="stats-table">
+                                        <div class="stat-row">
+                                            <span class="stat-key">Mean Energy</span>
+                                            <span class="stat-val" id="stat-mean">-</span>
+                                        </div>
+                                        <div class="stat-row">
+                                            <span class="stat-key">Std. Deviation</span>
+                                            <span class="stat-val" id="stat-std">-</span>
+                                        </div>
+                                        <div class="stat-row">
+                                            <span class="stat-key">Best Sample</span>
+                                            <span class="stat-val" id="stat-best">-</span>
+                                        </div>
+                                        <div class="stat-row">
+                                            <span class="stat-key">Success Rate</span>
+                                            <span class="stat-val" id="stat-success-rate">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="card-footer">
-                        <button class="btn btn-outline" data-section="jobs">
-                            <i class="fas fa-arrow-left"></i> Back to Jobs
-                        </button>
-                        <button class="btn btn-outline btn-danger" id="cancel-job" style="display: none;">
-                            <i class="fas fa-stop-circle"></i> Cancel Job
-                        </button>
-                        <button class="btn btn-outline btn-warning" id="retry-job" style="display: none;">
-                            <i class="fas fa-redo"></i> Retry Job
-                        </button>
-                        <button class="btn btn-outline" onclick="exportJob(STATE.selectedJobId)">
-                            <i class="fas fa-download"></i> Export
-                        </button>
-                        <button class="btn btn-primary" id="refresh-job">
-                            <i class="fas fa-sync-alt"></i> Refresh Status
-                        </button>
+
+                    <!-- Right Panel - Configuration & Details -->
+                    <div class="job-panel job-panel-side">
+                        <!-- Job Parameters -->
+                        <div class="pro-card">
+                            <div class="pro-card-header">
+                                <h3><i class="fas fa-cog"></i> Parameters</h3>
+                            </div>
+                            <div class="pro-card-body">
+                                <div class="param-list">
+                                    <div class="param-item">
+                                        <div class="param-icon"><i class="fas fa-atom"></i></div>
+                                        <div class="param-info">
+                                            <span class="param-label">Problem Type</span>
+                                            <span class="param-value" id="detail-type">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="param-item">
+                                        <div class="param-icon"><i class="fas fa-cubes"></i></div>
+                                        <div class="param-info">
+                                            <span class="param-label">Qubits</span>
+                                            <span class="param-value" id="detail-qubits">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="param-item">
+                                        <div class="param-icon"><i class="fas fa-layer-group"></i></div>
+                                        <div class="param-info">
+                                            <span class="param-label">Circuit Depth</span>
+                                            <span class="param-value" id="detail-layers">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="param-item">
+                                        <div class="param-icon"><i class="fas fa-server"></i></div>
+                                        <div class="param-info">
+                                            <span class="param-label">Backend</span>
+                                            <span class="param-value" id="detail-backend-param">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Configuration JSON -->
+                        <div class="pro-card">
+                            <div class="pro-card-header collapsible" onclick="toggleConfigPanel()">
+                                <h3><i class="fas fa-code"></i> Configuration</h3>
+                                <i class="fas fa-chevron-down collapse-icon" id="config-collapse-icon"></i>
+                            </div>
+                            <div class="pro-card-body config-panel" id="config-panel">
+                                <pre class="config-json"><code id="detail-config">{}</code></pre>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="pro-card">
+                            <div class="pro-card-header">
+                                <h3><i class="fas fa-bolt"></i> Actions</h3>
+                            </div>
+                            <div class="pro-card-body">
+                                <div class="action-buttons">
+                                    <button class="action-btn primary" onclick="cloneJob(STATE.selectedJobId)">
+                                        <i class="fas fa-clone"></i>
+                                        <span>Clone & Modify</span>
+                                    </button>
+                                    <button class="action-btn" id="retry-job" style="display: none;">
+                                        <i class="fas fa-redo"></i>
+                                        <span>Retry Job</span>
+                                    </button>
+                                    <button class="action-btn danger" id="cancel-job" style="display: none;">
+                                        <i class="fas fa-stop-circle"></i>
+                                        <span>Cancel</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -991,8 +1353,9 @@
 
                         <!-- PQC Algorithm Categories -->
                         <div class="pqc-categories">
-                            <h4 style="margin: 24px 0 16px; color: var(--text-primary);">🛡️ NIST Post-Quantum Standards</h4>
-                            
+                            <h4 style="margin: 24px 0 16px; color: var(--text-primary);">🛡️ NIST Post-Quantum Standards
+                            </h4>
+
                             <!-- Key Encapsulation Mechanisms -->
                             <div class="algorithm-category">
                                 <div class="category-header" onclick="toggleAlgorithmCategory('kem-algorithms')">
@@ -1010,7 +1373,8 @@
                                                 <h6 id="pqc-kem-name">ML-KEM-768</h6>
                                                 <span class="algo-status active">ACTIVE</span>
                                             </div>
-                                            <p class="algo-description">Module-Lattice Key Encapsulation Mechanism based on CRYSTALS-Kyber</p>
+                                            <p class="algo-description">Module-Lattice Key Encapsulation Mechanism based
+                                                on CRYSTALS-Kyber</p>
                                             <div class="algo-specs">
                                                 <div class="spec-row">
                                                     <span>Security Level:</span>
@@ -1048,7 +1412,8 @@
                                                 <h6>ML-KEM-512</h6>
                                                 <span class="algo-status available">AVAILABLE</span>
                                             </div>
-                                            <p class="algo-description">Lightweight variant for constrained environments</p>
+                                            <p class="algo-description">Lightweight variant for constrained environments
+                                            </p>
                                             <div class="algo-specs">
                                                 <div class="spec-row">
                                                     <span>Security Level:</span>
@@ -1069,7 +1434,8 @@
                                                 <h6>ML-KEM-1024</h6>
                                                 <span class="algo-status available">AVAILABLE</span>
                                             </div>
-                                            <p class="algo-description">High-security variant for sensitive applications</p>
+                                            <p class="algo-description">High-security variant for sensitive applications
+                                            </p>
                                             <div class="algo-specs">
                                                 <div class="spec-row">
                                                     <span>Security Level:</span>
@@ -1106,7 +1472,8 @@
                                                 <h6 id="pqc-sign-name">ML-DSA-65</h6>
                                                 <span class="algo-status active">ACTIVE</span>
                                             </div>
-                                            <p class="algo-description">Module-Lattice Digital Signature Algorithm (CRYSTALS-Dilithium)</p>
+                                            <p class="algo-description">Module-Lattice Digital Signature Algorithm
+                                                (CRYSTALS-Dilithium)</p>
                                             <div class="algo-specs">
                                                 <div class="spec-row">
                                                     <span>Security Level:</span>
@@ -1174,7 +1541,8 @@
                                                 <h6>SLH-DSA (SPHINCS+)</h6>
                                                 <span class="algo-status available">AVAILABLE</span>
                                             </div>
-                                            <p class="algo-description">Stateless Hash-Based Digital Signature Algorithm (FIPS 205)</p>
+                                            <p class="algo-description">Stateless Hash-Based Digital Signature Algorithm
+                                                (FIPS 205)</p>
                                             <div class="algo-specs">
                                                 <div class="spec-row">
                                                     <span>Security Level:</span>
@@ -1211,7 +1579,8 @@
                                                 <h6>AES-256-GCM</h6>
                                                 <span class="algo-status active">ACTIVE</span>
                                             </div>
-                                            <p class="algo-description">Authenticated Encryption with Associated Data (AEAD)</p>
+                                            <p class="algo-description">Authenticated Encryption with Associated Data
+                                                (AEAD)</p>
                                             <div class="algo-specs">
                                                 <div class="spec-row">
                                                     <span>Key Size:</span>
@@ -1351,7 +1720,8 @@
                         <!-- ML-KEM Key Management -->
                         <div class="key-management-section">
                             <h4><i class="fas fa-key"></i> ML-KEM Key Management</h4>
-                            <p class="section-description">Generate and register post-quantum encryption keys for secure communication.</p>
+                            <p class="section-description">Generate and register post-quantum encryption keys for secure
+                                communication.</p>
                             <div class="key-management-grid">
                                 <div class="key-card">
                                     <div class="key-card-header">
@@ -1359,7 +1729,8 @@
                                         <h5>Generate New Keys</h5>
                                     </div>
                                     <p>Create a new ML-KEM-768 keypair for encrypting job data.</p>
-                                    <button class="btn btn-primary" id="btn-generate-keys" onclick="generateMLKEMKeys()">
+                                    <button class="btn btn-primary" id="btn-generate-keys"
+                                        onclick="generateMLKEMKeys()">
                                         <i class="fas fa-key"></i> Generate Keypair
                                     </button>
                                 </div>
@@ -1370,7 +1741,9 @@
                                     </div>
                                     <p>Register your public key with the server for secure job encryption.</p>
                                     <div class="form-group" style="margin-bottom: 12px;">
-                                        <textarea id="register-public-key" placeholder="Paste your public key here (Base64 encoded)..." rows="3" style="font-size: 12px;"></textarea>
+                                        <textarea id="register-public-key"
+                                            placeholder="Paste your public key here (Base64 encoded)..." rows="3"
+                                            style="font-size: 12px;"></textarea>
                                     </div>
                                     <button class="btn btn-outline" id="btn-register-key" onclick="registerPublicKey()">
                                         <i class="fas fa-cloud-upload-alt"></i> Register Key
@@ -1386,14 +1759,16 @@
                                 <div class="key-output">
                                     <label>Public Key (share this):</label>
                                     <textarea id="generated-public-key" readonly rows="3"></textarea>
-                                    <button class="btn btn-ghost btn-sm" onclick="copyToClipboard('generated-public-key')">
+                                    <button class="btn btn-ghost btn-sm"
+                                        onclick="copyToClipboard('generated-public-key')">
                                         <i class="fas fa-copy"></i> Copy
                                     </button>
                                 </div>
                                 <div class="key-output">
                                     <label>Private Key (keep secret!):</label>
                                     <textarea id="generated-private-key" readonly rows="3"></textarea>
-                                    <button class="btn btn-ghost btn-sm" onclick="copyToClipboard('generated-private-key')">
+                                    <button class="btn btn-ghost btn-sm"
+                                        onclick="copyToClipboard('generated-private-key')">
                                         <i class="fas fa-copy"></i> Copy
                                     </button>
                                 </div>
@@ -1514,20 +1889,24 @@
                     <h2>QAOA - Quantum Approximate Optimization Algorithm</h2>
                     <p>Solve combinatorial optimization problems with hybrid quantum-classical variational circuits.</p>
                 </div>
-                
+
                 <!-- QAOA Overview -->
                 <div class="algorithm-overview">
                     <div class="overview-card">
                         <div class="overview-icon">🎯</div>
                         <h4>What is QAOA?</h4>
-                        <p>QAOA is a hybrid quantum-classical algorithm designed to find approximate solutions to combinatorial optimization problems. It uses parameterized quantum circuits alternating between cost and mixer Hamiltonians.</p>
+                        <p>QAOA is a hybrid quantum-classical algorithm designed to find approximate solutions to
+                            combinatorial optimization problems. It uses parameterized quantum circuits alternating
+                            between cost and mixer Hamiltonians.</p>
                     </div>
                 </div>
 
                 <div class="dashboard-grid">
                     <!-- Supported Problems -->
                     <div class="card">
-                        <div class="card-header"><h3>📊 Supported Problems</h3></div>
+                        <div class="card-header">
+                            <h3>📊 Supported Problems</h3>
+                        </div>
                         <div class="card-body">
                             <div class="problem-list">
                                 <div class="problem-item" onclick="toggleProblemDetails('maxcut')">
@@ -1611,12 +1990,15 @@
 
                     <!-- QAOA Parameters -->
                     <div class="card">
-                        <div class="card-header"><h3>⚙️ Algorithm Parameters</h3></div>
+                        <div class="card-header">
+                            <h3>⚙️ Algorithm Parameters</h3>
+                        </div>
                         <div class="card-body">
                             <div class="param-list">
                                 <div class="param-item">
                                     <div class="param-name">Layers (p)</div>
-                                    <div class="param-desc">Number of QAOA layers. More layers = better approximation but longer runtime.</div>
+                                    <div class="param-desc">Number of QAOA layers. More layers = better approximation
+                                        but longer runtime.</div>
                                     <div class="param-range">Range: 1-20 | Default: 2</div>
                                 </div>
                                 <div class="param-item">
@@ -1640,7 +2022,9 @@
 
                     <!-- Optimizers -->
                     <div class="card">
-                        <div class="card-header"><h3>🔧 Available Optimizers</h3></div>
+                        <div class="card-header">
+                            <h3>🔧 Available Optimizers</h3>
+                        </div>
                         <div class="card-body">
                             <div class="optimizer-grid">
                                 <div class="optimizer-card">
@@ -1679,9 +2063,12 @@
 
                     <!-- Quick Start -->
                     <div class="card">
-                        <div class="card-header"><h3>🚀 Quick Start</h3></div>
+                        <div class="card-header">
+                            <h3>🚀 Quick Start</h3>
+                        </div>
                         <div class="card-body">
-                            <p style="margin-bottom: 16px;">Create a new QAOA optimization job with recommended settings.</p>
+                            <p style="margin-bottom: 16px;">Create a new QAOA optimization job with recommended
+                                settings.</p>
                             <button class="btn btn-primary btn-block" data-section="new-job" data-type="QAOA">
                                 <i class="fas fa-plus"></i> Create QAOA Job
                             </button>
@@ -1710,14 +2097,18 @@
                     <div class="overview-card">
                         <div class="overview-icon">⚛️</div>
                         <h4>What is VQE?</h4>
-                        <p>VQE is a hybrid algorithm for finding the lowest eigenvalue of a Hamiltonian, crucial for quantum chemistry simulations. It uses parameterized quantum circuits (ansätze) to prepare trial wavefunctions.</p>
+                        <p>VQE is a hybrid algorithm for finding the lowest eigenvalue of a Hamiltonian, crucial for
+                            quantum chemistry simulations. It uses parameterized quantum circuits (ansätze) to prepare
+                            trial wavefunctions.</p>
                     </div>
                 </div>
 
                 <div class="dashboard-grid">
                     <!-- Supported Molecules -->
                     <div class="card">
-                        <div class="card-header"><h3>🧪 Supported Molecules</h3></div>
+                        <div class="card-header">
+                            <h3>🧪 Supported Molecules</h3>
+                        </div>
                         <div class="card-body">
                             <div class="molecule-grid">
                                 <div class="molecule-card" onclick="toggleMoleculeDetails('h2')">
@@ -1727,7 +2118,8 @@
                                     <div class="molecule-details" id="h2-molecule">
                                         <div class="mol-spec"><span>Qubits:</span> <strong>2-4</strong></div>
                                         <div class="mol-spec"><span>Bond length:</span> <strong>0.74 Å</strong></div>
-                                        <div class="mol-spec"><span>Ground state:</span> <strong>-1.137 Ha</strong></div>
+                                        <div class="mol-spec"><span>Ground state:</span> <strong>-1.137 Ha</strong>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="molecule-card" onclick="toggleMoleculeDetails('lih')">
@@ -1766,7 +2158,9 @@
 
                     <!-- Ansatz Types -->
                     <div class="card">
-                        <div class="card-header"><h3>📐 Ansatz Types</h3></div>
+                        <div class="card-header">
+                            <h3>📐 Ansatz Types</h3>
+                        </div>
                         <div class="card-body">
                             <div class="ansatz-list">
                                 <div class="ansatz-item">
@@ -1774,7 +2168,8 @@
                                         <h5>UCCSD</h5>
                                         <span class="ansatz-badge chemistry">Chemistry</span>
                                     </div>
-                                    <p>Unitary Coupled Cluster Singles and Doubles - chemically inspired ansatz with high accuracy.</p>
+                                    <p>Unitary Coupled Cluster Singles and Doubles - chemically inspired ansatz with
+                                        high accuracy.</p>
                                     <div class="ansatz-specs">
                                         <span>Parameters: O(n⁴)</span>
                                         <span>Accuracy: High</span>
@@ -1823,12 +2218,15 @@
 
                     <!-- Hamiltonians -->
                     <div class="card">
-                        <div class="card-header"><h3>🔬 Hamiltonian Types</h3></div>
+                        <div class="card-header">
+                            <h3>🔬 Hamiltonian Types</h3>
+                        </div>
                         <div class="card-body">
                             <div class="hamiltonian-list">
                                 <div class="ham-item">
                                     <h5>Molecular Hamiltonian</h5>
-                                    <p>Second-quantized electronic structure Hamiltonian using Jordan-Wigner or Bravyi-Kitaev mapping.</p>
+                                    <p>Second-quantized electronic structure Hamiltonian using Jordan-Wigner or
+                                        Bravyi-Kitaev mapping.</p>
                                 </div>
                                 <div class="ham-item">
                                     <h5>Ising Model</h5>
@@ -1848,9 +2246,12 @@
 
                     <!-- Quick Start -->
                     <div class="card">
-                        <div class="card-header"><h3>🚀 Quick Start</h3></div>
+                        <div class="card-header">
+                            <h3>🚀 Quick Start</h3>
+                        </div>
                         <div class="card-body">
-                            <p style="margin-bottom: 16px;">Create a new VQE job for molecular ground state calculation.</p>
+                            <p style="margin-bottom: 16px;">Create a new VQE job for molecular ground state calculation.
+                            </p>
                             <button class="btn btn-primary btn-block" data-section="new-job" data-type="VQE">
                                 <i class="fas fa-plus"></i> Create VQE Job
                             </button>
@@ -1879,14 +2280,18 @@
                     <div class="overview-card">
                         <div class="overview-icon">⚡</div>
                         <h4>What is Quantum Annealing?</h4>
-                        <p>Quantum annealing exploits quantum tunneling to find the global minimum of an optimization problem. The system starts in a superposition and slowly evolves toward the ground state of the problem Hamiltonian.</p>
+                        <p>Quantum annealing exploits quantum tunneling to find the global minimum of an optimization
+                            problem. The system starts in a superposition and slowly evolves toward the ground state of
+                            the problem Hamiltonian.</p>
                     </div>
                 </div>
 
                 <div class="dashboard-grid">
                     <!-- Features -->
                     <div class="card">
-                        <div class="card-header"><h3>✨ Features</h3></div>
+                        <div class="card-header">
+                            <h3>✨ Features</h3>
+                        </div>
                         <div class="card-body">
                             <div class="feature-grid">
                                 <div class="feature-item">
@@ -1915,7 +2320,9 @@
 
                     <!-- Problem Formulations -->
                     <div class="card">
-                        <div class="card-header"><h3>📝 Problem Formulations</h3></div>
+                        <div class="card-header">
+                            <h3>📝 Problem Formulations</h3>
+                        </div>
                         <div class="card-body">
                             <div class="formulation-list">
                                 <div class="form-item">
@@ -1941,7 +2348,9 @@ J = {(0,1): -1, (1,2): -1}</code></pre>
 
                     <!-- Annealing Parameters -->
                     <div class="card">
-                        <div class="card-header"><h3>⏱️ Annealing Parameters</h3></div>
+                        <div class="card-header">
+                            <h3>⏱️ Annealing Parameters</h3>
+                        </div>
                         <div class="card-body">
                             <div class="param-list">
                                 <div class="param-item">
@@ -1970,7 +2379,9 @@ J = {(0,1): -1, (1,2): -1}</code></pre>
 
                     <!-- Backends -->
                     <div class="card">
-                        <div class="card-header"><h3>💻 Available Backends</h3></div>
+                        <div class="card-header">
+                            <h3>💻 Available Backends</h3>
+                        </div>
                         <div class="card-body">
                             <div class="backend-list">
                                 <div class="backend-item">
@@ -2003,7 +2414,9 @@ J = {(0,1): -1, (1,2): -1}</code></pre>
 
                     <!-- Quick Start -->
                     <div class="card">
-                        <div class="card-header"><h3>🚀 Quick Start</h3></div>
+                        <div class="card-header">
+                            <h3>🚀 Quick Start</h3>
+                        </div>
                         <div class="card-body">
                             <p style="margin-bottom: 16px;">Create a new quantum annealing job for optimization.</p>
                             <button class="btn btn-primary btn-block" data-section="new-job" data-type="ANNEALING">
@@ -2043,68 +2456,8 @@ J = {(0,1): -1, (1,2): -1}</code></pre>
         </button>
     </div>
 
-    <!-- Auth Modal (Login/Register) -->
-    <div class="modal" id="auth-modal">
-        <div class="modal-content modal-md">
-            <div class="modal-header">
-                <h3 id="auth-modal-title"><i class="fas fa-user-lock"></i> Sign In</h3>
-                <button class="modal-close" onclick="closeAuthModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <!-- Login Form -->
-                <form id="login-form" class="auth-form">
-                    <div class="form-group">
-                        <label for="login-email"><i class="fas fa-envelope"></i> Email</label>
-                        <input type="email" id="login-email" placeholder="your@email.com" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="login-password"><i class="fas fa-lock"></i> Password</label>
-                        <input type="password" id="login-password" placeholder="••••••••" required>
-                    </div>
-                    <div class="form-error" id="login-error" style="display: none;"></div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary btn-block" id="login-submit">
-                            <i class="fas fa-sign-in-alt"></i> Sign In
-                        </button>
-                    </div>
-                    <div class="auth-switch">
-                        <span>Don't have an account?</span>
-                        <a href="#" onclick="showRegisterForm(event)">Create one</a>
-                    </div>
-                </form>
-
-                <!-- Register Form -->
-                <form id="register-form" class="auth-form" style="display: none;">
-                    <div class="form-group">
-                        <label for="register-name"><i class="fas fa-user"></i> Full Name</label>
-                        <input type="text" id="register-name" placeholder="John Doe" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="register-email"><i class="fas fa-envelope"></i> Email</label>
-                        <input type="email" id="register-email" placeholder="your@email.com" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="register-password"><i class="fas fa-lock"></i> Password</label>
-                        <input type="password" id="register-password" placeholder="••••••••" required minlength="8">
-                    </div>
-                    <div class="form-group">
-                        <label for="register-confirm"><i class="fas fa-lock"></i> Confirm Password</label>
-                        <input type="password" id="register-confirm" placeholder="••••••••" required minlength="8">
-                    </div>
-                    <div class="form-error" id="register-error" style="display: none;"></div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary btn-block" id="register-submit">
-                            <i class="fas fa-user-plus"></i> Create Account
-                        </button>
-                    </div>
-                    <div class="auth-switch">
-                        <span>Already have an account?</span>
-                        <a href="#" onclick="showLoginForm(event)">Sign in</a>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+    <!-- Auth Modal - Now handled by AuthModal component -->
+    <!-- Old auth modal removed - using new AuthModal component instead -->
 
     <!-- Job Comparison Modal -->
     <div class="modal" id="compare-modal">
@@ -2127,6 +2480,137 @@ J = {(0,1): -1, (1,2): -1}</code></pre>
         </div>
     </div>
 
-    <script src="js/dashboard.js"></script>
+    <!-- Component System - Load before dashboard -->
+    <script type="module">
+        import Component from './js/components/Component.js';
+        import ToastContainer from './js/components/ToastContainer.js';
+        import Modal from './js/components/Modal.js';
+        import ConfirmModal from './js/components/Modal.js';
+        import AuthModal from './js/components/AuthModal.js';
+
+        // Initialize auth modal
+        const authModal = new AuthModal();
+        window.authModal = authModal;
+
+        // Expose to global scope for compatibility
+        window.Component = Component;
+        window.ToastContainer = ToastContainer;
+        window.Modal = Modal;
+        window.ConfirmModal = ConfirmModal;
+        window.AuthModal = AuthModal;
+        
+        // Initialize global toast container
+        window.toastContainer = new ToastContainer();
+        window.toastContainer.mount(document.body);
+        
+        // Make toast functions available globally
+        window.showSuccess = (title, message, duration) => window.toastContainer.success(title, message, duration);
+        window.showError = (title, message, duration) => window.toastContainer.error(title, message, duration);
+        window.showWarning = (title, message, duration) => window.toastContainer.warning(title, message, duration);
+        window.showInfo = (title, message, duration) => window.toastContainer.info(title, message, duration);
+    </script>
+
+    <!-- Dashboard JavaScript - ES6 Modules -->
+    <script type="module" src="js/dashboard-modular.js"></script>
+
+    <script nomodule src="js/dashboard.js"></script>
+
+    <!-- Component System Scripts -->
+    <script type="module">
+        import { Component } from './js/components/Component.js';
+        import { OptimizationSuggestionCard } from './js/components/OptimizationSuggestionCard.js';
+        import { ToastContainer } from './js/components/ToastContainer.js';
+        import { Modal, ConfirmModal } from './js/components/Modal.js';
+        import modalManager from './js/components/ModalManager.js';
+        import {
+            alertDialog, confirmDialog, showModal, showSuccess, showError
+        } from './js/components/ModalUtils.js';
+
+        // Make components globally accessible
+        window.OptimizationSuggestionCard = OptimizationSuggestionCard;
+        window.ToastContainer = ToastContainer;
+        window.Modal = Modal;
+        window.ConfirmModal = ConfirmModal;
+        window.Component = Component;
+        window.modalManager = modalManager;
+        window.alertDialog = alertDialog;
+        window.confirmDialog = confirmDialog;
+        window.showModal = showModal;
+        window.showSuccess = showSuccess;
+        window.showError = showError;
+
+        // Initialize Modal Manager with preview modal
+        document.addEventListener('DOMContentLoaded', () => {
+            const suggestionContainer = document.getElementById('ai-suggestions-container');
+            const problemType = document.getElementById('problem-type');
+            const backend = document.getElementById('backend');
+            const qaoaLayers = document.getElementById('qaoa-layers');
+            const qaoaOptimizer = document.getElementById('qaoa-optimizer');
+            const vqeAnsatz = document.getElementById('vqe-ansatz');
+            const vqeOptimizer = document.getElementById('vqe-optimizer');
+
+            let suggestionCard = null;
+
+            const updateSuggestions = () => {
+                const type = problemType?.value || 'QAOA';
+                const selectedBackend = backend?.value || 'local_simulator';
+
+                if (!suggestionCard) {
+                    // Remove placeholder and create card
+                    const placeholder = document.getElementById('ai-suggestions-placeholder');
+                    if (placeholder) placeholder.remove();
+                    suggestionContainer.style.display = 'block';
+                    
+                    suggestionCard = new OptimizationSuggestionCard({
+                        container: suggestionContainer,
+                        problemType: type,
+                        backend: selectedBackend,
+                        parameters: { layers: 2, optimizer: 'COBYLA' }
+                    });
+                    suggestionCard.mount();
+                } else {
+                    const parameters = {};
+                    if (type === 'QAOA') {
+                        parameters.layers = qaoaLayers?.value || 2;
+                        parameters.optimizer = qaoaOptimizer?.value || 'COBYLA';
+                    } else if (type === 'VQE') {
+                        parameters.ansatz = vqeAnsatz?.value || 'hardware_efficient';
+                        parameters.optimizer = vqeOptimizer?.value || 'L-BFGS-B';
+                    }
+                    
+                    suggestionCard.updateProps({ problemType: type, backend: selectedBackend, parameters });
+                }
+            };
+
+            // Listen for changes to form fields
+            const formFields = [problemType, backend, qaoaLayers, qaoaOptimizer, vqeAnsatz, vqeOptimizer];
+            formFields.forEach(field => {
+                if (field) {
+                    field.addEventListener('change', updateSuggestions);
+                    field.addEventListener('input', updateSuggestions);
+                }
+            });
+
+            // Also update when QAOA/VQE config sections become visible
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                        const target = mutation.target;
+                        if (target.id?.startsWith('config-') && target.style.display !== 'none') {
+                            updateSuggestions();
+                        }
+                    }
+                });
+            });
+
+            // Observe config sections
+            document.querySelectorAll('.config-section').forEach(section => {
+                observer.observe(section, { attributes: true, attributeFilter: ['style'] });
+            });
+
+            console.log('✅ AI Optimization Suggestions initialized');
+        });
+    </script>
 </body>
+
 </html>

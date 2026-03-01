@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkAuthStatus();
     checkApiStatus();
     loadJobs();
-    
+
     // Only health check polling - job updates via WebSocket
     STATE.healthCheckTimer = setInterval(checkApiStatus, CONFIG.healthCheckInterval);
 });
@@ -111,8 +111,8 @@ function toggleTheme() {
 function updateThemeToggle() {
     const toggleBtn = document.getElementById('theme-toggle');
     if (toggleBtn) {
-        toggleBtn.innerHTML = STATE.theme === 'dark' 
-            ? '<i class="fas fa-sun"></i>' 
+        toggleBtn.innerHTML = STATE.theme === 'dark'
+            ? '<i class="fas fa-sun"></i>'
             : '<i class="fas fa-moon"></i>';
         toggleBtn.title = `Switch to ${STATE.theme === 'dark' ? 'light' : 'dark'} mode`;
     }
@@ -130,7 +130,7 @@ function initSearch() {
             STATE.currentPage = 1;
             loadJobs(true);
         }, 500));
-        
+
         // Enter key triggers immediate search
         searchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -140,7 +140,7 @@ function initSearch() {
             }
         });
     }
-    
+
     // Status filter - server-side
     const statusFilter = document.getElementById('filter-status');
     if (statusFilter) {
@@ -150,7 +150,7 @@ function initSearch() {
             loadJobs(true);
         });
     }
-    
+
     // Type filter - server-side
     const typeFilter = document.getElementById('filter-type');
     if (typeFilter) {
@@ -169,7 +169,7 @@ function initMobileSearch() {
     const mobileSearchToggle = document.getElementById('mobile-search-toggle');
     const searchBox = document.getElementById('search-box');
     const searchInput = document.getElementById('search-input');
-    
+
     if (mobileSearchToggle && searchBox) {
         mobileSearchToggle.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -178,14 +178,14 @@ function initMobileSearch() {
                 searchInput?.focus();
             }
         });
-        
+
         // Close mobile search when clicking outside
         document.addEventListener('click', (e) => {
             if (!searchBox.contains(e.target) && !mobileSearchToggle.contains(e.target)) {
                 searchBox.classList.remove('mobile-active');
             }
         });
-        
+
         // Close on escape
         searchInput?.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -206,19 +206,19 @@ function debounce(func, wait) {
 function filterJobs(jobs) {
     return jobs.filter(job => {
         // Search filter
-        const matchesSearch = STATE.searchQuery === '' || 
+        const matchesSearch = STATE.searchQuery === '' ||
             job.id.toLowerCase().includes(STATE.searchQuery) ||
             job.problem_type?.toLowerCase().includes(STATE.searchQuery) ||
             job.status?.toLowerCase().includes(STATE.searchQuery);
-        
+
         // Status filter
-        const matchesStatus = STATE.filterStatus === 'all' || 
+        const matchesStatus = STATE.filterStatus === 'all' ||
             job.status?.toLowerCase() === STATE.filterStatus.toLowerCase();
-        
+
         // Type filter
-        const matchesType = STATE.filterType === 'all' || 
+        const matchesType = STATE.filterType === 'all' ||
             job.problem_type?.toLowerCase() === STATE.filterType.toLowerCase();
-        
+
         return matchesSearch && matchesStatus && matchesType;
     });
 }
@@ -234,7 +234,7 @@ function initNavigation() {
             const section = item.dataset.section;
             if (section) {
                 navigateToSection(section);
-                
+
                 // Handle algorithm type selection for new job
                 if (section === 'new-job' && item.dataset.type) {
                     setTimeout(() => {
@@ -248,12 +248,12 @@ function initNavigation() {
             }
         });
     });
-    
+
     // Sidebar toggle for mobile with backdrop
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const sidebar = document.querySelector('.sidebar');
     const sidebarBackdrop = document.getElementById('sidebar-backdrop');
-    
+
     if (sidebarToggle && sidebar) {
         sidebarToggle.addEventListener('click', () => {
             sidebar.classList.toggle('open');
@@ -261,7 +261,7 @@ function initNavigation() {
             document.body.classList.toggle('sidebar-open', sidebar.classList.contains('open'));
         });
     }
-    
+
     // Close sidebar when clicking backdrop
     if (sidebarBackdrop) {
         sidebarBackdrop.addEventListener('click', () => {
@@ -270,7 +270,7 @@ function initNavigation() {
             document.body.classList.remove('sidebar-open');
         });
     }
-    
+
     // Close sidebar when clicking nav item on mobile
     document.querySelectorAll('.nav-item').forEach(item => {
         item.addEventListener('click', () => {
@@ -288,12 +288,12 @@ function navigateToSection(section) {
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.section === section);
     });
-    
+
     // Update section visibility
     document.querySelectorAll('.dashboard-section').forEach(sec => {
         sec.classList.toggle('active', sec.id === `section-${section}`);
     });
-    
+
     // Update page title
     const titles = {
         'overview': 'Overview',
@@ -306,10 +306,10 @@ function navigateToSection(section) {
         'security': 'Security',
         'settings': 'Settings'
     };
-    
+
     document.getElementById('page-title').textContent = titles[section] || section;
     STATE.currentSection = section;
-    
+
     // Close mobile sidebar
     document.querySelector('.sidebar')?.classList.remove('open');
 }
@@ -387,12 +387,12 @@ const JOB_TEMPLATES = {
 function loadTemplate(templateId) {
     const template = JOB_TEMPLATES[templateId];
     if (!template) return;
-    
+
     // Set problem type
     const problemType = document.getElementById('problem-type');
     problemType.value = template.type;
     problemType.dispatchEvent(new Event('change'));
-    
+
     // Wait for config section to show
     setTimeout(() => {
         switch (template.type) {
@@ -403,14 +403,14 @@ function loadTemplate(templateId) {
                 document.getElementById('qaoa-shots').value = template.config.shots || 1000;
                 document.getElementById('qaoa-graph').value = JSON.stringify(template.config.graph || []);
                 break;
-                
+
             case 'VQE':
                 document.getElementById('vqe-molecule').value = template.config.molecule || 'H2';
                 document.getElementById('vqe-ansatz').value = template.config.ansatz || 'hardware_efficient';
                 document.getElementById('vqe-optimizer').value = template.config.optimizer || 'COBYLA';
                 document.getElementById('vqe-shots').value = template.config.shots || 1000;
                 break;
-                
+
             case 'ANNEALING':
                 document.getElementById('backend').value = 'local_simulator';
                 document.getElementById('anneal-formulation').value = template.config.formulation || 'QUBO';
@@ -420,7 +420,7 @@ function loadTemplate(templateId) {
                 document.getElementById('anneal-matrix').value = JSON.stringify(template.config.matrix || []);
                 break;
         }
-        
+
         showToast('success', 'Template Loaded', `${template.name} configuration applied`);
     }, 100);
 }
@@ -433,19 +433,19 @@ function initJobForm() {
     const problemType = document.getElementById('problem-type');
     const backendSelect = document.getElementById('backend');
     const advancedSimSection = document.getElementById('advanced-simulator-config');
-    
+
     // Show/hide config sections based on problem type
     if (problemType) {
         problemType.addEventListener('change', () => {
             document.querySelectorAll('.config-section').forEach(sec => {
                 sec.style.display = 'none';
             });
-            
+
             const selectedConfig = document.getElementById(`config-${problemType.value.toLowerCase()}`);
             if (selectedConfig) {
                 selectedConfig.style.display = 'block';
             }
-            
+
             // Update backend options for annealing
             const backendSelect = document.getElementById('backend');
             if (problemType.value === 'ANNEALING') {
@@ -467,14 +467,14 @@ function initJobForm() {
             }
         });
     }
-    
+
     // Preview button
     document.getElementById('preview-job')?.addEventListener('click', () => {
         const jobData = buildJobData();
         document.getElementById('preview-json').textContent = JSON.stringify(jobData, null, 2);
         document.getElementById('preview-modal').classList.add('active');
     });
-    
+
     // Form submission
     if (form) {
         form.addEventListener('submit', async (e) => {
@@ -493,9 +493,9 @@ function buildJobData() {
     const backend = document.getElementById('backend').value;
     const encrypt = document.getElementById('encrypt-data').checked;
     const sign = document.getElementById('sign-request').checked;
-    
+
     let problemConfig = {};
-    
+
     switch (problemType) {
         case 'QAOA':
             let qaoaGraph = [];
@@ -514,7 +514,7 @@ function buildJobData() {
                 graph: qaoaGraph
             };
             break;
-            
+
         case 'VQE':
             const ansatzValue = document.getElementById('vqe-ansatz').value.toLowerCase();
             problemConfig = {
@@ -524,7 +524,7 @@ function buildJobData() {
                 shots: parseInt(document.getElementById('vqe-shots').value)
             };
             break;
-            
+
         case 'ANNEALING':
             let quboMatrix = [];
             try {
@@ -543,11 +543,11 @@ function buildJobData() {
             };
             break;
     }
-    
+
     // Get optional fields
     const priority = document.getElementById('job-priority')?.value || 'normal';
     const callbackUrl = document.getElementById('callback-url')?.value?.trim() || null;
-    
+
     const jobData = {
         problem_type: problemType,
         problem_config: problemConfig,
@@ -568,12 +568,12 @@ function buildJobData() {
             use_caching: document.getElementById('enable-caching')?.checked !== false,
         };
     }
-    
+
     // Only include callback_url if provided
     if (callbackUrl) {
         jobData.callback_url = callbackUrl;
     }
-    
+
     return jobData;
 }
 
@@ -581,56 +581,71 @@ async function submitJob() {
     const jobData = buildJobData();
     const submitBtn = document.querySelector('#job-form button[type="submit"]');
     const originalBtnContent = submitBtn?.innerHTML;
-    
+
+    // Check if user is authenticated before submitting
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        showToast('warning', 'Authentication Required', 'Please sign in to submit jobs');
+        // Open the sign-in modal if available
+        const signInBtn = document.querySelector('[data-auth-action="signin"]');
+        if (signInBtn) signInBtn.click();
+        return;
+    }
+
     try {
         // Show loading state on button
         if (submitBtn) {
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
         }
-        
+
         showToast('info', 'Submitting Job', 'Sending to quantum backend...');
-        
-        // Get auth token if available
-        const token = localStorage.getItem('authToken');
+
         const headers = {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
         };
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-        
+
         const response = await fetch(`${CONFIG.apiUrl}/jobs`, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(jobData)
         });
-        
+
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            // Handle 401 specifically
+            if (response.status === 401) {
+                localStorage.removeItem('authToken');
+                STATE.isAuthenticated = false;
+                STATE.user = null;
+                updateAuthUI();
+                throw new Error('Session expired. Please sign in again.');
+            }
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         const result = await response.json();
-        
+
         showToast('success', 'Job Submitted', `Job ID: ${result.job_id}`);
-        
+
         // Add notification for successful job submission
         addNotification('success', 'Job Submitted', `${jobData.problem_type} job created`, result.job_id);
-        
+
         // Reset form and navigate to jobs
         document.getElementById('job-form').reset();
         document.querySelectorAll('.config-section').forEach(sec => {
             sec.style.display = 'none';
         });
-        
+
         // Refresh jobs and navigate
         await loadJobs();
         navigateToSection('jobs');
-        
+
     } catch (error) {
         console.error('Job submission failed:', error);
-        showToast('error', 'Submission Failed', error.message);
-        addNotification('error', 'Submission Failed', error.message);
+        showToast('error', 'Submission Failed', error.message || 'An error occurred');
+        addNotification('error', 'Submission Failed', error.message || 'An error occurred');
     } finally {
         // Restore button state
         if (submitBtn) {
@@ -645,25 +660,34 @@ async function submitJob() {
  */
 async function loadJobs(showLoading = false) {
     if (STATE.isLoading) return;
-    
+
+    // If user is not authenticated, just show empty state - no error
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        STATE.jobs = [];
+        STATE.totalJobs = 0;
+        updateJobsUI();
+        updateStats();
+        updatePaginationUI();
+        return;
+    }
+
     try {
         STATE.isLoading = true;
-        
+
         // Show loading skeleton if requested
         if (showLoading) {
             showJobsLoadingSkeleton();
         }
-        
-        const token = localStorage.getItem('authToken');
-        const headers = {};
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-        
+
+        const headers = {
+            'Authorization': `Bearer ${token}`
+        };
+
         // Build URL with pagination and filter params
         const skip = (STATE.currentPage - 1) * STATE.pageSize;
         let url = `${CONFIG.apiUrl}/jobs?skip=${skip}&limit=${STATE.pageSize}`;
-        
+
         // Add server-side filter params
         if (STATE.filterStatus && STATE.filterStatus !== 'all') {
             url += `&status=${encodeURIComponent(STATE.filterStatus)}`;
@@ -674,40 +698,49 @@ async function loadJobs(showLoading = false) {
         if (STATE.searchQuery) {
             url += `&search=${encodeURIComponent(STATE.searchQuery)}`;
         }
-        
+
         const response = await fetch(url, { headers });
-        
+
         if (!response.ok) {
             if (response.status === 401) {
-                // Token expired or invalid
+                // Token expired or invalid - clear auth state and show empty
                 localStorage.removeItem('authToken');
+                STATE.isAuthenticated = false;
+                STATE.user = null;
+                STATE.jobs = [];
+                STATE.totalJobs = 0;
+                updateAuthUI();
+                updateJobsUI();
+                updateStats();
+                updatePaginationUI();
+                return; // Don't show error for auth issues
             }
             throw new Error(`HTTP ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         // Normalize job data - add encrypted flag from encrypt_result or encrypted_result
         STATE.jobs = (data.jobs || []).map(job => ({
             ...job,
             encrypted: job.encrypted || job.encrypt_result || !!job.encrypted_result
         }));
-        
+
         // Update total count if provided
         STATE.totalJobs = data.total || STATE.jobs.length;
-        
+
         // Reset failure counter on success
         STATE.loadJobsFailures = 0;
-        
+
         updateJobsUI();
         updateStats();
         updatePaginationUI();
-        
+
     } catch (error) {
         console.error('Failed to load jobs:', error);
         // Track consecutive failures for smart feedback
         STATE.loadJobsFailures = (STATE.loadJobsFailures || 0) + 1;
-        
+
         // Show feedback on first failure or every 5th failure (avoid spam)
         if (STATE.loadJobsFailures === 1) {
             showToast('warning', 'Connection Issue', 'Unable to load jobs. Retrying...');
@@ -715,7 +748,7 @@ async function loadJobs(showLoading = false) {
             showToast('error', 'Persistent Error', `Failed to load jobs ${STATE.loadJobsFailures} times. Check your connection.`);
             addNotification('error', 'Jobs Load Failed', `Unable to fetch jobs after ${STATE.loadJobsFailures} attempts`);
         }
-        
+
         // Show empty state with retry option on initial load failure
         if (showLoading && STATE.jobs.length === 0) {
             const tableBody = document.getElementById('jobs-table-body');
@@ -742,7 +775,7 @@ async function loadJobs(showLoading = false) {
 function showJobsLoadingSkeleton() {
     const tableBody = document.getElementById('jobs-table-body');
     if (!tableBody) return;
-    
+
     const skeletonRows = Array(5).fill().map(() => `
         <tr class="skeleton-row">
             <td><div class="skeleton skeleton-text" style="width: 80px;"></div></td>
@@ -754,7 +787,7 @@ function showJobsLoadingSkeleton() {
             <td><div class="skeleton skeleton-text" style="width: 60px;"></div></td>
         </tr>
     `).join('');
-    
+
     tableBody.innerHTML = skeletonRows;
 }
 
@@ -766,16 +799,16 @@ function hideJobsLoadingSkeleton() {
 function updatePaginationUI() {
     const paginationContainer = document.getElementById('pagination-controls');
     if (!paginationContainer) return;
-    
+
     const totalPages = Math.ceil(STATE.totalJobs / STATE.pageSize);
-    
+
     if (totalPages <= 1) {
         paginationContainer.style.display = 'none';
         return;
     }
-    
+
     paginationContainer.style.display = 'flex';
-    
+
     let paginationHTML = `
         <button class="btn btn-ghost btn-sm" onclick="goToPage(1)" ${STATE.currentPage === 1 ? 'disabled' : ''}>
             <i class="fas fa-angle-double-left"></i>
@@ -784,11 +817,11 @@ function updatePaginationUI() {
             <i class="fas fa-angle-left"></i>
         </button>
     `;
-    
+
     // Show page numbers
     const startPage = Math.max(1, STATE.currentPage - 2);
     const endPage = Math.min(totalPages, STATE.currentPage + 2);
-    
+
     for (let i = startPage; i <= endPage; i++) {
         paginationHTML += `
             <button class="btn ${i === STATE.currentPage ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="goToPage(${i})">
@@ -796,7 +829,7 @@ function updatePaginationUI() {
             </button>
         `;
     }
-    
+
     paginationHTML += `
         <button class="btn btn-ghost btn-sm" onclick="goToPage(${STATE.currentPage + 1})" ${STATE.currentPage === totalPages ? 'disabled' : ''}>
             <i class="fas fa-angle-right"></i>
@@ -806,14 +839,14 @@ function updatePaginationUI() {
         </button>
         <span class="pagination-info">Page ${STATE.currentPage} of ${totalPages} (${STATE.totalJobs} jobs)</span>
     `;
-    
+
     paginationContainer.innerHTML = paginationHTML;
 }
 
 function goToPage(page) {
     const totalPages = Math.ceil(STATE.totalJobs / STATE.pageSize);
     if (page < 1 || page > totalPages) return;
-    
+
     STATE.currentPage = page;
     loadJobs(true);
 }
@@ -821,7 +854,7 @@ function goToPage(page) {
 function updateJobsUI() {
     // Update jobs count badge
     document.getElementById('jobs-count').textContent = STATE.jobs.length;
-    
+
     // Update recent jobs in overview
     const recentJobsContainer = document.getElementById('recent-jobs');
     if (recentJobsContainer) {
@@ -853,14 +886,14 @@ function updateJobsUI() {
                     </div>
                 </div>
             `).join('');
-            
+
             // Add click handlers
             recentJobsContainer.querySelectorAll('.job-item').forEach(item => {
                 item.addEventListener('click', () => viewJobDetails(item.dataset.jobId));
             });
         }
     }
-    
+
     // Update jobs table
     const tableBody = document.getElementById('jobs-table-body');
     if (tableBody) {
@@ -911,7 +944,7 @@ function updateJobsUI() {
                         </td>
                     </tr>
                 `).join('');
-                
+
                 // Update compare button visibility
                 updateCompareButton();
             }
@@ -933,36 +966,169 @@ function clearFilters() {
     STATE.searchQuery = '';
     STATE.filterStatus = 'all';
     STATE.filterType = 'all';
-    
+
     const searchInput = document.querySelector('.search-box input');
     const statusFilter = document.getElementById('filter-status');
     const typeFilter = document.getElementById('filter-type');
-    
+
     if (searchInput) searchInput.value = '';
     if (statusFilter) statusFilter.value = 'all';
     if (typeFilter) typeFilter.value = 'all';
-    
+
     updateJobsUI();
 }
 
-function exportJob(jobId) {
+function exportJob(jobId, format = 'json') {
     const job = STATE.jobs.find(j => j.job_id === jobId);
     if (!job) return;
-    
-    const dataStr = JSON.stringify(job, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
+
+    if (format === 'csv') {
+        exportJobAsCSVSingle(job);
+    } else {
+        const dataStr = JSON.stringify(job, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${job.job_id}_${job.problem_type}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast('success', 'Exported', `Job ${jobId.substring(0, 8)} exported as JSON`);
+    }
+}
+
+// Export single job as CSV
+function exportJobAsCSVSingle(job) {
+    const headers = ['Job ID', 'Problem Type', 'Backend', 'Status', 'Created', 'Encrypted', 'Optimal Value', 'Iterations', 'Execution Time'];
+    const values = [
+        job.job_id,
+        job.problem_type,
+        job.backend,
+        job.status,
+        job.created_at,
+        job.encrypted ? 'Yes' : 'No',
+        job.result?.optimal_value || '',
+        job.result?.iterations || (job.result?.convergence_history?.length || ''),
+        job.result?.execution_time || ''
+    ];
+
+    const csvContent = [headers.join(','), values.map(v => `"${v}"`).join(',')].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${job.job_id}_${job.problem_type}.json`;
+    a.download = `${job.job_id}_${job.problem_type}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
-    showToast('success', 'Exported', `Job ${jobId.substring(0, 8)} exported successfully`);
+
+    showToast('success', 'Exported', `Job ${job.job_id.substring(0, 8)} exported as CSV`);
 }
+
+// Clone a job with the same configuration
+async function cloneJob(jobId) {
+    const job = STATE.jobs.find(j => j.job_id === jobId);
+    if (!job) {
+        showToast('error', 'Error', 'Job not found');
+        return;
+    }
+
+    showToast('info', 'Cloning', 'Creating a copy of this job...');
+
+    try {
+        // Prepare the job submission with the same config
+        const newJobData = {
+            problem_type: job.problem_type,
+            backend: job.backend,
+            encrypted: job.encrypted,
+            problem_config: { ...job.problem_config }
+        };
+
+        const token = localStorage.getItem('authToken');
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(`${CONFIG.apiBase}/jobs`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(newJobData)
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            showToast('success', 'Job Cloned', `New job created: ${result.job_id.substring(0, 8)}`);
+            await loadJobs();
+            viewJobDetails(result.job_id);
+        } else {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to clone job');
+        }
+    } catch (error) {
+        console.error('Clone job error:', error);
+        showToast('error', 'Clone Failed', error.message);
+    }
+}
+
+// Copy solution to clipboard
+function copySolution() {
+    const solutionEl = document.getElementById('result-solution');
+    if (solutionEl) {
+        const text = solutionEl.textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('success', 'Copied', 'Solution copied to clipboard');
+        }).catch(err => {
+            console.error('Copy failed:', err);
+            showToast('error', 'Copy Failed', 'Could not copy to clipboard');
+        });
+    }
+}
+
+// Export convergence chart as PNG
+function exportChartAsPNG() {
+    const canvas = document.getElementById('convergence-chart');
+    if (!canvas) {
+        showToast('error', 'Error', 'No chart available to export');
+        return;
+    }
+
+    const url = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `convergence_chart_${STATE.selectedJobId?.substring(0, 8) || 'job'}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    showToast('success', 'Exported', 'Chart exported as PNG');
+}
+
+// Initialize export dropdown toggle
+document.addEventListener('click', (e) => {
+    const dropdown = document.querySelector('.export-dropdown');
+    const toggleBtn = document.getElementById('export-dropdown-btn');
+
+    if (toggleBtn && toggleBtn.contains(e.target)) {
+        e.preventDefault();
+        dropdown.classList.toggle('open');
+    } else if (dropdown && !dropdown.contains(e.target)) {
+        dropdown.classList.remove('open');
+    }
+});
+
+// Make new functions globally accessible
+window.cloneJob = cloneJob;
+window.copySolution = copySolution;
+window.exportChartAsPNG = exportChartAsPNG;
 
 function updateStats() {
     const total = STATE.jobs.length;
@@ -971,12 +1137,12 @@ function updateStats() {
     const running = STATE.jobs.filter(j => j.status === 'running').length;
     const failed = STATE.jobs.filter(j => j.status === 'failed').length;
     const encrypted = STATE.jobs.filter(j => j.encrypted).length;
-    
+
     document.getElementById('stat-total').textContent = total;
     document.getElementById('stat-completed').textContent = completed;
     document.getElementById('stat-running').textContent = running + pending;
     document.getElementById('stat-encrypted').textContent = encrypted;
-    
+
     // Update status pie chart
     updateStatusPieChart({ completed, running, pending, failed });
 }
@@ -984,39 +1150,112 @@ function updateStats() {
 function viewJobDetails(jobId) {
     const job = STATE.jobs.find(j => j.job_id === jobId);
     if (!job) return;
-    
+
     STATE.selectedJobId = jobId;
-    
-    document.getElementById('job-detail-title').textContent = `${job.problem_type} Job`;
-    document.getElementById('job-detail-id').textContent = job.job_id;
-    document.getElementById('job-detail-status').textContent = job.status;
-    document.getElementById('job-detail-status').className = `status-badge ${job.status}`;
-    
+
+    // Update job header
+    document.getElementById('job-detail-title').textContent = `${job.problem_type} Optimization Job`;
+    document.getElementById('job-detail-breadcrumb').textContent = `${job.problem_type} Job`;
+
+    // Update job ID badge
+    const jobIdEl = document.getElementById('job-detail-id');
+    if (jobIdEl) {
+        const codeEl = jobIdEl.querySelector('code');
+        if (codeEl) {
+            codeEl.textContent = job.job_id.substring(0, 12) + '...';
+        } else {
+            jobIdEl.textContent = job.job_id;
+        }
+    }
+
+    // Update status pill with proper class
+    const statusPill = document.getElementById('job-detail-status');
+    if (statusPill) {
+        statusPill.className = `status-pill ${job.status}`;
+        const statusText = statusPill.querySelector('.status-text');
+        if (statusText) {
+            statusText.textContent = job.status.charAt(0).toUpperCase() + job.status.slice(1);
+        } else {
+            statusPill.textContent = job.status;
+        }
+    }
+
+    // Update job type badge
+    const typeBadge = document.getElementById('job-type-badge');
+    const typeLabel = document.getElementById('detail-type-label');
+    if (typeLabel) typeLabel.textContent = job.problem_type;
+
+    // Set type icon based on problem type
+    if (typeBadge) {
+        const typeIconEl = typeBadge.querySelector('.type-icon');
+        if (typeIconEl) {
+            const icons = {
+                'QAOA': '⚛️',
+                'VQE': '🔬',
+                'Grover': '🔍',
+                'Shor': '🔢',
+                'default': '🌀'
+            };
+            typeIconEl.textContent = icons[job.problem_type] || icons.default;
+        }
+    }
+
     document.getElementById('detail-type').textContent = job.problem_type;
     document.getElementById('detail-backend').textContent = job.backend;
     document.getElementById('detail-created').textContent = formatDate(job.created_at);
-    document.getElementById('detail-encrypted').textContent = job.encrypted ? '🔐 Yes (ML-KEM-768)' : 'No';
-    
+
+    // Update encrypted status with icon
+    const encryptedEl = document.getElementById('detail-encrypted');
+    if (encryptedEl) {
+        if (job.encrypted) {
+            encryptedEl.innerHTML = '<i class="fas fa-shield-alt"></i> PQC Enabled';
+            encryptedEl.classList.add('security-badge');
+        } else {
+            encryptedEl.textContent = 'Standard';
+            encryptedEl.classList.remove('security-badge');
+        }
+    }
+
+    // Update backend param in sidebar
+    const backendParam = document.getElementById('detail-backend-param');
+    if (backendParam) backendParam.textContent = job.backend;
+
+    // Show qubits and layers info
+    const qubitsEl = document.getElementById('detail-qubits');
+    const layersEl = document.getElementById('detail-layers');
+    if (qubitsEl) {
+        const qubits = job.problem_config?.num_qubits || job.problem_config?.graph?.length || '-';
+        qubitsEl.textContent = qubits;
+    }
+    if (layersEl) {
+        const layers = job.problem_config?.p_layers || job.problem_config?.depth || job.problem_config?.layers || '-';
+        layersEl.textContent = layers;
+    }
+
     document.getElementById('detail-config').textContent = JSON.stringify(job.problem_config || {}, null, 2);
-    
+
+    // Update timeline based on job status
+    updateJobTimeline(job);
+
     // Show results if completed
     const resultsSection = document.getElementById('results-section');
     const chartSection = document.getElementById('chart-section');
-    
+    const additionalStats = document.getElementById('additional-stats');
+
     if (job.status === 'completed' && job.result) {
         resultsSection.style.display = 'block';
         document.getElementById('result-optimal').textContent = job.result.optimal_value?.toFixed(6) || '-';
-        
+
         // Show optimal solution - could be optimal_bitstring, optimal_solution, or optimal_params
         const solution = job.result.optimal_bitstring || job.result.optimal_solution || job.result.optimal_params;
-        document.getElementById('result-solution').textContent = solution ? 
+        document.getElementById('result-solution').textContent = solution ?
             (typeof solution === 'string' ? solution : JSON.stringify(solution, null, 2)) : '-';
-        
+
         // Show iterations from convergence_history length
-        const iterations = job.result.iterations || 
+        const iterations = job.result.iterations ||
             (job.result.convergence_history ? job.result.convergence_history.length : null);
         document.getElementById('result-iterations').textContent = iterations || '-';
-        
+
         // Calculate execution time from timestamps
         let execTime = job.result.execution_time;
         if (!execTime && job.result.submitted_at && job.result.completed_at) {
@@ -1025,7 +1264,31 @@ function viewJobDetails(jobId) {
             execTime = ((end - start) / 1000).toFixed(2);
         }
         document.getElementById('result-time').textContent = execTime ? `${execTime}s` : '-';
-        
+
+        // Calculate improvement (from initial to final value)
+        const improvementEl = document.getElementById('result-improvement');
+        if (improvementEl && job.result.convergence_history && job.result.convergence_history.length > 1) {
+            const initial = job.result.convergence_history[0];
+            const final = job.result.convergence_history[job.result.convergence_history.length - 1];
+            const improvement = ((Math.abs(final - initial) / Math.abs(initial)) * 100).toFixed(1);
+            improvementEl.textContent = `${improvement}%`;
+            improvementEl.style.color = 'var(--success)';
+        } else if (improvementEl) {
+            improvementEl.textContent = '-';
+        }
+
+        // Show additional statistics if available
+        if (additionalStats && job.result.statistics) {
+            additionalStats.style.display = 'block';
+            document.getElementById('stat-mean').textContent = job.result.statistics.mean?.toFixed(6) || '-';
+            document.getElementById('stat-std').textContent = job.result.statistics.std?.toFixed(6) || '-';
+            document.getElementById('stat-best').textContent = job.result.statistics.best_sample || '-';
+            document.getElementById('stat-success-rate').textContent =
+                job.result.statistics.success_rate ? `${(job.result.statistics.success_rate * 100).toFixed(1)}%` : '-';
+        } else if (additionalStats) {
+            additionalStats.style.display = 'none';
+        }
+
         // Show convergence chart if data available
         if (job.result.convergence_history && job.result.convergence_history.length > 0 && chartSection) {
             chartSection.style.display = 'block';
@@ -1036,8 +1299,9 @@ function viewJobDetails(jobId) {
     } else {
         resultsSection.style.display = 'none';
         if (chartSection) chartSection.style.display = 'none';
+        if (additionalStats) additionalStats.style.display = 'none';
     }
-    
+
     // Show progress bar for running jobs
     const progressSection = document.getElementById('progress-section');
     if (progressSection) {
@@ -1054,7 +1318,7 @@ function viewJobDetails(jobId) {
             progressSection.style.display = 'none';
         }
     }
-    
+
     // Show/hide cancel and retry buttons based on job status
     const cancelBtn = document.getElementById('cancel-job');
     const retryBtn = document.getElementById('retry-job');
@@ -1064,14 +1328,113 @@ function viewJobDetails(jobId) {
     if (retryBtn) {
         retryBtn.style.display = job.status === 'failed' ? 'inline-flex' : 'none';
     }
-    
+
     // Connect WebSocket for real-time updates if job is running
     if (job.status === 'running' || job.status === 'pending') {
         connectJobWebSocket(jobId);
     }
-    
+
+    // Update visualizations (charts, graphs)
+    updateJobVisualizations(job);
+
     navigateToSection('job-details');
 }
+
+// Update job timeline visualization (supports new pipeline design)
+function updateJobTimeline(job) {
+    const steps = ['created', 'queued', 'processing', 'completed'];
+    const statusMap = {
+        'pending': 1,     // Created + Queued active
+        'running': 2,     // Created + Queued complete, Processing active
+        'completed': 3,   // All complete
+        'failed': 2       // Failed at processing
+    };
+
+    const currentStep = statusMap[job.status] || 0;
+
+    steps.forEach((step, index) => {
+        const stepEl = document.getElementById(`timeline-${step}`);
+        // Support both old (.timeline-icon) and new (.stage-indicator) structures
+        const indicatorEl = stepEl?.querySelector('.stage-indicator') || stepEl?.querySelector('.timeline-icon');
+        const timeEl = document.getElementById(`timeline-${step}-time`);
+        const connectorEl = document.getElementById(`timeline-connector-${index + 1}`);
+
+        if (indicatorEl) {
+            indicatorEl.classList.remove('completed', 'active', 'failed');
+
+            if (index < currentStep) {
+                indicatorEl.classList.add('completed');
+            } else if (index === currentStep) {
+                if (job.status === 'failed' && step === 'completed') {
+                    indicatorEl.classList.add('failed');
+                    const iconEl = indicatorEl.querySelector('.stage-icon') || indicatorEl;
+                    if (iconEl) iconEl.innerHTML = '<i class="fas fa-times-circle"></i>';
+                    if (timeEl) timeEl.textContent = 'Failed';
+                } else {
+                    indicatorEl.classList.add('active');
+                }
+            }
+        }
+
+        if (connectorEl) {
+            connectorEl.classList.remove('completed', 'active');
+            if (index < currentStep) {
+                connectorEl.classList.add('completed');
+            } else if (index === currentStep - 1) {
+                connectorEl.classList.add('active');
+            }
+        }
+
+        // Set timestamps
+        if (timeEl && step !== 'completed') {
+            switch (step) {
+                case 'created':
+                    timeEl.textContent = job.created_at ? formatTimeShort(job.created_at) : '-';
+                    break;
+                case 'queued':
+                    timeEl.textContent = job.queued_at ? formatTimeShort(job.queued_at) :
+                        (currentStep >= 1 ? 'Queued' : '-');
+                    break;
+                case 'processing':
+                    timeEl.textContent = job.started_at ? formatTimeShort(job.started_at) :
+                        (currentStep >= 2 ? 'Processing' : '-');
+                    break;
+            }
+        } else if (timeEl && step === 'completed') {
+            if (job.status === 'completed') {
+                timeEl.textContent = job.completed_at ? formatTimeShort(job.completed_at) : 'Done';
+                const iconEl = stepEl?.querySelector('.stage-icon') || stepEl?.querySelector('.timeline-icon');
+                if (iconEl) iconEl.innerHTML = '<i class="fas fa-check-double"></i>';
+            } else if (job.status === 'failed') {
+                timeEl.textContent = 'Failed';
+            } else {
+                timeEl.textContent = '-';
+            }
+        }
+    });
+}
+
+// Format time in short format (HH:MM)
+function formatTimeShort(dateString) {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// Toggle config panel collapse
+function toggleConfigPanel() {
+    const configPanel = document.getElementById('config-panel');
+    const collapseIcon = document.getElementById('config-collapse-icon');
+    if (configPanel) {
+        configPanel.classList.toggle('collapsed');
+        if (collapseIcon) {
+            collapseIcon.style.transform = configPanel.classList.contains('collapsed') ? 'rotate(-90deg)' : 'rotate(0)';
+        }
+    }
+}
+
+// Make toggleConfigPanel globally accessible
+window.toggleConfigPanel = toggleConfigPanel;
 
 // Refresh job details
 document.getElementById('refresh-job')?.addEventListener('click', async () => {
@@ -1085,41 +1448,41 @@ document.getElementById('refresh-job')?.addEventListener('click', async () => {
 // Cancel job
 document.getElementById('cancel-job')?.addEventListener('click', async () => {
     if (!STATE.selectedJobId) return;
-    
+
     if (!confirm('Are you sure you want to cancel this job?')) return;
-    
+
     try {
         const response = await fetch(`${CONFIG.apiUrl}/jobs/${STATE.selectedJobId}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
-        
+
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
+
         showToast('success', 'Job Cancelled', 'The job has been cancelled');
         await loadJobs();
         viewJobDetails(STATE.selectedJobId);
     } catch (error) {
-        showToast('error', 'Cancel Failed', error.message);
+        showToast('error', 'Cancel Failed', error.message || 'Failed to cancel job');
     }
 });
 
 // Retry job
 document.getElementById('retry-job')?.addEventListener('click', async () => {
     if (!STATE.selectedJobId) return;
-    
+
     try {
         const response = await fetch(`${CONFIG.apiUrl}/jobs/${STATE.selectedJobId}/retry`, {
             method: 'POST',
             headers: getAuthHeaders()
         });
-        
+
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
+
         const data = await response.json();
         showToast('success', 'Job Restarted', `New job ID: ${data.job_id?.substring(0, 8) || 'created'}`);
         await loadJobs();
-        
+
         // Navigate to new job if different ID returned
         if (data.job_id && data.job_id !== STATE.selectedJobId) {
             viewJobDetails(data.job_id);
@@ -1127,7 +1490,7 @@ document.getElementById('retry-job')?.addEventListener('click', async () => {
             viewJobDetails(STATE.selectedJobId);
         }
     } catch (error) {
-        showToast('error', 'Retry Failed', error.message);
+        showToast('error', 'Retry Failed', error.message || 'Failed to retry job');
     }
 });
 
@@ -1154,10 +1517,10 @@ const WS_BASE_RECONNECT_DELAY = 1000; // 1 second
 function connectJobWebSocket(jobId) {
     // Close existing connection and clear reconnect timer
     disconnectJobWebSocket();
-    
+
     wsCurrentJobId = jobId;
     wsReconnectAttempts = 0;
-    
+
     createWebSocketConnection(jobId);
 }
 
@@ -1165,17 +1528,17 @@ function createWebSocketConnection(jobId) {
     // Determine WebSocket URL
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/jobs/${jobId}`;
-    
+
     try {
         jobWebSocket = new WebSocket(wsUrl);
-        
+
         jobWebSocket.onopen = () => {
             console.log(`[WebSocket] Connected to job ${jobId}`);
             wsReconnectAttempts = 0; // Reset on successful connection
             showToast('info', 'Live Updates', 'Connected to real-time job updates', 2000);
             updateConnectivityItem('websocket', 'healthy', null, 'Connected');
         };
-        
+
         jobWebSocket.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
@@ -1184,27 +1547,27 @@ function createWebSocketConnection(jobId) {
                 console.error('[WebSocket] Parse error:', e);
             }
         };
-        
+
         jobWebSocket.onerror = (error) => {
             console.warn('[WebSocket] Connection error');
         };
-        
+
         jobWebSocket.onclose = (event) => {
             console.log('[WebSocket] Connection closed', event.code, event.reason);
             jobWebSocket = null;
             updateConnectivityItem('websocket', 'degraded', null, 'Disconnected');
-            
+
             // Don't reconnect if intentionally closed or job completed
             if (event.code === 1000 || !wsCurrentJobId) {
                 return;
             }
-            
+
             // Attempt reconnection with exponential backoff
             if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
                 wsReconnectAttempts++;
                 const delay = WS_BASE_RECONNECT_DELAY * Math.pow(2, wsReconnectAttempts - 1);
                 console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${wsReconnectAttempts}/${WS_MAX_RECONNECT_ATTEMPTS})`);
-                
+
                 wsReconnectTimer = setTimeout(() => {
                     if (wsCurrentJobId === jobId) {
                         createWebSocketConnection(jobId);
@@ -1239,15 +1602,15 @@ function handleJobUpdate(data) {
     // Update progress bar
     const progressBar = document.getElementById('job-progress-bar');
     const progressText = document.getElementById('job-progress-text');
-    
+
     if (data.progress !== undefined && progressBar) {
         progressBar.style.width = `${data.progress}%`;
     }
-    
+
     if (data.message && progressText) {
         progressText.textContent = data.message;
     }
-    
+
     // If job completed or failed, refresh and close WebSocket
     if (data.status === 'completed' || data.status === 'failed') {
         if (jobWebSocket) {
@@ -1259,7 +1622,7 @@ function handleJobUpdate(data) {
                 viewJobDetails(STATE.selectedJobId);
             }
         });
-        
+
         if (data.status === 'completed') {
             showToast('success', 'Job Completed', 'Your optimization job has finished!');
         } else {
@@ -1273,22 +1636,22 @@ function handleJobUpdate(data) {
  */
 function initModal() {
     const modal = document.getElementById('preview-modal');
-    
+
     modal?.querySelector('.modal-close')?.addEventListener('click', () => {
         modal.classList.remove('active');
     });
-    
+
     modal?.querySelector('.copy-json')?.addEventListener('click', () => {
         const json = document.getElementById('preview-json').textContent;
         navigator.clipboard.writeText(json);
         showToast('success', 'Copied', 'JSON copied to clipboard');
     });
-    
+
     modal?.querySelector('.submit-from-preview')?.addEventListener('click', async () => {
         modal.classList.remove('active');
         await submitJob();
     });
-    
+
     // Close on backdrop click
     modal?.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -1305,32 +1668,32 @@ function initSettings() {
     document.getElementById('api-url').value = CONFIG.apiUrl;
     document.getElementById('default-backend').value = localStorage.getItem('defaultBackend') || 'local_simulator';
     document.getElementById('default-encryption').value = localStorage.getItem('defaultEncryption') || 'enabled';
-    
+
     // Apply saved defaults to job form
     applyDefaultSettings();
-    
+
     // Save settings
     document.getElementById('save-settings')?.addEventListener('click', async () => {
         const apiUrl = document.getElementById('api-url').value;
         const defaultBackend = document.getElementById('default-backend').value;
         const defaultEncryption = document.getElementById('default-encryption').value;
-        
+
         // Get backend credentials
         const ibmToken = document.getElementById('ibm-token')?.value?.trim();
         const awsRegion = document.getElementById('aws-region')?.value?.trim();
         const dwaveToken = document.getElementById('dwave-token')?.value?.trim();
-        
+
         // Save local settings
         localStorage.setItem('apiUrl', apiUrl);
         localStorage.setItem('defaultBackend', defaultBackend);
         localStorage.setItem('defaultEncryption', defaultEncryption);
-        
+
         CONFIG.apiUrl = apiUrl;
         CONFIG.apiBase = apiUrl.replace(/\/api\/v1\/?$/, '') || window.location.origin;
-        
+
         // Apply new defaults to form
         applyDefaultSettings();
-        
+
         // Save backend credentials to server if user is authenticated
         if (STATE.isAuthenticated) {
             try {
@@ -1338,14 +1701,14 @@ function initSettings() {
                 if (ibmToken) credentials.ibm_token = ibmToken;
                 if (awsRegion) credentials.aws_region = awsRegion;
                 if (dwaveToken) credentials.dwave_token = dwaveToken;
-                
+
                 if (Object.keys(credentials).length > 0) {
                     const response = await fetch(`${CONFIG.apiUrl}/settings/credentials`, {
                         method: 'POST',
                         headers: getAuthHeaders(),
                         body: JSON.stringify(credentials)
                     });
-                    
+
                     if (response.ok) {
                         showToast('success', 'Credentials Saved', 'Backend credentials updated on server');
                         // Clear password fields after successful save
@@ -1366,7 +1729,7 @@ function initSettings() {
             if (awsRegion) localStorage.setItem('aws_region', awsRegion);
             if (dwaveToken) localStorage.setItem('dwave_token_encrypted', btoa(dwaveToken));
         }
-        
+
         showToast('success', 'Settings Saved', 'Your preferences have been updated');
         checkApiStatus();
     });
@@ -1382,7 +1745,7 @@ function applyDefaultSettings() {
     if (backendSelect) {
         backendSelect.value = defaultBackend;
     }
-    
+
     // Apply default encryption
     const defaultEncryption = localStorage.getItem('defaultEncryption') || 'enabled';
     const encryptCheckbox = document.getElementById('encrypt-data');
@@ -1396,11 +1759,11 @@ function applyDefaultSettings() {
  */
 function initSecurityTests() {
     const resultsDiv = document.getElementById('crypto-test-results');
-    
+
     document.getElementById('test-kem')?.addEventListener('click', async () => {
         resultsDiv.textContent = 'Testing ML-KEM Key Encapsulation...\n';
         resultsDiv.textContent += '━'.repeat(40) + '\n';
-        
+
         try {
             // Call real KEM test endpoint
             const response = await fetch(`${CONFIG.apiUrl}/crypto/kem/test`, {
@@ -1408,7 +1771,7 @@ function initSecurityTests() {
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ level: 3 })
             });
-            
+
             if (!response.ok) {
                 // Fallback to keygen endpoint if test endpoint doesn't exist
                 const keygenResponse = await fetch(`${CONFIG.apiUrl}/crypto/kem/keygen`, {
@@ -1416,7 +1779,7 @@ function initSecurityTests() {
                     headers: getAuthHeaders(),
                     body: JSON.stringify({ level: 3 })
                 });
-                
+
                 if (keygenResponse.ok) {
                     const data = await keygenResponse.json();
                     resultsDiv.textContent += `\n✅ ML-KEM-768 Key Generation: SUCCESS\n`;
@@ -1443,7 +1806,7 @@ function initSecurityTests() {
             const startTime = performance.now();
             await new Promise(r => setTimeout(r, 50)); // Simulate crypto operation
             const endTime = performance.now();
-            
+
             resultsDiv.textContent += `✅ ML-KEM-768 Simulation: SUCCESS\n`;
             resultsDiv.textContent += `   - Public Key Size: 1,184 bytes\n`;
             resultsDiv.textContent += `   - Secret Key Size: 2,400 bytes\n`;
@@ -1453,11 +1816,11 @@ function initSecurityTests() {
             resultsDiv.textContent += `   - Security Level: NIST Level 3\n`;
         }
     });
-    
+
     document.getElementById('test-sign')?.addEventListener('click', async () => {
         resultsDiv.textContent = 'Testing ML-DSA Digital Signatures...\n';
         resultsDiv.textContent += '━'.repeat(40) + '\n';
-        
+
         try {
             // Call real signature test endpoint
             const response = await fetch(`${CONFIG.apiUrl}/crypto/sign/test`, {
@@ -1465,7 +1828,7 @@ function initSecurityTests() {
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ level: 3, message: 'Test message for signature verification' })
             });
-            
+
             if (!response.ok) {
                 // Fallback to keygen endpoint
                 const keygenResponse = await fetch(`${CONFIG.apiUrl}/crypto/sign/keygen`, {
@@ -1473,7 +1836,7 @@ function initSecurityTests() {
                     headers: getAuthHeaders(),
                     body: JSON.stringify({ level: 3 })
                 });
-                
+
                 if (keygenResponse.ok) {
                     const data = await keygenResponse.json();
                     resultsDiv.textContent += `\n✅ ML-DSA-65 Key Generation: SUCCESS\n`;
@@ -1500,7 +1863,7 @@ function initSecurityTests() {
             const startTime = performance.now();
             await new Promise(r => setTimeout(r, 30));
             const endTime = performance.now();
-            
+
             resultsDiv.textContent += `✅ ML-DSA-65 Simulation: SUCCESS\n`;
             resultsDiv.textContent += `   - Public Key Size: 1,952 bytes\n`;
             resultsDiv.textContent += `   - Secret Key Size: 4,032 bytes\n`;
@@ -1509,13 +1872,13 @@ function initSecurityTests() {
             resultsDiv.textContent += `   - Security Level: NIST Level 3\n`;
         }
     });
-    
+
     document.getElementById('test-encrypt')?.addEventListener('click', async () => {
         resultsDiv.textContent = 'Testing Hybrid Encryption Pipeline...\n';
         resultsDiv.textContent += '━'.repeat(40) + '\n';
-        
+
         const testData = 'This is a test message for hybrid encryption verification.';
-        
+
         try {
             // Call real hybrid encryption test endpoint
             const response = await fetch(`${CONFIG.apiUrl}/crypto/encrypt/test`, {
@@ -1523,7 +1886,7 @@ function initSecurityTests() {
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ plaintext: testData })
             });
-            
+
             if (response.ok) {
                 const data = await response.json();
                 resultsDiv.textContent += `\n✅ Hybrid Encryption Test: ${data.status || 'SUCCESS'}\n`;
@@ -1545,7 +1908,7 @@ function initSecurityTests() {
         } catch (error) {
             // Run simulated pipeline
             resultsDiv.textContent += `\n⚠️ API not available, running simulated pipeline...\n\n`;
-            
+
             const steps = [
                 { name: 'Generate ML-KEM-768 keypair', time: 15 },
                 { name: 'Encapsulate shared secret', time: 8 },
@@ -1553,7 +1916,7 @@ function initSecurityTests() {
                 { name: 'Encrypt data (AES-256-GCM)', time: 5 },
                 { name: 'Sign envelope (ML-DSA-65)', time: 12 }
             ];
-            
+
             let totalTime = 0;
             for (const step of steps) {
                 resultsDiv.textContent += `   ${steps.indexOf(step) + 1}. ${step.name}...`;
@@ -1561,7 +1924,7 @@ function initSecurityTests() {
                 totalTime += step.time;
                 resultsDiv.textContent += ` ✅ (${step.time}ms)\n`;
             }
-            
+
             resultsDiv.textContent += `\n📊 Simulation Results:\n`;
             resultsDiv.textContent += `   - Original Size: ${testData.length} bytes\n`;
             resultsDiv.textContent += `   - Simulated Encrypted Size: ~${testData.length + 1088 + 16 + 12} bytes\n`;
@@ -1577,7 +1940,7 @@ function initSecurityTests() {
 async function checkApiStatus() {
     const statusEl = document.getElementById('api-status');
     const statusText = statusEl?.querySelector('.status-text');
-    
+
     try {
         // Health endpoint is at root level, not versioned
         const response = await fetch(`${CONFIG.apiBase}/health`);
@@ -1588,7 +1951,7 @@ async function checkApiStatus() {
             statusEl?.classList.add('online');
             statusEl?.classList.remove('offline');
             if (statusText) statusText.textContent = 'API Online';
-            
+
             // Update backend status indicators
             updateBackendStatus('local-simulator', true);
             updateBackendStatus('ibm-quantum', data.backends?.ibm || false);
@@ -1606,7 +1969,7 @@ async function checkApiStatus() {
         statusEl?.classList.remove('online');
         statusEl?.classList.add('offline');
         if (statusText) statusText.textContent = 'API Offline';
-        
+
         // Mark all backends as offline
         ['local-simulator', 'ibm-quantum', 'aws-braket', 'azure-quantum', 'dwave'].forEach(id => {
             updateBackendStatus(id, false);
@@ -1736,8 +2099,8 @@ function updateConnectivityItem(component, status, latencyMs, message) {
     if (text) {
         text.textContent = normalized === 'healthy' ? 'Healthy'
             : normalized === 'degraded' ? 'Degraded'
-            : normalized === 'unhealthy' ? 'Unhealthy'
-            : message || 'Unknown';
+                : normalized === 'unhealthy' ? 'Unhealthy'
+                    : message || 'Unknown';
     }
     if (latency) {
         if (latencyMs === null || latencyMs === undefined || Number.isNaN(latencyMs)) {
@@ -1780,7 +2143,7 @@ function getWebSocketLabel() {
 function updateBackendStatus(backendId, isOnline) {
     const statusEl = document.querySelector(`[data-backend="${backendId}"] .backend-status-indicator`);
     const textEl = document.querySelector(`[data-backend="${backendId}"] .backend-status-text`);
-    
+
     if (statusEl) {
         statusEl.className = `backend-status-indicator ${isOnline ? 'online' : 'offline'}`;
     }
@@ -1798,7 +2161,7 @@ let chartJsLoaded = false;
 async function initConvergenceChart(containerId, data) {
     const canvas = document.getElementById(containerId);
     if (!canvas) return;
-    
+
     // Lazy load Chart.js if not already loaded
     if (!window.Chart && window.loadChartJS) {
         try {
@@ -1819,14 +2182,14 @@ async function initConvergenceChart(containerId, data) {
             return;
         }
     }
-    
+
     // Destroy existing chart
     if (convergenceChart) {
         convergenceChart.destroy();
     }
-    
+
     const ctx = canvas.getContext('2d');
-    
+
     convergenceChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -1899,41 +2262,479 @@ async function initConvergenceChart(containerId, data) {
     });
 }
 
+// Store chart instances for cleanup
+let energyDistChart = null;
+let probabilityChart = null;
+let parameterChart = null;
+let graphState = { showLabels: true };
+
 /**
- * Toast Notifications
+ * Render Bitstring Visualization
  */
-function showToast(type, title, message) {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-    
-    const icons = {
-        success: '✅',
-        error: '❌',
-        info: 'ℹ️'
-    };
-    
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `
-        <span class="toast-icon">${icons[type]}</span>
-        <div class="toast-message">
-            <strong>${title}</strong>
-            <span>${message}</span>
+function renderBitstringViz(bitstring) {
+    const container = document.getElementById('bitstring-viz');
+    if (!container || !bitstring) return;
+
+    // Parse bitstring if it's a string
+    const bits = typeof bitstring === 'string' ? bitstring.split('') : bitstring;
+
+    container.innerHTML = bits.map((bit, i) => `
+        <div class="bit-cell ${bit === '1' || bit === 1 ? 'on' : 'off'}" title="Qubit ${i}">
+            ${bit}
+            <span class="bit-index">${i}</span>
         </div>
-        <button class="toast-close">&times;</button>
-    `;
-    
-    container.appendChild(toast);
-    
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        toast.remove();
-    }, 5000);
-    
-    // Manual close
-    toast.querySelector('.toast-close').addEventListener('click', () => {
-        toast.remove();
+    `).join('');
+}
+
+/**
+ * Initialize Energy Distribution Chart
+ */
+async function initEnergyDistributionChart(data) {
+    const canvas = document.getElementById('energy-distribution-chart');
+    if (!canvas || !window.Chart) return;
+
+    if (energyDistChart) energyDistChart.destroy();
+
+    // Create histogram bins
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const binCount = Math.min(20, Math.ceil(Math.sqrt(data.length)));
+    const binWidth = (max - min) / binCount;
+    const bins = new Array(binCount).fill(0);
+
+    data.forEach(value => {
+        const binIndex = Math.min(Math.floor((value - min) / binWidth), binCount - 1);
+        bins[binIndex]++;
     });
+
+    const labels = bins.map((_, i) => (min + (i + 0.5) * binWidth).toFixed(2));
+
+    const ctx = canvas.getContext('2d');
+    energyDistChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Frequency',
+                data: bins,
+                backgroundColor: 'rgba(99, 102, 241, 0.6)',
+                borderColor: '#6366f1',
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1a1a25',
+                    titleColor: '#f8fafc',
+                    bodyColor: '#94a3b8'
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Energy', color: '#64748b' },
+                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
+                    ticks: { color: '#64748b', maxRotation: 45 }
+                },
+                y: {
+                    title: { display: true, text: 'Count', color: '#64748b' },
+                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
+                    ticks: { color: '#64748b' }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Initialize Probability Distribution Chart
+ */
+async function initProbabilityChart(probabilities) {
+    const canvas = document.getElementById('probability-chart');
+    if (!canvas || !window.Chart) return;
+
+    if (probabilityChart) probabilityChart.destroy();
+
+    // Take top 10 states by probability
+    const sortedProbs = Object.entries(probabilities)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+
+    const ctx = canvas.getContext('2d');
+    probabilityChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sortedProbs.map(([state]) => state.length > 8 ? state.substring(0, 8) + '...' : state),
+            datasets: [{
+                label: 'Probability',
+                data: sortedProbs.map(([, prob]) => prob),
+                backgroundColor: sortedProbs.map((_, i) =>
+                    i === 0 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(99, 102, 241, 0.6)'
+                ),
+                borderColor: sortedProbs.map((_, i) =>
+                    i === 0 ? '#10b981' : '#6366f1'
+                ),
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1a1a25',
+                    callbacks: {
+                        label: (ctx) => `Probability: ${(ctx.raw * 100).toFixed(2)}%`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Probability', color: '#64748b' },
+                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
+                    ticks: {
+                        color: '#64748b',
+                        callback: v => (v * 100).toFixed(0) + '%'
+                    },
+                    max: 1
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { color: '#64748b', font: { family: 'monospace', size: 10 } }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Initialize Parameter Space Chart
+ */
+async function initParameterChart(params) {
+    const canvas = document.getElementById('parameter-chart');
+    if (!canvas || !window.Chart) return;
+
+    if (parameterChart) parameterChart.destroy();
+
+    // Extract gamma and beta parameters if available
+    const gamma = params.gamma || params.gammas || [];
+    const beta = params.beta || params.betas || [];
+
+    const ctx = canvas.getContext('2d');
+    parameterChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: gamma.map((_, i) => `Layer ${i + 1}`),
+            datasets: [
+                {
+                    label: 'γ (gamma)',
+                    data: gamma,
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.3
+                },
+                {
+                    label: 'β (beta)',
+                    data: beta,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: { color: '#94a3b8', boxWidth: 12 }
+                },
+                tooltip: {
+                    backgroundColor: '#1a1a25',
+                    titleColor: '#f8fafc',
+                    bodyColor: '#94a3b8'
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
+                    ticks: { color: '#64748b' }
+                },
+                y: {
+                    title: { display: true, text: 'Parameter Value', color: '#64748b' },
+                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
+                    ticks: { color: '#64748b' }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Render Graph Visualization (MaxCut/QAOA)
+ */
+function renderGraphVisualization(graph, solution) {
+    const canvas = document.getElementById('graph-canvas');
+    if (!canvas || !graph) return;
+
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width = canvas.parentElement.clientWidth;
+    const height = canvas.height = canvas.parentElement.clientHeight;
+
+    // Parse solution bitstring
+    const solutionBits = typeof solution === 'string' ? solution.split('').map(Number) : solution || [];
+
+    // Calculate node positions (circular layout)
+    const nodeCount = graph.length;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const radius = Math.min(width, height) * 0.35;
+
+    const nodes = graph.map((_, i) => ({
+        x: centerX + radius * Math.cos(2 * Math.PI * i / nodeCount - Math.PI / 2),
+        y: centerY + radius * Math.sin(2 * Math.PI * i / nodeCount - Math.PI / 2),
+        set: solutionBits[i] || 0
+    }));
+
+    // Count edges and cuts
+    let edgeCount = 0;
+    let cutCount = 0;
+
+    // Draw edges
+    ctx.lineWidth = 2;
+    for (let i = 0; i < graph.length; i++) {
+        for (let j = i + 1; j < graph[i].length; j++) {
+            if (graph[i][j]) {
+                edgeCount++;
+                const isCut = nodes[i].set !== nodes[j].set;
+                if (isCut) cutCount++;
+
+                ctx.beginPath();
+                ctx.moveTo(nodes[i].x, nodes[i].y);
+                ctx.lineTo(nodes[j].x, nodes[j].y);
+
+                if (isCut) {
+                    ctx.strokeStyle = '#f59e0b';
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = 'rgba(245, 158, 11, 0.5)';
+                    ctx.shadowBlur = 10;
+                } else {
+                    ctx.strokeStyle = 'rgba(100, 116, 139, 0.3)';
+                    ctx.lineWidth = 1;
+                    ctx.shadowBlur = 0;
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+        }
+    }
+
+    // Draw nodes
+    nodes.forEach((node, i) => {
+        const nodeRadius = 20;
+
+        // Node circle
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI);
+
+        // Gradient fill
+        const gradient = ctx.createRadialGradient(
+            node.x - 5, node.y - 5, 0,
+            node.x, node.y, nodeRadius
+        );
+
+        if (node.set === 1) {
+            gradient.addColorStop(0, '#818cf8');
+            gradient.addColorStop(1, '#6366f1');
+            ctx.shadowColor = 'rgba(99, 102, 241, 0.5)';
+        } else {
+            gradient.addColorStop(0, '#34d399');
+            gradient.addColorStop(1, '#10b981');
+            ctx.shadowColor = 'rgba(16, 185, 129, 0.5)';
+        }
+
+        ctx.fillStyle = gradient;
+        ctx.shadowBlur = 15;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Node border
+        ctx.strokeStyle = node.set === 1 ? '#4f46e5' : '#059669';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Node label
+        if (graphState.showLabels) {
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 12px system-ui';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(i.toString(), node.x, node.y);
+        }
+    });
+
+    // Update stats
+    document.getElementById('graph-cut-value').textContent = cutCount;
+    document.getElementById('graph-node-count').textContent = nodeCount;
+    document.getElementById('graph-edge-count').textContent = edgeCount;
+}
+
+/**
+ * Toggle graph labels visibility
+ */
+function toggleGraphLabels() {
+    graphState.showLabels = !graphState.showLabels;
+    // Re-render with current data
+    const graphSection = document.getElementById('graph-viz-section');
+    if (graphSection && graphSection.style.display !== 'none') {
+        const job = STATE.jobs.find(j => j.job_id === STATE.selectedJobId);
+        if (job?.problem_config?.graph && job?.result?.optimal_bitstring) {
+            renderGraphVisualization(job.problem_config.graph, job.result.optimal_bitstring);
+        }
+    }
+}
+
+/**
+ * Reset graph view
+ */
+function resetGraphView() {
+    const job = STATE.jobs.find(j => j.job_id === STATE.selectedJobId);
+    if (job?.problem_config?.graph && job?.result?.optimal_bitstring) {
+        renderGraphVisualization(job.problem_config.graph, job.result.optimal_bitstring);
+    }
+}
+
+// Make functions globally accessible
+window.toggleGraphLabels = toggleGraphLabels;
+window.resetGraphView = resetGraphView;
+
+/**
+ * Update all job visualizations
+ */
+async function updateJobVisualizations(job) {
+    if (!job || job.status !== 'completed' || !job.result) return;
+
+    // Show solution visualization section
+    const solutionVizSection = document.getElementById('solution-viz-section');
+    const vizGridSection = document.getElementById('viz-grid-section');
+    const graphVizSection = document.getElementById('graph-viz-section');
+
+    // Render bitstring visualization
+    const solution = job.result.optimal_bitstring || job.result.optimal_solution;
+    if (solution && typeof solution === 'string' && /^[01]+$/.test(solution)) {
+        solutionVizSection.style.display = 'block';
+        renderBitstringViz(solution);
+    } else {
+        solutionVizSection.style.display = 'none';
+    }
+
+    // Show visualization grid if we have chart data
+    const hasConvergence = job.result.convergence_history?.length > 0;
+    const hasProbabilities = job.result.probabilities || job.result.state_probabilities;
+    const hasParams = job.result.optimal_params;
+
+    if (hasConvergence || hasProbabilities || hasParams) {
+        vizGridSection.style.display = 'grid';
+
+        // Convergence chart
+        if (hasConvergence) {
+            await initConvergenceChart('convergence-chart', job.result.convergence_history);
+        }
+
+        // Energy distribution (use convergence history as sample)
+        if (hasConvergence && job.result.convergence_history.length > 5) {
+            await initEnergyDistributionChart(job.result.convergence_history);
+        }
+
+        // Probability distribution
+        if (hasProbabilities) {
+            const probs = job.result.probabilities || job.result.state_probabilities;
+            await initProbabilityChart(probs);
+        }
+
+        // Parameter chart
+        if (hasParams) {
+            await initParameterChart(job.result.optimal_params);
+        }
+    } else {
+        vizGridSection.style.display = 'none';
+    }
+
+    // Graph visualization for MaxCut/QAOA with graph config
+    if (job.problem_config?.graph && solution) {
+        graphVizSection.style.display = 'block';
+        renderGraphVisualization(job.problem_config.graph, solution);
+    } else {
+        graphVizSection.style.display = 'none';
+    }
+}
+
+
+/**
+ * Toast Notifications - Using new Component System
+ */
+function showToast(type, title, message, duration = 5000) {
+    // Use global toast container that's initialized in HTML
+    if (window.toastContainer) {
+        // Map old type names to new component methods
+        const methodMap = {
+            'success': 'success',
+            'error': 'error',
+            'warning': 'warning',
+            'info': 'info'
+        };
+        
+        const method = methodMap[type] || 'info';
+        window.toastContainer[method](title, message, duration);
+    } else {
+        // Fallback to old implementation if component not loaded yet
+        console.warn('[Toast] Component system not loaded, using fallback');
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        const icons = {
+            success: '✅',
+            error: '❌',
+            warning: '⚠️',
+            info: 'ℹ️'
+        };
+
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+            <span class="toast-icon">${icons[type]}</span>
+            <div class="toast-message">
+                <strong>${title}</strong>
+                <span>${message}</span>
+            </div>
+            <button class="toast-close">&times;</button>
+        `;
+
+        container.appendChild(toast);
+
+        // Auto remove after duration
+        setTimeout(() => {
+            toast.remove();
+        }, duration);
+
+        // Manual close
+        toast.querySelector('.toast-close').addEventListener('click', () => {
+            toast.remove();
+        });
+    }
 }
 
 /**
@@ -1944,12 +2745,12 @@ function exportAllJobs() {
         showToast('info', 'No Jobs', 'There are no jobs to export');
         return;
     }
-    
+
     const filteredJobs = filterJobs(STATE.jobs);
     const dataStr = JSON.stringify(filteredJobs, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.href = url;
     a.download = `quantum_jobs_${new Date().toISOString().split('T')[0]}.json`;
@@ -1957,7 +2758,7 @@ function exportAllJobs() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     showToast('success', 'Exported', `${filteredJobs.length} jobs exported successfully`);
 }
 
@@ -1972,11 +2773,11 @@ function exportJobAsCSV(jobs) {
         job.created_at,
         job.result?.optimal_value || ''
     ]);
-    
+
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.href = url;
     a.download = `quantum_jobs_${new Date().toISOString().split('T')[0]}.csv`;
@@ -2006,13 +2807,13 @@ function formatDate(dateString) {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
-    
+
     // Show relative time for recent jobs
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    
+
     return date.toLocaleString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -2037,23 +2838,30 @@ window.STATE = STATE;
  * Authentication Functions
  */
 function initAuth() {
-    // Login form submission
-    document.getElementById('login-form')?.addEventListener('submit', handleLogin);
-    
-    // Register form submission
-    document.getElementById('register-form')?.addEventListener('submit', handleRegister);
+    // Auth is now handled by AuthModal component
+    // Set up callbacks for auth modal
+    if (window.authModal) {
+        window.authModal.onLogin(async () => {
+            await checkAuthStatus();
+            loadJobs();
+        });
+        window.authModal.onRegister(async () => {
+            await checkAuthStatus();
+            loadJobs();
+        });
+    }
 }
 
 function initUserMenu() {
     const userMenu = document.getElementById('user-menu');
     const dropdown = document.getElementById('user-dropdown');
-    
+
     if (userMenu && dropdown) {
         userMenu.addEventListener('click', (e) => {
             e.stopPropagation();
             dropdown.classList.toggle('active');
         });
-        
+
         // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {
             if (!userMenu.contains(e.target)) {
@@ -2066,59 +2874,82 @@ function initUserMenu() {
 async function checkAuthStatus() {
     const token = localStorage.getItem('authToken');
     const storedUser = localStorage.getItem('quantumSafeUser');
-    
+
     if (!token) {
+        console.log('[Auth] No token found');
         updateAuthUI(false, null);
         return;
     }
-    
-    // First try to decode demo token from landing page login
+
+    console.log('[Auth] Token found, validating...');
+
+    // First check if we have stored user data (from landing page login)
+    let storedUserData = null;
+    if (storedUser) {
+        try {
+            storedUserData = JSON.parse(storedUser);
+        } catch (e) {
+            console.warn('[Auth] Failed to parse stored user data');
+        }
+    }
+
+    // Try to decode as demo token (base64 JSON)
     try {
         const decodedToken = JSON.parse(atob(token));
         if (decodedToken && decodedToken.email && decodedToken.exp > Date.now()) {
-            // Valid demo token from landing page
-            const user = storedUser ? JSON.parse(storedUser) : { email: decodedToken.email };
+            console.log('[Auth] Valid demo token detected');
+            const user = storedUserData || { email: decodedToken.email };
             STATE.isAuthenticated = true;
             STATE.user = user;
             updateAuthUI(true, user);
-            
-            // Load additional data for demo authenticated users
             loadWorkerStatus();
             loadWebhookStats();
             return;
         }
     } catch (e) {
-        // Not a demo token, try API authentication
+        // Not a demo token - this is expected for real JWT tokens
+        console.log('[Auth] Token is not a demo token, trying API validation...');
     }
-    
+
+    // Validate real JWT token via API
     try {
         const response = await fetch(`${CONFIG.apiBase}/auth/me`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (response.ok) {
             const user = await response.json();
+            console.log('[Auth] API validation successful:', user.username || user.email);
             STATE.isAuthenticated = true;
             STATE.user = user;
             updateAuthUI(true, user);
-            
-            // Load additional data for authenticated users
             loadWorkerStatus();
             loadWebhookStats();
-        } else {
+        } else if (response.status === 401) {
+            console.log('[Auth] Token invalid or expired (401)');
             localStorage.removeItem('authToken');
+            localStorage.removeItem('quantumSafeUser');
             updateAuthUI(false, null);
+        } else {
+            // Other error - keep user logged in if we have stored data
+            console.warn('[Auth] API returned status', response.status);
+            if (storedUserData) {
+                console.log('[Auth] Using stored user data as fallback');
+                STATE.isAuthenticated = true;
+                STATE.user = storedUserData;
+                updateAuthUI(true, storedUserData);
+            } else {
+                updateAuthUI(false, null);
+            }
         }
     } catch (error) {
-        console.error('Auth check failed:', error);
-        // If API is unreachable but we have a stored user from landing page, use that
-        if (storedUser) {
-            const user = JSON.parse(storedUser);
+        console.error('[Auth] API check failed:', error.message);
+        // If API is unreachable but we have stored user data, use it
+        if (storedUserData) {
+            console.log('[Auth] API unreachable, using stored user data');
             STATE.isAuthenticated = true;
-            STATE.user = user;
-            updateAuthUI(true, user);
-            
-            // Load data with demo fallback
+            STATE.user = storedUserData;
+            updateAuthUI(true, storedUserData);
             loadWorkerStatus();
             loadWebhookStats();
         } else {
@@ -2130,14 +2961,14 @@ async function checkAuthStatus() {
 function updateAuthUI(isAuthenticated, user) {
     STATE.isAuthenticated = isAuthenticated;
     STATE.user = user;
-    
+
     const loginBtn = document.getElementById('btn-login');
     const logoutBtn = document.getElementById('btn-logout');
     const userAvatar = document.getElementById('user-avatar');
     const userName = document.getElementById('user-name');
     const dropdownHeader = document.getElementById('user-dropdown-header');
     const dropdownEmail = document.getElementById('user-dropdown-email');
-    
+
     if (isAuthenticated && user) {
         // Show authenticated state
         if (loginBtn) loginBtn.style.display = 'none';
@@ -2158,72 +2989,45 @@ function updateAuthUI(isAuthenticated, user) {
 
 function openAuthModal(e) {
     e?.preventDefault();
-    document.getElementById('auth-modal')?.classList.add('active');
-    showLoginForm();
-    
+    // Use new AuthModal component
+    if (window.authModal) {
+        window.authModal.openLogin();
+    }
+
+    // Close user dropdown
+    document.getElementById('user-dropdown')?.classList.remove('active');
+}
+
+function openRegisterModal(e) {
+    e?.preventDefault();
+    // Use new AuthModal component
+    if (window.authModal) {
+        window.authModal.openRegister();
+    }
+
     // Close user dropdown
     document.getElementById('user-dropdown')?.classList.remove('active');
 }
 
 function closeAuthModal() {
-    document.getElementById('auth-modal')?.classList.remove('active');
-    // Reset forms
-    document.getElementById('login-form')?.reset();
-    document.getElementById('register-form')?.reset();
-    document.getElementById('login-error').style.display = 'none';
-    document.getElementById('register-error').style.display = 'none';
+    // Use new AuthModal component
+    if (window.authModal) {
+        window.authModal.close();
+    }
 }
 
-function showLoginForm(e) {
-    e?.preventDefault();
-    document.getElementById('login-form').style.display = 'block';
-    document.getElementById('register-form').style.display = 'none';
-    document.getElementById('auth-modal-title').innerHTML = '<i class="fas fa-user-lock"></i> Sign In';
-}
-
-function showRegisterForm(e) {
-    e?.preventDefault();
-    document.getElementById('login-form').style.display = 'none';
-    document.getElementById('register-form').style.display = 'block';
-    document.getElementById('auth-modal-title').innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
-}
-
+// Login and register handlers now in AuthModal component
+// These functions are kept for backward compatibility
 async function handleLogin(e) {
+    // Defer to AuthModal component
     e.preventDefault();
-    
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    const errorDiv = document.getElementById('login-error');
-    const submitBtn = document.getElementById('login-submit');
-    
-    // Disable button and show loading
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing in...';
-    errorDiv.style.display = 'none';
-    
-    try {
-        // Backend expects username, not email
-        const username = email.includes('@') ? email.split('@')[0] : email;
-        
-        const response = await fetch(`${CONFIG.apiBase}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok && data.access_token) {
-            localStorage.setItem('authToken', data.access_token);
-            localStorage.setItem('quantumSafeUser', JSON.stringify({
-                email: email,
-                username: username,
-                signedInAt: new Date().toISOString()
-            }));
-            if (data.refresh_token) {
-                localStorage.setItem('refreshToken', data.refresh_token);
-            }
-            
+}
+
+async function handleRegister(e) {
+    // Defer to AuthModal component
+    e.preventDefault();
+}
+
             closeAuthModal();
             showToast('success', 'Welcome!', 'You have successfully signed in');
             await checkAuthStatus();
@@ -2256,42 +3060,74 @@ async function handleLogin(e) {
 
 async function handleRegister(e) {
     e.preventDefault();
-    
+
     const name = document.getElementById('register-name').value;
     const email = document.getElementById('register-email').value;
     const password = document.getElementById('register-password').value;
     const confirm = document.getElementById('register-confirm').value;
     const errorDiv = document.getElementById('register-error');
     const submitBtn = document.getElementById('register-submit');
-    
+
     // Validate passwords match
     if (password !== confirm) {
         errorDiv.textContent = 'Passwords do not match';
         errorDiv.style.display = 'block';
         return;
     }
-    
+
     // Disable button and show loading
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating account...';
     errorDiv.style.display = 'none';
-    
+
     try {
-        // Backend expects username (alphanumeric), create from name
-        const username = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-        
+        // Create username from email prefix (same as signin logic for consistency)
+        const username = email.includes('@') ? email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_') : email.toLowerCase();
+
         const response = await fetch(`${CONFIG.apiBase}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, email, password })
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok) {
-            showToast('success', 'Account Created', 'Please sign in with your credentials');
-            showLoginForm();
-            document.getElementById('login-email').value = username;
+            // Auto-login after successful registration
+            try {
+                const loginResponse = await fetch(`${CONFIG.apiBase}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const loginData = await loginResponse.json();
+
+                if (loginResponse.ok && loginData.access_token) {
+                    localStorage.setItem('authToken', loginData.access_token);
+                    localStorage.setItem('quantumSafeUser', JSON.stringify({
+                        email: email,
+                        username: username,
+                        name: name,
+                        signedInAt: new Date().toISOString()
+                    }));
+
+                    closeAuthModal();
+                    showToast('success', 'Account Created', 'Welcome! You are now signed in.');
+                    await checkAuthStatus();
+                    loadJobs();
+                } else {
+                    // Login failed but signup succeeded
+                    showToast('success', 'Account Created', 'Please sign in with your credentials');
+                    showLoginForm();
+                    document.getElementById('login-email').value = username;
+                }
+            } catch (loginError) {
+                console.warn('Auto-login failed:', loginError);
+                showToast('success', 'Account Created', 'Please sign in with your credentials');
+                showLoginForm();
+                document.getElementById('login-email').value = username;
+            }
         } else {
             throw new Error(data.detail || data.message || 'Registration failed');
         }
@@ -2313,7 +3149,7 @@ async function handleRegister(e) {
 
 async function handleLogout(e) {
     e?.preventDefault();
-    
+
     try {
         const token = localStorage.getItem('authToken');
         if (token) {
@@ -2321,21 +3157,21 @@ async function handleLogout(e) {
             await fetch(`${CONFIG.apiBase}/auth/logout`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
-            }).catch(() => {});
+            }).catch(() => { });
         }
     } finally {
         // Clear tokens
         localStorage.removeItem('authToken');
         localStorage.removeItem('refreshToken');
-        
+
         // Update UI
         STATE.isAuthenticated = false;
         STATE.user = null;
         updateAuthUI(false, null);
-        
+
         // Close dropdown
         document.getElementById('user-dropdown')?.classList.remove('active');
-        
+
         showToast('info', 'Signed Out', 'You have been signed out');
         loadJobs();
     }
@@ -2347,24 +3183,24 @@ async function handleLogout(e) {
 async function generateMLKEMKeys() {
     const generateBtn = document.getElementById('btn-generate-keys');
     const resultSection = document.getElementById('key-generation-result');
-    
+
     generateBtn.disabled = true;
     generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
-    
+
     try {
         // Check if user is authenticated (either via API or demo token)
         if (!STATE.isAuthenticated) {
             throw new Error('Please sign in to generate keys');
         }
-        
+
         let data;
-        
+
         try {
             const response = await fetch(`${CONFIG.apiBase}/auth/keys/generate`, {
                 method: 'POST',
                 headers: getAuthHeaders()
             });
-            
+
             if (response.ok) {
                 data = await response.json();
             } else if (response.status === 401) {
@@ -2382,19 +3218,19 @@ async function generateMLKEMKeys() {
                 throw fetchError;
             }
         }
-        
+
         // Display generated keys
         document.getElementById('generated-public-key').value = data.public_key || '';
         document.getElementById('generated-private-key').value = data.private_key || data.secret_key || '';
         resultSection.style.display = 'block';
-        
+
         showToast('success', 'Keys Generated', 'Your ML-KEM-768 keypair has been created');
-        
+
         // Auto-fill the register public key field
         document.getElementById('register-public-key').value = data.public_key || '';
-        
+
     } catch (error) {
-        showToast('error', 'Generation Failed', error.message);
+        showToast('error', 'Generation Failed', error.message || 'Failed to generate keys');
     } finally {
         generateBtn.disabled = false;
         generateBtn.innerHTML = '<i class="fas fa-key"></i> Generate Keypair';
@@ -2409,7 +3245,7 @@ function generateDemoMLKEMKeys() {
         crypto.getRandomValues(arr);
         return btoa(String.fromCharCode.apply(null, arr));
     };
-    
+
     return {
         public_key: randomBytes(1184),  // ML-KEM-768 public key size
         private_key: randomBytes(2400)  // ML-KEM-768 private key size
@@ -2419,30 +3255,30 @@ function generateDemoMLKEMKeys() {
 async function registerPublicKey() {
     const publicKey = document.getElementById('register-public-key').value.trim();
     const registerBtn = document.getElementById('btn-register-key');
-    
+
     if (!publicKey) {
         showToast('error', 'Missing Key', 'Please enter a public key to register');
         return;
     }
-    
+
     if (!STATE.isAuthenticated) {
         showToast('error', 'Registration Failed', 'Please sign in to register keys');
         return;
     }
-    
+
     registerBtn.disabled = true;
     registerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
-    
+
     try {
         let success = false;
-        
+
         try {
             const response = await fetch(`${CONFIG.apiBase}/auth/keys/register`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ public_key: publicKey })
             });
-            
+
             if (response.ok) {
                 success = true;
             } else if (response.status === 401 && STATE.isAuthenticated) {
@@ -2460,17 +3296,17 @@ async function registerPublicKey() {
                 throw fetchError;
             }
         }
-        
+
         if (success) {
             showToast('success', 'Key Registered', 'Your public key has been registered with the server');
             document.getElementById('register-public-key').value = '';
-            
+
             // Show registered keys section
             loadRegisteredKeys();
         }
-        
+
     } catch (error) {
-        showToast('error', 'Registration Failed', error.message);
+        showToast('error', 'Registration Failed', error.message || 'Failed to register key');
     } finally {
         registerBtn.disabled = false;
         registerBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Register Key';
@@ -2482,15 +3318,15 @@ async function loadRegisteredKeys() {
         const response = await fetch(`${CONFIG.apiBase}/auth/keys`, {
             headers: getAuthHeaders()
         });
-        
+
         if (response.ok) {
             const data = await response.json();
             const keys = data.keys || [];
-            
+
             if (keys.length > 0) {
                 const keysSection = document.getElementById('registered-keys-section');
                 const keysList = document.getElementById('registered-keys-list');
-                
+
                 keysSection.style.display = 'block';
                 keysList.innerHTML = keys.map(key => `
                     <div class="key-item">
@@ -2522,15 +3358,15 @@ function copyToClipboard(elementId) {
 async function loadWorkerStatus() {
     const workersGrid = document.getElementById('workers-grid');
     if (!workersGrid) return;
-    
+
     try {
         let workers = [];
-        
+
         try {
             const response = await fetch(`${CONFIG.apiUrl}/workers`, {
                 headers: getAuthHeaders()
             });
-            
+
             if (response.ok) {
                 const data = await response.json();
                 workers = data.workers || data || [];
@@ -2556,9 +3392,9 @@ async function loadWorkerStatus() {
                 throw fetchError;
             }
         }
-        
+
         STATE.workers = workers;
-        
+
         if (workers.length === 0) {
             workersGrid.innerHTML = `
                 <div class="empty-state">
@@ -2568,7 +3404,7 @@ async function loadWorkerStatus() {
             `;
             return;
         }
-        
+
         workersGrid.innerHTML = workers.map(worker => `
             <div class="worker-card ${worker.status || 'unknown'}">
                 <div class="worker-header">
@@ -2597,7 +3433,7 @@ async function loadWorkerStatus() {
                 </div>
             </div>
         `).join('');
-        
+
     } catch (error) {
         console.error('Failed to load worker status:', error);
         workersGrid.innerHTML = `
@@ -2626,17 +3462,17 @@ async function loadWebhookStats() {
     const statsGrid = document.getElementById('webhook-stats-grid');
     const recentSection = document.getElementById('recent-webhooks');
     const webhooksList = document.getElementById('webhooks-list');
-    
+
     if (!statsGrid) return;
-    
+
     try {
         let data = null;
-        
+
         try {
             const response = await fetch(`${CONFIG.apiUrl}/webhooks/stats`, {
                 headers: getAuthHeaders()
             });
-            
+
             if (response.ok) {
                 data = await response.json();
             } else if ((response.status === 401 || response.status === 403) && STATE.isAuthenticated) {
@@ -2661,9 +3497,9 @@ async function loadWebhookStats() {
                 throw fetchError;
             }
         }
-        
+
         STATE.webhookStats = data;
-        
+
         // Render statistics grid
         statsGrid.innerHTML = `
             <div class="webhook-stat-card">
@@ -2703,7 +3539,7 @@ async function loadWebhookStats() {
                 </div>
             </div>
         `;
-        
+
         // Render recent webhooks if available
         const recentHooks = data.recent || data.deliveries || [];
         if (recentHooks.length > 0 && recentSection && webhooksList) {
@@ -2725,7 +3561,7 @@ async function loadWebhookStats() {
         } else if (recentSection) {
             recentSection.style.display = 'none';
         }
-        
+
     } catch (error) {
         console.error('Failed to load webhook stats:', error);
         statsGrid.innerHTML = `
@@ -2780,7 +3616,7 @@ function initNotifications() {
             STATE.notifications = [];
         }
     }
-    
+
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
         const menu = document.getElementById('notification-menu');
@@ -2795,7 +3631,7 @@ function toggleNotifications(e) {
     e?.stopPropagation();
     const dropdown = document.getElementById('notification-dropdown');
     dropdown?.classList.toggle('active');
-    
+
     // Mark all as read when opening
     if (dropdown?.classList.contains('active')) {
         STATE.notifications.forEach(n => n.read = true);
@@ -2814,14 +3650,14 @@ function addNotification(type, title, message, jobId = null) {
         timestamp: new Date().toISOString(),
         read: false
     };
-    
+
     STATE.notifications.unshift(notification);
-    
+
     // Keep only last 50 notifications
     if (STATE.notifications.length > 50) {
         STATE.notifications = STATE.notifications.slice(0, 50);
     }
-    
+
     saveNotifications();
     updateNotificationUI();
 }
@@ -2833,14 +3669,14 @@ function saveNotifications() {
 function updateNotificationUI() {
     const badge = document.getElementById('notification-badge');
     const list = document.getElementById('notification-list');
-    
+
     // Update badge
     const unreadCount = STATE.notifications.filter(n => !n.read).length;
     if (badge) {
         badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
         badge.style.display = unreadCount > 0 ? 'flex' : 'none';
     }
-    
+
     // Update list
     if (list) {
         if (STATE.notifications.length === 0) {
@@ -2867,9 +3703,12 @@ function updateNotificationUI() {
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-            `).join('');
+             `).join('');
         }
     }
+    
+    // Also show toast for new notifications
+    showToast(type, title, message);
 }
 
 function getNotificationIcon(type) {
@@ -2890,7 +3729,7 @@ function handleNotificationClick(notificationId, jobId) {
         saveNotifications();
         updateNotificationUI();
     }
-    
+
     // Navigate to job if jobId provided
     if (jobId) {
         document.getElementById('notification-dropdown')?.classList.remove('active');
@@ -2932,58 +3771,58 @@ function initKeyboardShortcuts() {
             }
             return;
         }
-        
+
         // Don't trigger with modifier keys (except for Ctrl+K search)
         if (e.altKey || e.metaKey) return;
-        
+
         // Ctrl+K or / for search focus
         if ((e.ctrlKey && e.key === 'k') || e.key === '/') {
             e.preventDefault();
             document.getElementById('search-input')?.focus();
             return;
         }
-        
+
         // Skip if Ctrl is pressed for other keys
         if (e.ctrlKey) return;
-        
+
         switch (e.key.toLowerCase()) {
             case 'n':
                 // New job
                 e.preventDefault();
                 navigateToSection('new-job');
                 break;
-                
+
             case 'j':
                 // Jobs list
                 e.preventDefault();
                 navigateToSection('jobs');
                 break;
-                
+
             case 'o':
                 // Overview
                 e.preventDefault();
                 navigateToSection('overview');
                 break;
-                
+
             case 'r':
                 // Refresh
                 e.preventDefault();
                 loadJobs(true);
                 showToast('info', 'Refreshing', 'Reloading jobs...');
                 break;
-                
+
             case 't':
                 // Toggle theme
                 e.preventDefault();
                 toggleTheme();
                 break;
-                
+
             case 's':
                 // Settings
                 e.preventDefault();
                 navigateToSection('settings');
                 break;
-                
+
             case 'escape':
                 // Close modals
                 document.getElementById('auth-modal')?.classList.remove('active');
@@ -2991,7 +3830,7 @@ function initKeyboardShortcuts() {
                 document.getElementById('notification-dropdown')?.classList.remove('active');
                 document.getElementById('user-dropdown')?.classList.remove('active');
                 break;
-                
+
             case '?':
                 // Show keyboard shortcuts help
                 e.preventDefault();
@@ -3014,11 +3853,11 @@ function showKeyboardShortcutsHelp() {
         { key: 'Esc', desc: 'Close Modals' },
         { key: '?', desc: 'Show This Help' }
     ];
-    
-    const helpHtml = shortcuts.map(s => 
+
+    const helpHtml = shortcuts.map(s =>
         `<div class="shortcut-item"><kbd>${s.key}</kbd><span>${s.desc}</span></div>`
     ).join('');
-    
+
     showToast('info', '⌨️ Keyboard Shortcuts', `
         <div class="shortcuts-grid">${helpHtml}</div>
     `);
@@ -3030,7 +3869,7 @@ function showKeyboardShortcutsHelp() {
 function initOfflineDetection() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    
+
     // Initial check
     if (!navigator.onLine) {
         handleOffline();
@@ -3041,26 +3880,26 @@ function handleOffline() {
     STATE.wasOffline = true;
     const banner = document.getElementById('offline-banner');
     const statusText = document.getElementById('offline-status');
-    
+
     if (banner) {
         banner.style.display = 'flex';
         if (statusText) statusText.textContent = 'Waiting for connection...';
     }
-    
+
     showToast('warning', 'Offline', 'You are currently offline');
 }
 
 function handleOnline() {
     const banner = document.getElementById('offline-banner');
     const statusText = document.getElementById('offline-status');
-    
+
     if (banner) {
         if (statusText) statusText.textContent = 'Reconnected!';
         setTimeout(() => {
             banner.style.display = 'none';
         }, 2000);
     }
-    
+
     if (STATE.wasOffline) {
         showToast('success', 'Back Online', 'Connection restored');
         STATE.wasOffline = false;
@@ -3071,7 +3910,7 @@ function handleOnline() {
 function checkConnection() {
     const statusText = document.getElementById('offline-status');
     if (statusText) statusText.textContent = 'Checking...';
-    
+
     fetch(CONFIG.apiUrl + '/health', { method: 'HEAD', cache: 'no-store' })
         .then(() => handleOnline())
         .catch(() => {
@@ -3123,7 +3962,7 @@ function toggleJobSelection(jobId) {
 function updateCompareButton() {
     const btn = document.getElementById('compare-jobs-btn');
     const countSpan = document.getElementById('compare-count');
-    
+
     if (btn && countSpan) {
         countSpan.textContent = STATE.selectedForCompare.length;
         btn.style.display = STATE.selectedForCompare.length >= 2 ? 'inline-flex' : 'none';
@@ -3135,14 +3974,14 @@ function openCompareModal() {
         showToast('info', 'Select Jobs', 'Select at least 2 jobs to compare');
         return;
     }
-    
+
     const modal = document.getElementById('compare-modal');
     const grid = document.getElementById('compare-grid');
-    
+
     if (!modal || !grid) return;
-    
+
     const jobs = STATE.selectedForCompare.map(id => STATE.jobs.find(j => j.job_id === id)).filter(Boolean);
-    
+
     grid.innerHTML = jobs.map(job => `
         <div class="compare-card">
             <div class="compare-header">
@@ -3180,7 +4019,7 @@ function openCompareModal() {
             </div>
         </div>
     `).join('');
-    
+
     modal.classList.add('active');
 }
 
@@ -3191,7 +4030,7 @@ function closeCompareModal() {
 
 function exportComparison() {
     const jobs = STATE.selectedForCompare.map(id => STATE.jobs.find(j => j.job_id === id)).filter(Boolean);
-    
+
     const comparison = {
         exported_at: new Date().toISOString(),
         jobs: jobs.map(job => ({
@@ -3204,7 +4043,7 @@ function exportComparison() {
             result: job.result || null
         }))
     };
-    
+
     const blob = new Blob([JSON.stringify(comparison, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -3212,7 +4051,7 @@ function exportComparison() {
     a.download = `job_comparison_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    
+
     showToast('success', 'Exported', 'Comparison exported successfully');
     closeCompareModal();
 }
@@ -3226,11 +4065,11 @@ async function updateStatusPieChart(data) {
     const canvas = document.getElementById('status-pie-chart');
     const container = document.getElementById('status-chart-container');
     const legend = document.getElementById('status-chart-legend');
-    
+
     if (!canvas || !container) return;
-    
+
     const total = data.completed + data.running + data.pending + data.failed;
-    
+
     if (total === 0) {
         container.innerHTML = `
             <div class="empty-state">
@@ -3240,7 +4079,7 @@ async function updateStatusPieChart(data) {
         `;
         return;
     }
-    
+
     // Lazy load Chart.js
     if (!window.Chart && window.loadChartJS) {
         try {
@@ -3250,16 +4089,16 @@ async function updateStatusPieChart(data) {
             return;
         }
     }
-    
+
     if (!window.Chart) return;
-    
+
     // Destroy existing chart
     if (statusPieChart) {
         statusPieChart.destroy();
     }
-    
+
     const ctx = canvas.getContext('2d');
-    
+
     statusPieChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -3296,7 +4135,7 @@ async function updateStatusPieChart(data) {
                     borderColor: '#2a2a3a',
                     borderWidth: 1,
                     callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                             const value = context.raw;
                             const percentage = ((value / total) * 100).toFixed(1);
                             return `${context.label}: ${value} (${percentage}%)`;
@@ -3306,7 +4145,7 @@ async function updateStatusPieChart(data) {
             }
         }
     });
-    
+
     // Update custom legend
     if (legend) {
         legend.innerHTML = `
@@ -3324,7 +4163,7 @@ async function updateStatusPieChart(data) {
 function toggleAlgorithmCategory(categoryId) {
     const content = document.getElementById(categoryId);
     const icon = document.getElementById(`${categoryId}-icon`);
-    
+
     if (content) {
         content.classList.toggle('expanded');
         if (icon) {
