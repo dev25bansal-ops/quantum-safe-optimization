@@ -22,13 +22,17 @@ def test_mlkem_decryption():
     # Register user
     username = f"decrypt_test_{int(time.time())}"
     reg_resp = requests.post(
-        f"{BASE_URL}/auth/register", json={"username": username, "password": "TestPassword123!"}
+        f"{BASE_URL}/auth/register",
+        json={"username": username, "password": "TestPassword123!"},
+        timeout=5,
     )
     assert reg_resp.status_code in [201, 200]
 
     # Login
     login_resp = requests.post(
-        f"{BASE_URL}/auth/login", json={"username": username, "password": "TestPassword123!"}
+        f"{BASE_URL}/auth/login",
+        json={"username": username, "password": "TestPassword123!"},
+        timeout=5,
     )
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -38,6 +42,7 @@ def test_mlkem_decryption():
         f"{BASE_URL}/auth/keys/encryption-key",
         headers=headers,
         json={"public_key": public_key, "key_type": "ML-KEM-768"},
+        timeout=5,
     )
     assert reg_key_resp.status_code == 200
 
@@ -54,18 +59,19 @@ def test_mlkem_decryption():
             "parameters": {"layers": 1, "shots": 50},
             "encrypt_result": True,
         },
+        timeout=10,
     )
     job_id = job_resp.json()["job_id"]
 
     # Wait for completion
     for _ in range(20):
-        status_resp = requests.get(f"{BASE_URL}/jobs/{job_id}", headers=headers)
+        status_resp = requests.get(f"{BASE_URL}/jobs/{job_id}", headers=headers, timeout=5)
         if status_resp.json()["status"] == "completed":
             break
         time.sleep(0.5)
 
     # Get encrypted result
-    result_resp = requests.get(f"{BASE_URL}/jobs/{job_id}/result", headers=headers)
+    result_resp = requests.get(f"{BASE_URL}/jobs/{job_id}/result", headers=headers, timeout=5)
     result_data = result_resp.json()
 
     assert result_data["encrypted"], "Result should be encrypted"
@@ -73,7 +79,10 @@ def test_mlkem_decryption():
 
     # Decrypt using server endpoint
     decrypt_resp = requests.post(
-        f"{BASE_URL}/jobs/{job_id}/decrypt", headers=headers, json={"secret_key": secret_key}
+        f"{BASE_URL}/jobs/{job_id}/decrypt",
+        headers=headers,
+        json={"secret_key": secret_key},
+        timeout=10,
     )
 
     assert decrypt_resp.status_code == 200, f"Decryption failed: {decrypt_resp.text}"

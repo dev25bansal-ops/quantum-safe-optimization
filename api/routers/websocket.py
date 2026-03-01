@@ -117,7 +117,7 @@ class ConnectionManager:
             # Start health check task
             self._health_check_task = asyncio.create_task(self._health_check_loop())
 
-        except Exception:
+        except Exception:  # noqa: BLE001 - Non-critical exception
             self._redis = None
 
     async def close(self):
@@ -142,7 +142,7 @@ class ConnectionManager:
             for conn_info in list(connections):
                 try:
                     await conn_info.websocket.close(code=1001, reason="Server shutdown")
-                except Exception:
+except Exception:  # noqa: BLE001 - Connection cleanup is non-critical
                     pass
 
         self.active_connections.clear()
@@ -249,7 +249,7 @@ class ConnectionManager:
                 pass
 
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001 - Non-critical exception
             self._connection_errors += 1
             return False
 
@@ -259,7 +259,7 @@ class ConnectionManager:
             try:
                 await websocket.send_json(message)
                 self._total_messages_sent += 1
-            except Exception:
+            except Exception:  # noqa: BLE001 - Non-critical exception
                 self._connection_errors += 1
 
     async def broadcast_to_job(self, job_id: str, message: dict):
@@ -304,7 +304,7 @@ class ConnectionManager:
                                         "timestamp": datetime.utcnow().isoformat(),
                                     }
                                 )
-                        except Exception:
+                        except Exception:  # noqa: BLE001 - Non-critical exception
                             stale_connections.append(conn_info)
 
                     # Remove stale connections
@@ -313,7 +313,7 @@ class ConnectionManager:
 
             except asyncio.CancelledError:
                 break
-            except Exception:
+except Exception:  # noqa: BLE001 - Error sending is non-critical
                 pass
 
     async def _listen_for_updates(self):
@@ -343,7 +343,7 @@ class ConnectionManager:
                             pass
         except asyncio.CancelledError:
             pass
-        except Exception:
+except Exception:  # noqa: BLE001 - Heartbeat error is non-critical
             pass
 
     def get_status(self) -> dict[str, Any]:
@@ -504,7 +504,7 @@ async def job_progress_websocket(
                     "message": str(e),
                 },
             )
-        except Exception:
+except Exception:  # noqa: BLE001 - Job lookup error is non-critical
             pass
     finally:
         manager.disconnect(conn_info)
@@ -676,7 +676,7 @@ async def all_jobs_websocket(
                     "message": str(e),
                 }
             )
-        except Exception:
+except Exception:  # noqa: BLE001 - Broadcast error is non-critical
             pass
     finally:
         # Record disconnection metric

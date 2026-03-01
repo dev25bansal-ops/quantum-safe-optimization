@@ -28,7 +28,7 @@ def main() -> int:
 
     # Server command
     server_parser = subparsers.add_parser("server", help="Start the API server")
-    server_parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
+    server_parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")  # noqa: S104 - Accepting connections from all interfaces
     server_parser.add_argument("--port", type=int, default=8000, help="Port to bind to")
     server_parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
 

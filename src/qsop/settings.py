@@ -43,7 +43,7 @@ class APISettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="QSOP_API_")
 
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # noqa: S104 - Accepting connections from all interfaces
     port: int = 8000
     workers: int = 4
     reload: bool = False

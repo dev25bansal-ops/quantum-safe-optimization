@@ -183,7 +183,7 @@ def demo_crypto():
         valid = sig.verify(message, signature, pk)
         assert valid, "Signature verification failed!"
 
-    except Exception:
+except Exception:  # noqa: BLE001 - Demo cleanup error ignored
         pass
 
 

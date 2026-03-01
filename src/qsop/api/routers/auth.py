@@ -25,7 +25,7 @@ class LoginResponse(BaseModel):
     """Login response body."""
 
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 - Standard JWT token type
 
 
 class RegisterRequest(BaseModel):
