@@ -1,0 +1,393 @@
+# Algorithm Pseudocode
+
+This document provides detailed pseudocode for all quantum algorithms implemented in the QSOP platform, including complexity analysis and implementation details.
+
+---
+
+## Table of Contents
+
+1. [QAOA - Quantum Approximate Optimization Algorithm](#qaoa---quantum-approximate-optimization-algorithm)
+2. [VQE - Variational Quantum Eigensolver](#vqe---variational-quantum-eigensolver)
+3. [Grover's Algorithm](#grovers-algorithm)
+4. [Quantum Fourier Transform (QFT)](#quantum-fourier-transform-qft)
+5. [Quantum Phase Estimation (QPE)](#quantum-phase-estimation-qpe)
+
+---
+
+## QAOA - Quantum Approximate Optimization Algorithm
+
+### Algorithm 1: QAOA Optimization
+
+\begin{algorithm}
+\caption{Quantum Approximate Optimization Algorithm (QAOA)}
+\begin{algorithmic}[1]
+\REQUIRE Problem Hamiltonian $\hat{H}_C$, Mixer Hamiltonian $\hat{H}_M$, Depth $p$, Max iterations $T$
+\ENSURE Optimized parameters $(\vec{\gamma}^*, \vec{\beta}^*)$ and solution bitstring $z^*$
+
+\STATE Initialize parameters $\vec{\gamma} \gets [\gamma_1, \ldots, \gamma_p]$, $\vec{\beta} \gets [\beta_1, \ldots, \beta_p]$
+\STATE Initialize initial state $|\psi_0\rangle \gets H^{\otimes n} |0\rangle^{\otimes n}$
+
+\FOR{$t \gets 1$ \TO $T$}
+    \STATE Build QAOA circuit with depth $p$:
+    \STATE \quad $|\psi(\vec{\gamma}, \vec{\beta})\rangle \gets |\psi_0\rangle$
+    \FOR{$k \gets 1$ \TO $p$}
+        \STATE \quad $|\psi(\vec{\gamma}, \vec{\beta})\rangle \gets e^{-i\beta_k \hat{H}_M} |\psi(\vec{\gamma}, \vec{\beta})\rangle$
+        \STATE \quad $|\psi(\vec{\gamma}, \vec{\beta})\rangle \gets e^{-i\gamma_k \hat{H}_C} |\psi(\vec{\gamma}, \vec{\beta})\rangle$
+    \ENDFOR
+    \STATE Execute circuit $m$ times, measure in computational basis
+    \STATE Collect measurement counts $\{z_i\}_{i=1}^m$
+    \STATE Compute expectation value: $E_t \gets \frac{1}{m} \sum_{i=1}^m C(z_i)$
+    \STATE Update parameters using classical optimizer:
+    \STATE \quad $(\vec{\gamma}, \vec{\beta}) \gets \text{Optimize}(E_t, \vec{\gamma}, \vec{\beta})$
+    \IF{$|E_t - E_{t-1}| < \epsilon$}
+        \STATE \textbf{break}
+    \ENDIF
+\ENDFOR
+
+\STATE Measure final state with $4m$ shots
+\STATE Find best bitstring: $z^* \gets \arg\max_z \text{count}(z)$
+\RETURN $(\vec{\gamma}^*, \vec{\beta}^*, z^*, E_T)$
+\end{algorithmic}
+\end{algorithm}
+
+### Complexity Analysis
+
+**Quantum Circuit Complexity:**
+- Number of gates: $O(p \cdot |G|)$ where $|G|$ is graph edge count
+- Circuit depth: $O(p)$
+- Number of parameters: $2p$
+
+**Classical Optimization Complexity:**
+- Per iteration: $O(m)$ for expectation value computation
+- Total: $O(T \cdot m)$ where $T$ is number of optimization iterations
+
+**Total Complexity:** $O(p \cdot |G| + T \cdot m)$
+
+### Algorithm 2: QAOA QUBO to Ising Conversion
+
+\begin{algorithm}
+\caption{Convert QUBO to Ising Hamiltonian}
+\begin{algorithmic}[1]
+\REQUIRE QUBO matrix $\mathbf{Q} \in \mathbb{R}^{n \times n}$
+\ENSURE Ising Hamiltonian $\hat{H}_C = \sum_i h_i Z_i + \sum_{i<j} J_{ij} Z_i Z_j$
+
+\STATE Initialize $h_i \gets 0$ for all $i$, $J_{ij} \gets 0$ for all $i<j$
+
+\FOR{$i \gets 0$ \TO $n-1$}
+    \STATE $h_i \gets h_i + Q_{ii}/2$
+\ENDFOR
+
+\FOR{$i \gets 0$ \TO $n-2$}
+    \FOR{$j \gets i+1$ \TO $n-1$}
+        \STATE $J_{ij} \gets Q_{ij}/4$
+        \STATE $h_i \gets h_i + Q_{ij}/4$
+        \STATE $h_j \gets h_j + Q_{ij}/4$
+    \ENDFOR
+\ENDFOR
+
+\RETURN $(h_0, \ldots, h_{n-1}, \{J_{ij}\}_{i<j})$
+\end{algorithmic}
+\end{algorithm}
+
+---
+
+## VQE - Variational Quantum Eigensolver
+
+### Algorithm 3: VQE Optimization
+
+\begin{algorithm}
+\caption{Variational Quantum Eigensolver (VQE) with Parameter Shift Gradients}
+\begin{algorithmic}[1]
+\REQUIRE Hamiltonian $\hat{H} = \sum_{j=1}^M \alpha_j P_j$, Ansatz $U(\vec{\theta})$, Max iterations $T$
+\ENSURE Optimized parameters $\vec{\theta}^*$ and ground state energy estimate $E^*$
+
+\STATE Decompose Hamiltonian into Pauli strings: $\hat{H} = \sum_{j=1}^M \alpha_j P_j$
+\STATE Initialize parameters $\vec{\theta} \gets$ (random or heuristic)
+\FOR{$t \gets 1$ \TO $T$}
+    \STATE Build ansatz circuit: $|\psi(\vec{\theta})\rangle \gets U(\vec{\theta}) |\psi_0\rangle$
+    \STATE Compute expectation value $E(\vec{\theta}) \gets 0$
+    \FOR{$j \gets 1$ \TO $M$}
+        \STATE Measure the expectation $\langle P_j \rangle$:
+        \STATE \quad Group commuting Pauli terms
+        \STATE \quad $\langle P_j \rangle \gets \frac{1}{m} \sum_{k=1}^{m} \lambda_j(z_k)$
+        \STATE \quad $E(\vec{\theta}) \gets E(\vec{\theta}) + \alpha_j \langle P_j \rangle$
+    \ENDFOR
+    
+    \STATE Compute gradient ∇$\vec{\theta} E$ using parameter shift:
+    \FOR{$i \gets 1$ \TO $n_{\text{params}}$}
+        \STATE $\theta_i^+ \gets \vec{\theta}$ with $\theta_i \gets \theta_i + \pi/2$
+        \STATE $\theta_i^- \gets \vec{\theta}$ with $\theta_i \gets \theta_i - \pi/2$
+        \STATE $E^+ \gets \text{Energy}(U(\theta_i^+))$
+        \STATE $E^- \gets \text{Energy}(U(\theta_i^-))$
+        \STATE $[\nabla E]_i \gets (E^+ - E^-)/2$
+    \ENDFOR
+    
+    \STATE Update parameters: $\vec{\theta} \gets \vec{\theta} - \eta \cdot \nabla E$
+    
+    \IF{$|E_t - E_{t-1}| < \epsilon$}
+        \STATE \textbf{break}
+    \ENDIF
+\ENDFOR
+
+\RETURN $(\vec{\theta}^*, E^*)$
+\end{algorithmic}
+\end{algorithm}
+
+### Algorithm 4: UCCSD Ansatz Construction
+
+\begin{algorithm}
+\caption{UCCSD Ansatz with Single and Double Excitations}
+\begin{algorithmic}[1]
+\REQUIRE Hartree-Fock state $|\text{HF}\rangle$, Number of occupied $n_{\text{occ}}$, Number of virtual $n_{\text{virt}}$
+\ENSURE UCCSD state $|\psi_\text{UCCSD}\rangle$
+
+\STATE $|\psi\rangle \gets |\text{HF}\rangle$
+\STATE Count parameters: $n_{\text{singles}} \gets n_{\text{occ}} \cdot n_{\text{virt}}$
+\STATE $n_{\text{doubles}} \gets \frac{n_{\text{singles}}(n_{\text{singles}}-1)}{2}$
+\STATE $n_{\text{params}} \gets n_{\text{singles}} + n_{\text{doubles}}$
+\STATE Initialize parameters $t_1, \ldots, t_{n_{\text{params}}}$
+
+\FOR{$i \gets 0$ \TO $n_{\text{occ}}-1$}
+    \FOR{$a \gets n_{\text{occ}}$ \TO $n_{\text{occ}}+n_{\text{virt}}-1$}
+        \STATE Apply single excitation operator:
+        \STATE \quad $|\psi\rangle \gets \exp(t_{ia} a^\dagger_a a_i - h.c.) |\psi\rangle$
+        \STATE \quad Using approximation: CX$(i,a) \cdot R_y(2t_{ia}, a) \cdot$CX$(i,a)$
+    \ENDFOR
+\ENDFOR
+
+\FOR{$i \gets 0$ \TO $n_{\text{occ}}-2$}
+    \FOR{$j \gets i+1$ \TO $n_{\text{occ}}-1$}
+        \FOR{$a \gets n_{\text{occ}}$ \TO $n_{\text{occ}}+n_{\text{virt}}-2$}
+            \FOR{$b \gets a+1$ \TO $n_{\text{occ}}+n_{\text{virt}}-1$}
+                \STATE Apply double excitation operator:
+                \STATE \quad $|\psi\rangle \gets \exp(t_{ijab} a^\dagger_a b^\dagger_b a_j a_i - h.c.) |\psi\rangle$
+                \STATE \quad Using entangling gate sequence with parameters
+            \ENDFOR
+        \ENDFOR
+    \ENDFOR
+\ENDFOR
+
+\RETURN $|\psi_\text{UCCSD}\rangle$
+\end{algorithmic}
+\end{algorithm}
+
+### Complexity Analysis
+
+**Quantum Circuit Complexity:**
+- UCCSD ansatz gates: $O(n_{\text{singles}} + n_{\text{doubles}})$
+- Circuit depth: $O(n_{\text{occ}} \cdot n_{\text{virt}})$
+
+**Measurement Complexity:**
+- Pauli term measurements: $O(M \cdot m)$ per iteration
+- With grouping: $O(n_{\text{groups}} \cdot m)$ where $n_{\text{groups}} \leq 4^n$
+
+**Gradient Computation:**
+- Parameter shift: $O(2 \cdot n_{\text{params}} \cdot M \cdot m)$ per iteration
+
+**Total Complexity:** $O(T \cdot n_{\text{groups}} \cdot m)$ for optimization
+
+---
+
+## Grover's Algorithm
+
+### Algorithm 5: Grover's Search
+
+\begin{algorithm}
+\caption{Grover's Search Algorithm}
+\begin{algorithmic}[1]
+\REQUIRE Oracle $U_f$, Number of solutions $M$, Number of items $N = 2^n$
+\ENSURE Solution bitstring $x^*$
+
+\STATE Compute optimal iterations: $t_{\text{opt}} \gets \left\lfloor \frac{\pi}{4\theta} \right\rfloor$ where $\theta \gets \arcsin(\sqrt{M/N})$
+\STATE Initialize uniform superposition: $|\psi_0\rangle \gets H^{\otimes n} |0\rangle^{\otimes n} = \frac{1}{\sqrt{N}} \sum_{x=0}^{N-1} |x\rangle$
+
+\FOR{$t \gets 1$ \TO $t_{\text{opt}}$}
+    \STATE Apply oracle: $|\psi_t\rangle \gets U_f |\psi_{t-1}\rangle$
+    \STATE Apply diffusion: $|\psi_t\rangle \gets U_s |\psi_t\rangle$
+    \STATE \quad where $U_s = 2|s\rangle\langle s| - I$ with $|s\rangle = H^{\otimes n}|0\rangle^{\otimes n}$
+    \STATE \quad $U_s |\psi\rangle = H^{\otimes n} (2|0\rangle\langle 0| - I) H^{\otimes n} |\psi\rangle$
+\ENDFOR
+
+\STATE Measure all qubits in computational basis
+\RETURN measured bitstring $x^*$
+\end{algorithmic}
+\end{algorithm}
+
+### Algorithm 6: Grover with Unknown Number of Solutions
+
+\begin{algorithm}
+\caption{Adaptive Grover's Search (Dürr-Høyer Minimum Finding)}
+\begin{algorithmic}[1]
+\REQUIRE Oracle $U_f$, Number of items $N = 2^n$
+\ENSURE Optimal solution $x^*$
+
+\STATE Initialize $\lambda \gets 1/8$, $m \gets 1$
+\STATE Select random element $x_{\text{best}}$ uniformly
+
+\WHILE{$m^3 \lambda < N$}
+    \STATE $k \gets \lfloor \frac{\pi}{4} \sqrt{\frac{N}{m}} \rfloor$
+    \FOR{$i \gets 1$ \TO $k$}
+        \STATE Apply oracle to $|\psi_0\rangle$ marking states with value $\leq x_{\text{best}}$
+        \STATE Apply diffusion operator
+    \ENDFOR
+    \STATE Measure to get candidate $x_{\text{candidate}}$
+    \IF{$C(x_{\text{candidate}}) < C(x_{\text{best}})$}
+        \STATE $x_{\text{best}} \gets x_{\text{candidate}}$
+        \STATE $m \gets 1$
+    \ELSE
+        \STATE $m \gets 2m$
+    \ENDIF
+    \STATE $\lambda \gets \lambda/2$
+\ENDWHILE
+
+\RETURN $x_{\text{best}}$
+\end{algorithmic}
+\end{algorithm}
+
+### Complexity Analysis
+
+**Quantum Circuit Complexity:**
+- Oracle calls: $O(t_{\text{opt}})$
+- Diffusion operators: $O(t_{\text{opt}})$
+- Total gates: $O(t_{\text{opt}} \cdot n)$
+
+**Query Complexity:**
+- Classical: $O(N/M)$ queries
+- Quantum: $O(\sqrt{N/M})$ queries
+- **Speedup:** $O(\sqrt{N/M})$ quadratic improvement
+
+**Success Probability:**
+$P_{\text{success}} = \sin^2((2t_{\text{opt}}+1)\theta) \geq 0.5$
+
+---
+
+## Quantum Fourier Transform (QFT)
+
+### Algorithm 7: Quantum Fourier Transform
+
+\begin{algorithm}
+\caption{Quantum Fourier Transform (QFT)}
+\begin{algorithmic}[1]
+\REQUIRE $n$-qubit input state $|x\rangle$
+\ENSURE Fourier transformed state $|\tilde{x}\rangle$
+
+\FOR{$k \gets n-1$ \TO $0$}
+    \STATE Apply Hadamard gate: $H|k\rangle$
+    \FOR{$j \gets k-1$ \TO $0$}
+        \STATE Apply controlled phase rotation:
+        \STATE \quad CR$_{k-j+1}$ with phase $\phi = \frac{2\pi}{2^{k-j+1}}$
+        \STATE \quad Phase gate: $R_z(\phi)$ on qubit $j$ controlled by qubit $k$
+    \ENDFOR
+\ENDFOR
+
+\FOR{$k \gets 0$ \TO $\lfloor n/2 \rfloor - 1$}
+    \STATE Swap qubits $k$ and $n-1-k$
+\ENDFOR
+
+\RETURN Fourier transformed state
+\end{algorithmic}
+\end{algorithm}
+
+### Algorithm 8: Inverse Quantum Fourier Transform
+
+\begin{algorithm}
+\caption{Inverse Quantum Fourier Transform (QFT$^\dagger$)}
+\begin{algorithmic}[1]
+\REQUIRE $n$-qubit input state
+\ENSURE Inverse Fourier transformed state
+
+\FOR{$k \gets 0$ \TO $\lfloor n/2 \rfloor - 1$}
+    \STATE Swap qubits $k$ and $n-1-k$
+\ENDFOR
+
+\FOR{$k \gets 0$ \TO $n-1$}
+    \FOR{$j \gets 0$ \TO $k-1$}
+        \STATE Apply controlled rotation with negative phase:
+        \STATE \quad CR$_{k-j+1}$ with phase $-\frac{2\pi}{2^{k-j+1}}$
+    \ENDFOR
+    \STATE Apply Hadamard gate: $H|k\rangle$
+\ENDFOR
+
+\RETURN Inverse Fourier transformed state
+\end{algorithmic}
+\end{algorithm}
+
+### Complexity Analysis
+
+**Circuit Complexity:**
+- Hadamard gates: $n$
+- Controlled rotations: $\frac{n(n-1)}{2} = O(n^2)$
+- Swap gates: $\lfloor n/2 \rfloor = O(n)$
+- Total gates: $O(n^2)$
+
+**Circuit Depth:**
+- Without optimization: $O(n^2)$
+- With parallelization: $O(n)$ depth (using approximate QFT)
+
+---
+
+## Quantum Phase Estimation (QPE)
+
+### Algorithm 9: Quantum Phase Estimation
+
+\begin{algorithm}
+\caption{Quantum Phase Estimation (QPE)}
+\begin{algorithmic}[1]
+\REQUIRE Unitary $U$, Eigenstate $|\psi\rangle$, Precision $n$ qubits
+\ENSURE Phase estimate $\phi_{\text{est}}$ with precision $\epsilon < 2^{-n}$
+
+\STATE Initialize precision qubits: $|0\rangle^{\otimes n}$
+\STATE Initialize state qubits: $|\psi\rangle$
+\STATE Apply Hadamard gates to all precision qubits:
+\STATE \quad $H^{\otimes n} |0\rangle^{\otimes n} = \frac{1}{2^{n/2}} \sum_{j=0}^{2^n-1} |j\rangle$
+\STATE Combined: $\frac{1}{2^{n/2}} \sum_{j=0}^{2^n-1} |j\rangle |\psi\rangle$
+
+\FOR{$k \gets 0$ \TO $n-1$}
+    \STATE Apply controlled-$U^{2^k}$ gate:
+    \STATE \quad Control: precision qubit $k$, Target: state register $|\psi\rangle$
+    \STATE \quad $|j\rangle |\psi\rangle \to |j\rangle U^{j \cdot 2^k} |\psi\rangle$
+    \STATE \quad For $U|\psi\rangle = e^{2\pi i \phi}|\psi\rangle$: $|j\rangle |\psi\rangle \to e^{2\pi i \phi j} |j\rangle |\psi\rangle$
+\ENDFOR
+
+\STATE Apply inverse QFT to precision qubits
+\STATE Measure precision qubits in computational basis
+\STATE Obtain bitstring $b_1 b_2 \ldots b_n$
+
+\STATE Compute phase: $\phi_{\text{est}} \gets \sum_{k=0}^{n-1} \frac{b_{k+1}}{2^{k+1}}$
+\RETURN $\phi_{\text{est}}$
+\end{algorithmic}
+\end{algorithm}
+
+### Complexity Analysis
+
+**Quantum Circuit Complexity:**
+- Hadamard gates: $n$
+- Controlled-$U$ applications: $\sum_{k=0}^{n-1} 2^k = 2^n - 1 = O(2^n)$
+- Inverse QFT: $O(n^2)$ gates
+- Total gates: $O(2^n + n^2)$
+
+**Precision:**
+- Error: $|\phi_{\text{est}} - \phi| < 2^{-n}$
+- Probability of correct measurement: $\geq \frac{4}{\pi^2}$
+
+---
+
+## Summary of Complexities
+
+| Algorithm | Quantum Complexity | Classical Complexity | Speedup |
+|-----------|-------------------|---------------------|---------|
+| QAOA | $O(p \cdot |G| + T \cdot m)$ | $O(T \cdot m)$ | Potential for problem classes |
+| VQE | $O(T \cdot n_{\text{groups}} \cdot m)$ | $O(T \cdot 2^n)$ | Exponential for chemistry |
+| Grover | $O(\sqrt{N/M})$ | $O(N/M)$ | Quadratic ($O(\sqrt{N/M})$) |
+| QFT | $O(n^2)$ | $O(n \log n)$ | Not faster (different paradigm) |
+| QPE | $O(2^n)$ | $O(2^n)$ | Phase precision not possible classically |
+
+---
+
+## References
+
+1. Farhi, E., et al. "Quantum Approximate Optimization Algorithm and its Application to Combinatorial Problems." arXiv:1411.4028 (2014).
+2. Peruzzo, A., et al. "A variational eigenvalue solver on a photonic quantum processor." Nature Communications 5, 4213 (2014).
+3. Grover, L. K. "A fast quantum mechanical algorithm for database search." STOC 1996.
+4. Nielsen, M. A., & Chuang, I. L. "Quantum Computation and Quantum Information." Cambridge University Press (2010).
+5. Dürr, C., & Høyer, P. "A quantum algorithm for finding the minimum." arXiv:quant-ph/9607014 (1996).

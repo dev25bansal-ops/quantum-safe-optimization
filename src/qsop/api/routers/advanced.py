@@ -620,10 +620,10 @@ async def create_histogram_visualization(
             download_urls={},
         )
     except Exception as e:
-    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to create visualization: {str(e)}",
         ) from e
+
 
 __all__ = ["router"]

@@ -5,6 +5,7 @@ Backend Pool for managing multiple quantum backends.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from qsop.domain.ports.quantum_backend import QuantumBackend
 

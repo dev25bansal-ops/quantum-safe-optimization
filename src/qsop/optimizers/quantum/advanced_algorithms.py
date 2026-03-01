@@ -60,9 +60,7 @@ class QuantumFourierTransform:
             qc.h(i)
             for j in range(i + 1, num_qubits):
                 angle = np.pi / (2 ** (j - i))
-                qc.cp(angle, j, i)
-            qc.h(i)
-
+                qc.cp(angle, i, j)
         qc = QuantumFourierTransform._reverse_qubit_order(qc, num_qubits)
         return qc
 
@@ -72,10 +70,9 @@ class QuantumFourierTransform:
         qc = QuantumFourierTransform._reverse_qubit_order(qc, num_qubits)
 
         for i in range(num_qubits):
-            qc.h(i)
             for j in range(i + 1, num_qubits):
                 angle = -np.pi / (2 ** (j - i))
-                qc.cp(angle, j, i)
+                qc.cp(angle, i, j)
             qc.h(i)
 
         return qc
@@ -137,10 +134,11 @@ class QuantumPhaseEstimation:
             )
 
         # Apply controlled-U^2^k gates
+        # Each precision qubit i controls U^(2^i) applications to state qubits
         for i in range(self.precision_qubits):
             num_applications = 2**i
             for _ in range(num_applications):
-                self.unitary(qc, self.precision_qubits)
+                self.unitary(qc, i)
 
         # Apply inverse QFT
         qft_inv = QuantumFourierTransform.build_circuit(self.precision_qubits, inverse=True)
