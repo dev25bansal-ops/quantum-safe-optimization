@@ -55,8 +55,18 @@ ALGORITHMS: dict[str, AlgorithmInfo] = {
         category="optimization",
         supported_backends=["qiskit_aer", "ibm_quantum", "ionq"],
         parameters={
-            "p": {"type": "integer", "min": 1, "max": 10, "default": 1, "description": "Number of QAOA layers"},
-            "optimizer": {"type": "string", "options": ["COBYLA", "SPSA", "ADAM"], "default": "COBYLA"},
+            "p": {
+                "type": "integer",
+                "min": 1,
+                "max": 10,
+                "default": 1,
+                "description": "Number of QAOA layers",
+            },
+            "optimizer": {
+                "type": "string",
+                "options": ["COBYLA", "SPSA", "ADAM"],
+                "default": "COBYLA",
+            },
             "max_iterations": {"type": "integer", "min": 1, "max": 1000, "default": 100},
         },
     ),
@@ -68,7 +78,11 @@ ALGORITHMS: dict[str, AlgorithmInfo] = {
         supported_backends=["qiskit_aer", "ibm_quantum", "ionq"],
         parameters={
             "ansatz": {"type": "string", "options": ["RY", "UCCSD", "HEA"], "default": "RY"},
-            "optimizer": {"type": "string", "options": ["COBYLA", "SPSA", "L-BFGS-B"], "default": "COBYLA"},
+            "optimizer": {
+                "type": "string",
+                "options": ["COBYLA", "SPSA", "L-BFGS-B"],
+                "default": "COBYLA",
+            },
             "max_iterations": {"type": "integer", "min": 1, "max": 1000, "default": 100},
         },
     ),
@@ -79,7 +93,13 @@ ALGORITHMS: dict[str, AlgorithmInfo] = {
         category="search",
         supported_backends=["qiskit_aer", "ibm_quantum"],
         parameters={
-            "iterations": {"type": "integer", "min": 1, "max": 100, "default": None, "description": "Auto-calculated if not specified"},
+            "iterations": {
+                "type": "integer",
+                "min": 1,
+                "max": 100,
+                "default": None,
+                "description": "Auto-calculated if not specified",
+            },
         },
     ),
     "qsvm": AlgorithmInfo(
@@ -89,8 +109,16 @@ ALGORITHMS: dict[str, AlgorithmInfo] = {
         category="machine_learning",
         supported_backends=["qiskit_aer", "ibm_quantum"],
         parameters={
-            "feature_map": {"type": "string", "options": ["ZZFeatureMap", "PauliFeatureMap"], "default": "ZZFeatureMap"},
-            "kernel": {"type": "string", "options": ["quantum", "precomputed"], "default": "quantum"},
+            "feature_map": {
+                "type": "string",
+                "options": ["ZZFeatureMap", "PauliFeatureMap"],
+                "default": "ZZFeatureMap",
+            },
+            "kernel": {
+                "type": "string",
+                "options": ["quantum", "precomputed"],
+                "default": "quantum",
+            },
         },
     ),
 }
@@ -152,13 +180,13 @@ async def get_algorithm(name: str) -> AlgorithmInfo:
     Get details of a specific algorithm.
     """
     algorithm = ALGORITHMS.get(name.lower())
-    
+
     if algorithm is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Algorithm '{name}' not found",
         )
-    
+
     return algorithm
 
 
@@ -179,11 +207,11 @@ async def get_backend(name: str) -> BackendInfo:
     Get details of a specific backend.
     """
     backend = BACKENDS.get(name.lower())
-    
+
     if backend is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Backend '{name}' not found",
         )
-    
+
     return backend

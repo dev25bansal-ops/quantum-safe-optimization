@@ -11,20 +11,18 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from qsop.infrastructure.persistence.sqlalchemy.job_repo import SQLAlchemyJobRepository
-from qsop.infrastructure.persistence.sqlalchemy.key_repo import SQLAlchemyKeyRepository
-from qsop.infrastructure.keystore.local_dev import LocalDevKeyStore
 from qsop.infrastructure.artifact_store.filesystem import FilesystemArtifactStore
 from qsop.infrastructure.events.inmem import InMemoryEventBus
+from qsop.infrastructure.keystore.local_dev import LocalDevKeyStore
+from qsop.infrastructure.persistence.sqlalchemy.job_repo import SQLAlchemyJobRepository
+from qsop.infrastructure.persistence.sqlalchemy.key_repo import SQLAlchemyKeyRepository
 
 
 class Settings:
     """Application settings loaded from environment."""
 
     def __init__(self) -> None:
-        self.database_url: str = os.getenv(
-            "DATABASE_URL", "sqlite+aiosqlite:///./qsop.db"
-        )
+        self.database_url: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./qsop.db")
         self.redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
         self.vault_url: str = os.getenv("VAULT_URL", "")
         self.s3_bucket: str = os.getenv("S3_BUCKET", "")
@@ -169,13 +167,13 @@ async def lifespan_context(settings: Settings | None = None):
     """Application lifespan context manager for startup/shutdown."""
     settings = settings or get_settings()
     engine = get_engine(settings)
-    
+
     # Import models to ensure they're registered
     from qsop.infrastructure.persistence.sqlalchemy.models import Base
-    
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     yield
-    
+
     await engine.dispose()

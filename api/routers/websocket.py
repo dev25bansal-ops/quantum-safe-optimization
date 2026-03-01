@@ -9,17 +9,17 @@ Features:
 - Metrics integration
 """
 
-import os
-import json
 import asyncio
-from typing import Dict, Set, Optional, Any
-from datetime import datetime
+import json
+import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
+from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
-from fastapi.websockets import WebSocketState
 import redis.asyncio as aioredis
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi.websockets import WebSocketState
 
 router = APIRouter()
 
@@ -33,6 +33,7 @@ WS_MAX_MESSAGE_SIZE = int(os.getenv("WS_MAX_MESSAGE_SIZE", "65536"))
 
 class ConnectionState(str, Enum):
     """WebSocket connection states."""
+
     CONNECTING = "connecting"
     CONNECTED = "connected"
     RECONNECTING = "reconnecting"
@@ -42,30 +43,31 @@ class ConnectionState(str, Enum):
 @dataclass
 class ConnectionInfo:
     """Information about a WebSocket connection."""
+
     websocket: WebSocket
     job_id: str
-    user_id: Optional[str] = None
+    user_id: str | None = None
     connected_at: datetime = field(default_factory=datetime.utcnow)
     last_activity: datetime = field(default_factory=datetime.utcnow)
     messages_sent: int = 0
     messages_received: int = 0
     state: ConnectionState = ConnectionState.CONNECTED
-    
+
     def __hash__(self):
         """Make hashable using websocket object identity."""
         return id(self.websocket)
-    
+
     def __eq__(self, other):
         """Equality based on websocket identity."""
         if not isinstance(other, ConnectionInfo):
             return False
         return id(self.websocket) == id(other.websocket)
-    
+
     def update_activity(self):
         """Update last activity timestamp."""
         self.last_activity = datetime.utcnow()
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for status reporting."""
         return {
             "job_id": self.job_id,
@@ -82,7 +84,7 @@ class ConnectionInfo:
 class ConnectionManager:
     """
     Manages WebSocket connections for job updates.
-    
+
     Supports:
     - Multiple connections per job
     - Redis pub/sub for distributed updates
@@ -90,36 +92,34 @@ class ConnectionManager:
     - Automatic cleanup on disconnect
     - Metrics collection
     """
-    
+
     def __init__(self):
         # Map of job_id -> set of ConnectionInfo
-        self.active_connections: Dict[str, Set[ConnectionInfo]] = {}
-        self._redis: Optional[aioredis.Redis] = None
-        self._pubsub: Optional[aioredis.client.PubSub] = None
-        self._listener_task: Optional[asyncio.Task] = None
-        self._health_check_task: Optional[asyncio.Task] = None
-        
+        self.active_connections: dict[str, set[ConnectionInfo]] = {}
+        self._redis: aioredis.Redis | None = None
+        self._pubsub: aioredis.client.PubSub | None = None
+        self._listener_task: asyncio.Task | None = None
+        self._health_check_task: asyncio.Task | None = None
+
         # Connection statistics
         self._total_connections: int = 0
         self._total_messages_sent: int = 0
         self._total_messages_received: int = 0
         self._connection_errors: int = 0
-    
+
     async def initialize(self):
         """Initialize Redis connection for pub/sub."""
         try:
             self._redis = aioredis.from_url(REDIS_URL, decode_responses=True)
             await self._redis.ping()
             self._pubsub = self._redis.pubsub()
-            
+
             # Start health check task
             self._health_check_task = asyncio.create_task(self._health_check_loop())
-            
-            print("✅ WebSocket manager connected to Redis")
-        except Exception as e:
-            print(f"⚠️ WebSocket Redis connection failed: {e}")
+
+        except Exception:
             self._redis = None
-    
+
     async def close(self):
         """Close Redis connections and cleanup."""
         # Cancel tasks
@@ -129,126 +129,130 @@ class ConnectionManager:
                 await self._health_check_task
             except asyncio.CancelledError:
                 pass
-        
+
         if self._listener_task:
             self._listener_task.cancel()
             try:
                 await self._listener_task
             except asyncio.CancelledError:
                 pass
-        
+
         # Close all WebSocket connections gracefully
-        for job_id, connections in list(self.active_connections.items()):
+        for _job_id, connections in list(self.active_connections.items()):
             for conn_info in list(connections):
                 try:
                     await conn_info.websocket.close(code=1001, reason="Server shutdown")
                 except Exception:
                     pass
-        
+
         self.active_connections.clear()
-        
+
         if self._pubsub:
             await self._pubsub.close()
-        
+
         if self._redis:
             await self._redis.close()
-    
+
     async def connect(
         self,
         websocket: WebSocket,
         job_id: str,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> ConnectionInfo:
         """Accept WebSocket connection and subscribe to job updates."""
         await websocket.accept()
-        
+
         # Create connection info
         conn_info = ConnectionInfo(
             websocket=websocket,
             job_id=job_id,
             user_id=user_id,
         )
-        
+
         if job_id not in self.active_connections:
             self.active_connections[job_id] = set()
             # Subscribe to Redis channel for this job
             if self._pubsub:
                 await self._pubsub.subscribe(f"job:{job_id}:progress")
-        
+
         self.active_connections[job_id].add(conn_info)
         self._total_connections += 1
-        
+
         # Record metrics
         try:
             from api.routers.metrics import metrics
+
             metrics.record_ws_connection(connected=True)
         except ImportError:
             pass
-        
+
         # Send current job state if available
         if self._redis:
             state = await self._redis.hgetall(f"job:{job_id}:state")
             if state:
-                await self.send_to_connection(conn_info, {
-                    "type": "state",
-                    "data": state,
-                })
-        
+                await self.send_to_connection(
+                    conn_info,
+                    {
+                        "type": "state",
+                        "data": state,
+                    },
+                )
+
         # Start listener if not running
         if self._listener_task is None or self._listener_task.done():
             self._listener_task = asyncio.create_task(self._listen_for_updates())
-        
+
         return conn_info
-    
+
     def disconnect(self, conn_info: ConnectionInfo):
         """Remove WebSocket connection."""
         job_id = conn_info.job_id
         conn_info.state = ConnectionState.DISCONNECTED
-        
+
         if job_id in self.active_connections:
             self.active_connections[job_id].discard(conn_info)
             if not self.active_connections[job_id]:
                 del self.active_connections[job_id]
                 # Unsubscribe from Redis channel
                 if self._pubsub:
-                    asyncio.create_task(
-                        self._pubsub.unsubscribe(f"job:{job_id}:progress")
-                    )
-        
+                    asyncio.create_task(self._pubsub.unsubscribe(f"job:{job_id}:progress"))
+
         # Record metrics
         try:
             from api.routers.metrics import metrics
+
             metrics.record_ws_connection(connected=False)
         except ImportError:
             pass
-    
+
     async def send_to_connection(
         self,
         conn_info: ConnectionInfo,
-        message: Dict[str, Any],
+        message: dict[str, Any],
     ) -> bool:
         """Send message to specific connection."""
         if conn_info.websocket.client_state != WebSocketState.CONNECTED:
             return False
-        
+
         try:
             await conn_info.websocket.send_json(message)
             conn_info.messages_sent += 1
             conn_info.update_activity()
             self._total_messages_sent += 1
-            
+
             # Record metrics
             try:
                 from api.routers.metrics import metrics
+
                 metrics.record_ws_message(sent=True)
             except ImportError:
                 pass
-            
+
             return True
         except Exception:
             self._connection_errors += 1
             return False
-    
+
     async def send_personal_message(self, message: dict, websocket: WebSocket):
         """Send message to specific WebSocket (legacy compatibility)."""
         if websocket.client_state == WebSocketState.CONNECTED:
@@ -257,64 +261,66 @@ class ConnectionManager:
                 self._total_messages_sent += 1
             except Exception:
                 self._connection_errors += 1
-    
+
     async def broadcast_to_job(self, job_id: str, message: dict):
         """Broadcast message to all connections watching a job."""
         if job_id not in self.active_connections:
             return
-        
+
         disconnected = []
         for conn_info in self.active_connections[job_id]:
             success = await self.send_to_connection(conn_info, message)
             if not success:
                 disconnected.append(conn_info)
-        
+
         # Clean up disconnected clients
         for conn_info in disconnected:
             self.active_connections[job_id].discard(conn_info)
-    
+
     async def _health_check_loop(self):
         """Periodically check connection health and send pings."""
         while True:
             try:
                 await asyncio.sleep(WS_HEARTBEAT_INTERVAL)
-                
+
                 # Check all connections
-                for job_id, connections in list(self.active_connections.items()):
+                for _job_id, connections in list(self.active_connections.items()):
                     stale_connections = []
-                    
+
                     for conn_info in connections:
                         # Check if connection is stale (no activity in 2x heartbeat interval)
                         idle_time = (datetime.utcnow() - conn_info.last_activity).total_seconds()
-                        
+
                         if idle_time > WS_HEARTBEAT_INTERVAL * 3:
                             stale_connections.append(conn_info)
                             continue
-                        
+
                         # Send ping
                         try:
                             if conn_info.websocket.client_state == WebSocketState.CONNECTED:
-                                await conn_info.websocket.send_json({
-                                    "type": "ping",
-                                    "timestamp": datetime.utcnow().isoformat(),
-                                })
+                                await conn_info.websocket.send_json(
+                                    {
+                                        "type": "ping",
+                                        "timestamp": datetime.utcnow().isoformat(),
+                                    }
+                                )
                         except Exception:
                             stale_connections.append(conn_info)
-                    
+
                     # Remove stale connections
                     for conn_info in stale_connections:
                         self.disconnect(conn_info)
-                        
+
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                print(f"WebSocket health check error: {e}")
-    
+            except Exception:
+                pass
+
     async def _listen_for_updates(self):
         """Background task to listen for Redis pub/sub messages."""
         if not self._pubsub:
             return
-        
+
         try:
             async for message in self._pubsub.listen():
                 if message["type"] == "message":
@@ -325,26 +331,27 @@ class ConnectionManager:
                         job_id = parts[1]
                         try:
                             data = json.loads(message["data"])
-                            await self.broadcast_to_job(job_id, {
-                                "type": "progress",
-                                "data": data,
-                                "timestamp": datetime.utcnow().isoformat(),
-                            })
+                            await self.broadcast_to_job(
+                                job_id,
+                                {
+                                    "type": "progress",
+                                    "data": data,
+                                    "timestamp": datetime.utcnow().isoformat(),
+                                },
+                            )
                         except json.JSONDecodeError:
                             pass
         except asyncio.CancelledError:
             pass
-        except Exception as e:
-            print(f"WebSocket listener error: {e}")
-    
-    def get_status(self) -> Dict[str, Any]:
+        except Exception:
+            pass
+
+    def get_status(self) -> dict[str, Any]:
         """Get WebSocket manager status."""
         connections_by_job = {}
         for job_id, connections in self.active_connections.items():
-            connections_by_job[job_id] = [
-                conn.to_dict() for conn in connections
-            ]
-        
+            connections_by_job[job_id] = [conn.to_dict() for conn in connections]
+
         return {
             "redis_connected": self._redis is not None,
             "total_connections": self._total_connections,
@@ -374,10 +381,10 @@ async def close_websocket_manager():
 
 
 @router.get("/status")
-async def websocket_status() -> Dict[str, Any]:
+async def websocket_status() -> dict[str, Any]:
     """
     Get WebSocket connection manager status.
-    
+
     Returns information about active connections and statistics.
     """
     return manager.get_status()
@@ -387,13 +394,13 @@ async def websocket_status() -> Dict[str, Any]:
 async def job_progress_websocket(
     websocket: WebSocket,
     job_id: str,
-    user_id: Optional[str] = Query(None, description="User ID for authorization"),
+    user_id: str | None = Query(None, description="User ID for authorization"),
 ):
     """
     WebSocket endpoint for streaming job progress.
-    
+
     Connect to receive real-time updates for a specific job.
-    
+
     Messages sent by server:
     - {"type": "connected", "job_id": "..."} - Connection confirmed
     - {"type": "state", "data": {...}} - Current job state on connect
@@ -401,85 +408,102 @@ async def job_progress_websocket(
     - {"type": "ping", "timestamp": "..."} - Keepalive ping
     - {"type": "completed", "data": {...}} - Job completed
     - {"type": "error", "message": "..."} - Error occurred
-    
+
     Messages accepted from client:
     - {"type": "pong"} - Response to ping
     - {"type": "ping"} - Client-initiated ping
     - {"type": "unsubscribe"} - Disconnect from this job
     """
     conn_info = await manager.connect(websocket, job_id, user_id)
-    
+
     try:
         # Send initial connection confirmation
-        await manager.send_to_connection(conn_info, {
-            "type": "connected",
-            "job_id": job_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "heartbeat_interval": WS_HEARTBEAT_INTERVAL,
-        })
-        
+        await manager.send_to_connection(
+            conn_info,
+            {
+                "type": "connected",
+                "job_id": job_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "heartbeat_interval": WS_HEARTBEAT_INTERVAL,
+            },
+        )
+
         # Keep connection alive and handle client messages
         while True:
             try:
                 # Wait for client messages with timeout
                 data = await asyncio.wait_for(
-                    websocket.receive_json(),
-                    timeout=float(WS_HEARTBEAT_INTERVAL * 2)
+                    websocket.receive_json(), timeout=float(WS_HEARTBEAT_INTERVAL * 2)
                 )
-                
+
                 conn_info.messages_received += 1
                 conn_info.update_activity()
                 manager._total_messages_received += 1
-                
+
                 # Record metrics
                 try:
                     from api.routers.metrics import metrics
+
                     metrics.record_ws_message(sent=False)
                 except ImportError:
                     pass
-                
+
                 # Handle client commands
                 msg_type = data.get("type", "")
-                
+
                 if msg_type == "ping":
-                    await manager.send_to_connection(conn_info, {
-                        "type": "pong",
-                        "timestamp": datetime.utcnow().isoformat(),
-                    })
+                    await manager.send_to_connection(
+                        conn_info,
+                        {
+                            "type": "pong",
+                            "timestamp": datetime.utcnow().isoformat(),
+                        },
+                    )
                 elif msg_type == "pong":
                     # Client responded to our ping, connection is healthy
                     pass
                 elif msg_type == "unsubscribe":
-                    await manager.send_to_connection(conn_info, {
-                        "type": "unsubscribed",
-                        "job_id": job_id,
-                    })
+                    await manager.send_to_connection(
+                        conn_info,
+                        {
+                            "type": "unsubscribed",
+                            "job_id": job_id,
+                        },
+                    )
                     break
                 elif msg_type == "status":
                     # Client requesting connection status
-                    await manager.send_to_connection(conn_info, {
-                        "type": "status",
-                        "connection": conn_info.to_dict(),
-                    })
-                    
-            except asyncio.TimeoutError:
+                    await manager.send_to_connection(
+                        conn_info,
+                        {
+                            "type": "status",
+                            "connection": conn_info.to_dict(),
+                        },
+                    )
+
+            except TimeoutError:
                 # Send keepalive ping
-                success = await manager.send_to_connection(conn_info, {
-                    "type": "ping",
-                    "timestamp": datetime.utcnow().isoformat(),
-                })
+                success = await manager.send_to_connection(
+                    conn_info,
+                    {
+                        "type": "ping",
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
+                )
                 if not success:
                     break
-                    
+
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        print(f"WebSocket error for job {job_id}: {e}")
         try:
-            await manager.send_to_connection(conn_info, {
-                "type": "error",
-                "message": str(e),
-            })
+            await manager.send_to_connection(
+                conn_info,
+                {
+                    "type": "error",
+                    "message": str(e),
+                },
+            )
         except Exception:
             pass
     finally:
@@ -493,9 +517,9 @@ async def all_jobs_websocket(
 ):
     """
     WebSocket endpoint for streaming all job updates for a user.
-    
+
     Requires user_id query parameter for filtering.
-    
+
     Messages sent by server:
     - {"type": "connected", "channel": "...", "timestamp": "..."} - Connection confirmed
     - {"type": "job_update", "data": {...}, "timestamp": "..."} - Job update
@@ -503,97 +527,107 @@ async def all_jobs_websocket(
     - {"type": "pong", "timestamp": "..."} - Response to client ping
     - {"type": "status", "redis_connected": bool, ...} - Connection status
     - {"type": "error", "message": "..."} - Error occurred
-    
+
     Messages accepted from client:
     - {"type": "ping"} - Client-initiated ping
-    - {"type": "pong"} - Response to server ping  
+    - {"type": "pong"} - Response to server ping
     - {"type": "status"} - Request connection status
     - {"type": "unsubscribe"} - Disconnect
     """
     await websocket.accept()
-    
+
     # Subscribe to user's job channel
     channel = f"user:{user_id}:jobs"
     connected_at = datetime.utcnow()
     messages_sent = 0
     messages_received = 0
-    
+
     # Record connection metric
     try:
         from api.routers.metrics import metrics
+
         metrics.record_ws_connection(connected=True)
     except ImportError:
         pass
-    
+
     try:
-        await websocket.send_json({
-            "type": "connected",
-            "channel": channel,
-            "user_id": user_id,
-            "timestamp": connected_at.isoformat(),
-            "heartbeat_interval": WS_HEARTBEAT_INTERVAL,
-        })
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "channel": channel,
+                "user_id": user_id,
+                "timestamp": connected_at.isoformat(),
+                "heartbeat_interval": WS_HEARTBEAT_INTERVAL,
+            }
+        )
         messages_sent += 1
-        
+
         # Listen for user's job updates
         if manager._redis:
             pubsub = manager._redis.pubsub()
             await pubsub.subscribe(channel)
-            
+
             # Create task to receive client messages
             async def receive_client_messages():
                 nonlocal messages_received
                 while True:
                     try:
                         data = await asyncio.wait_for(
-                            websocket.receive_json(),
-                            timeout=float(WS_HEARTBEAT_INTERVAL * 2)
+                            websocket.receive_json(), timeout=float(WS_HEARTBEAT_INTERVAL * 2)
                         )
                         messages_received += 1
-                        
+
                         msg_type = data.get("type", "")
-                        
+
                         if msg_type == "ping":
-                            await websocket.send_json({
-                                "type": "pong",
-                                "timestamp": datetime.utcnow().isoformat(),
-                            })
+                            await websocket.send_json(
+                                {
+                                    "type": "pong",
+                                    "timestamp": datetime.utcnow().isoformat(),
+                                }
+                            )
                         elif msg_type == "status":
-                            await websocket.send_json({
-                                "type": "status",
-                                "user_id": user_id,
-                                "channel": channel,
-                                "connected_at": connected_at.isoformat(),
-                                "messages_sent": messages_sent,
-                                "messages_received": messages_received,
-                                "redis_connected": manager._redis is not None,
-                            })
+                            await websocket.send_json(
+                                {
+                                    "type": "status",
+                                    "user_id": user_id,
+                                    "channel": channel,
+                                    "connected_at": connected_at.isoformat(),
+                                    "messages_sent": messages_sent,
+                                    "messages_received": messages_received,
+                                    "redis_connected": manager._redis is not None,
+                                }
+                            )
                         elif msg_type == "unsubscribe":
                             return  # Exit the receive loop
-                            
-                    except asyncio.TimeoutError:
+
+                    except TimeoutError:
                         # Send keepalive ping
-                        await websocket.send_json({
-                            "type": "ping",
-                            "timestamp": datetime.utcnow().isoformat(),
-                        })
-            
+                        await websocket.send_json(
+                            {
+                                "type": "ping",
+                                "timestamp": datetime.utcnow().isoformat(),
+                            }
+                        )
+
             # Run both receive and listen tasks concurrently
             receive_task = asyncio.create_task(receive_client_messages())
-            
+
             try:
                 async for message in pubsub.listen():
                     if receive_task.done():
                         break
-                        
+
                     if message["type"] == "message":
                         try:
                             data = json.loads(message["data"])
-                            await websocket.send_json({
-                                "type": "job_update",
-                                "data": data,
-                                "timestamp": datetime.utcnow().isoformat(),
-                            })
+                            await websocket.send_json(
+                                {
+                                    "type": "job_update",
+                                    "data": data,
+                                    "timestamp": datetime.utcnow().isoformat(),
+                                }
+                            )
                             messages_sent += 1
                         except json.JSONDecodeError:
                             pass
@@ -606,44 +640,49 @@ async def all_jobs_websocket(
             while True:
                 try:
                     data = await asyncio.wait_for(
-                        websocket.receive_json(),
-                        timeout=float(WS_HEARTBEAT_INTERVAL * 2)
+                        websocket.receive_json(), timeout=float(WS_HEARTBEAT_INTERVAL * 2)
                     )
                     messages_received += 1
-                    
+
                     msg_type = data.get("type", "")
-                    
+
                     if msg_type == "ping":
-                        await websocket.send_json({
-                            "type": "pong",
-                            "timestamp": datetime.utcnow().isoformat(),
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "pong",
+                                "timestamp": datetime.utcnow().isoformat(),
+                            }
+                        )
                         messages_sent += 1
                     elif msg_type == "unsubscribe":
                         break
-                        
-                except asyncio.TimeoutError:
-                    await websocket.send_json({
-                        "type": "ping",
-                        "timestamp": datetime.utcnow().isoformat(),
-                    })
+
+                except TimeoutError:
+                    await websocket.send_json(
+                        {
+                            "type": "ping",
+                            "timestamp": datetime.utcnow().isoformat(),
+                        }
+                    )
                     messages_sent += 1
-                    
+
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        print(f"WebSocket error for user {user_id}: {e}")
         try:
-            await websocket.send_json({
-                "type": "error",
-                "message": str(e),
-            })
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "message": str(e),
+                }
+            )
         except Exception:
             pass
     finally:
         # Record disconnection metric
         try:
             from api.routers.metrics import metrics
+
             metrics.record_ws_connection(connected=False)
         except ImportError:
             pass

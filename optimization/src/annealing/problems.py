@@ -13,28 +13,28 @@ import numpy as np
 
 class AnnealingProblem(ABC):
     """Base class for quantum annealing problems."""
-    
+
     @property
     @abstractmethod
     def num_variables(self) -> int:
         """Number of binary variables."""
         pass
-    
+
     @abstractmethod
     def to_qubo(self) -> Dict[Tuple[int, int], float]:
         """Convert to QUBO dictionary format."""
         pass
-    
+
     @abstractmethod
     def to_ising(self) -> Tuple[Dict[int, float], Dict[Tuple[int, int], float], float]:
         """Convert to Ising model (h, J, offset)."""
         pass
-    
+
     @abstractmethod
     def evaluate_solution(self, solution: Dict[int, int]) -> float:
         """Evaluate objective for a solution."""
         pass
-    
+
     @abstractmethod
     def decode_solution(self, solution: Dict[int, int]) -> Any:
         """Decode to problem-specific solution."""
@@ -45,14 +45,14 @@ class AnnealingProblem(ABC):
 class QUBOProblem(AnnealingProblem):
     """
     Quadratic Unconstrained Binary Optimization (QUBO) Problem.
-    
+
     Minimize: x^T Q x
     where x ∈ {0, 1}^n and Q is the QUBO matrix.
     """
-    
+
     qubo_matrix: Dict[Tuple[int, int], float]
     variable_names: Optional[Dict[int, str]] = None
-    
+
     def __init__(
         self,
         qubo: Dict[Tuple[int, int], float],
@@ -60,21 +60,21 @@ class QUBOProblem(AnnealingProblem):
     ):
         """
         Initialize QUBO problem.
-        
+
         Args:
             qubo: QUBO dictionary {(i, j): coefficient}
             variable_names: Optional mapping from indices to names
         """
         self.qubo_matrix = qubo
         self.variable_names = variable_names
-        
+
         # Determine number of variables
         all_vars = set()
-        for (i, j) in qubo.keys():
+        for i, j in qubo.keys():
             all_vars.add(i)
             all_vars.add(j)
         self._num_variables = max(all_vars) + 1 if all_vars else 0
-    
+
     @classmethod
     def from_matrix(cls, Q: np.ndarray) -> "QUBOProblem":
         """Create from numpy matrix."""
@@ -85,18 +85,20 @@ class QUBOProblem(AnnealingProblem):
                 if Q[i, j] != 0 or Q[j, i] != 0:
                     qubo[(i, j)] = Q[i, j] + (Q[j, i] if j != i else 0)
         return cls(qubo)
-    
+
     @classmethod
-    def max_cut(cls, edges: List[Tuple[int, int]], weights: Optional[List[float]] = None) -> "QUBOProblem":
+    def max_cut(
+        cls, edges: List[Tuple[int, int]], weights: Optional[List[float]] = None
+    ) -> "QUBOProblem":
         """
         Create QUBO for MaxCut problem.
-        
+
         MaxCut QUBO: minimize Σ_{(i,j)∈E} w_ij * x_i * (1 - x_j) + w_ij * (1 - x_i) * x_j
                    = maximize Σ_{(i,j)∈E} w_ij * (x_i + x_j - 2*x_i*x_j)
         """
         if weights is None:
             weights = [1.0] * len(edges)
-        
+
         qubo = {}
         for (i, j), w in zip(edges, weights):
             # Linear terms (negated for minimization)
@@ -105,20 +107,20 @@ class QUBOProblem(AnnealingProblem):
             # Quadratic term
             key = (min(i, j), max(i, j))
             qubo[key] = qubo.get(key, 0) + 2 * w
-        
+
         return cls(qubo)
-    
+
     @classmethod
     def number_partitioning(cls, numbers: List[float]) -> "QUBOProblem":
         """
         Create QUBO for number partitioning problem.
-        
+
         Partition numbers into two sets with equal sums.
         Minimize: (Σ_i n_i * (2*x_i - 1))^2
         """
         n = len(numbers)
         c = sum(numbers)
-        
+
         qubo = {}
         for i in range(n):
             # Linear term
@@ -126,9 +128,9 @@ class QUBOProblem(AnnealingProblem):
             # Quadratic terms
             for j in range(i + 1, n):
                 qubo[(i, j)] = 2 * numbers[i] * numbers[j]
-        
+
         return cls(qubo)
-    
+
     @classmethod
     def knapsack(
         cls,
@@ -139,43 +141,45 @@ class QUBOProblem(AnnealingProblem):
     ) -> "QUBOProblem":
         """
         Create QUBO for 0-1 knapsack problem.
-        
+
         Maximize value while respecting capacity constraint.
         """
         n = len(values)
-        
+
         qubo = {}
-        
+
         # Objective: maximize value (negate for minimization)
         for i in range(n):
             qubo[(i, i)] = qubo.get((i, i), 0) - values[i]
-        
+
         # Capacity constraint: (Σ w_i x_i - C)^2
         # Expanded: Σ w_i^2 x_i + 2*Σ_{i<j} w_i w_j x_i x_j - 2C*Σ w_i x_i + C^2
         for i in range(n):
-            qubo[(i, i)] = qubo.get((i, i), 0) + penalty * (weights[i]**2 - 2*capacity*weights[i])
+            qubo[(i, i)] = qubo.get((i, i), 0) + penalty * (
+                weights[i] ** 2 - 2 * capacity * weights[i]
+            )
             for j in range(i + 1, n):
                 qubo[(i, j)] = qubo.get((i, j), 0) + penalty * 2 * weights[i] * weights[j]
-        
+
         return cls(qubo)
-    
+
     @property
     def num_variables(self) -> int:
         return self._num_variables
-    
+
     def to_qubo(self) -> Dict[Tuple[int, int], float]:
         return self.qubo_matrix.copy()
-    
+
     def to_ising(self) -> Tuple[Dict[int, float], Dict[Tuple[int, int], float], float]:
         """
         Convert QUBO to Ising model.
-        
+
         Using: x_i = (1 + s_i) / 2  where s_i ∈ {-1, +1}
         """
         h = {}  # Linear terms
         J = {}  # Quadratic terms
         offset = 0.0
-        
+
         for (i, j), coef in self.qubo_matrix.items():
             if i == j:
                 # Linear QUBO term: Q_ii * x_i
@@ -192,9 +196,9 @@ class QUBOProblem(AnnealingProblem):
                 key = (min(i, j), max(i, j))
                 J[key] = J.get(key, 0) + coef / 4
                 offset += coef / 4
-        
+
         return h, J, offset
-    
+
     def evaluate_solution(self, solution: Dict[int, int]) -> float:
         """Evaluate QUBO objective."""
         total = 0.0
@@ -203,20 +207,20 @@ class QUBOProblem(AnnealingProblem):
             xj = solution.get(j, 0)
             total += coef * xi * xj
         return total
-    
+
     def decode_solution(self, solution: Dict[int, int]) -> Dict[str, Any]:
         """Decode solution."""
         selected = [i for i, v in solution.items() if v == 1]
-        
+
         result = {
             "selected_variables": selected,
-            "bitstring": ''.join(str(solution.get(i, 0)) for i in range(self.num_variables)),
+            "bitstring": "".join(str(solution.get(i, 0)) for i in range(self.num_variables)),
             "objective_value": self.evaluate_solution(solution),
         }
-        
+
         if self.variable_names:
             result["selected_names"] = [self.variable_names.get(i, str(i)) for i in selected]
-        
+
         return result
 
 
@@ -224,15 +228,15 @@ class QUBOProblem(AnnealingProblem):
 class IsingProblem(AnnealingProblem):
     """
     Ising Model Problem.
-    
+
     Minimize: Σ_i h_i s_i + Σ_{i<j} J_ij s_i s_j
     where s_i ∈ {-1, +1}
     """
-    
+
     h: Dict[int, float]  # Linear terms
     J: Dict[Tuple[int, int], float]  # Quadratic terms
     offset: float = 0.0
-    
+
     def __init__(
         self,
         h: Dict[int, float],
@@ -241,7 +245,7 @@ class IsingProblem(AnnealingProblem):
     ):
         """
         Initialize Ising problem.
-        
+
         Args:
             h: Linear biases {variable: bias}
             J: Quadratic couplings {(i, j): coupling}
@@ -250,14 +254,14 @@ class IsingProblem(AnnealingProblem):
         self.h = h
         self.J = J
         self.offset = offset
-        
+
         # Determine number of variables
         all_vars = set(h.keys())
-        for (i, j) in J.keys():
+        for i, j in J.keys():
             all_vars.add(i)
             all_vars.add(j)
         self._num_variables = max(all_vars) + 1 if all_vars else 0
-    
+
     @classmethod
     def from_graph(
         cls,
@@ -268,24 +272,24 @@ class IsingProblem(AnnealingProblem):
         """Create Ising model from graph structure."""
         if couplings is None:
             couplings = [1.0] * len(edges)
-        
+
         J = {(min(i, j), max(i, j)): c for (i, j), c in zip(edges, couplings)}
         h = fields or {}
-        
+
         return cls(h, J)
-    
+
     @property
     def num_variables(self) -> int:
         return self._num_variables
-    
+
     def to_qubo(self) -> Dict[Tuple[int, int], float]:
         """Convert Ising to QUBO using s_i = 2*x_i - 1."""
         qubo = {}
-        
+
         # Linear terms: h_i * s_i = h_i * (2*x_i - 1) = 2*h_i*x_i - h_i
         for i, bias in self.h.items():
             qubo[(i, i)] = qubo.get((i, i), 0) + 2 * bias
-        
+
         # Quadratic terms: J_ij * s_i * s_j = J_ij * (2*x_i - 1)(2*x_j - 1)
         # = 4*J_ij*x_i*x_j - 2*J_ij*x_i - 2*J_ij*x_j + J_ij
         for (i, j), coupling in self.J.items():
@@ -293,24 +297,24 @@ class IsingProblem(AnnealingProblem):
             qubo[(j, j)] = qubo.get((j, j), 0) - 2 * coupling
             key = (min(i, j), max(i, j))
             qubo[key] = qubo.get(key, 0) + 4 * coupling
-        
+
         return qubo
-    
+
     def to_ising(self) -> Tuple[Dict[int, float], Dict[Tuple[int, int], float], float]:
         return self.h.copy(), self.J.copy(), self.offset
-    
+
     def evaluate_solution(self, solution: Dict[int, int]) -> float:
         """Evaluate Ising energy. Solution should use {-1, +1}."""
         energy = self.offset
-        
+
         for i, bias in self.h.items():
             energy += bias * solution.get(i, 1)
-        
+
         for (i, j), coupling in self.J.items():
             energy += coupling * solution.get(i, 1) * solution.get(j, 1)
-        
+
         return energy
-    
+
     def decode_solution(self, solution: Dict[int, int]) -> Dict[str, Any]:
         """Decode Ising solution."""
         return {
@@ -324,14 +328,14 @@ class IsingProblem(AnnealingProblem):
 class ConstrainedProblem(AnnealingProblem):
     """
     Constrained Quadratic Model (CQM) Problem.
-    
+
     Supports linear and quadratic constraints for D-Wave hybrid CQM solver.
     """
-    
+
     objective: Dict[Tuple[int, int], float]
     constraints: List[Dict[str, Any]]
     variable_types: Dict[int, str]  # "BINARY", "SPIN", or "INTEGER"
-    
+
     def __init__(
         self,
         objective: Dict[Tuple[int, int], float],
@@ -339,23 +343,23 @@ class ConstrainedProblem(AnnealingProblem):
     ):
         """
         Initialize constrained problem.
-        
+
         Args:
             objective: Objective function coefficients
             variable_types: Variable type mapping
         """
         self.objective = objective
         self.constraints = []
-        
+
         # Determine variables
         all_vars = set()
-        for (i, j) in objective.keys():
+        for i, j in objective.keys():
             all_vars.add(i)
             all_vars.add(j)
         self._num_variables = max(all_vars) + 1 if all_vars else 0
-        
+
         self.variable_types = variable_types or {i: "BINARY" for i in range(self._num_variables)}
-    
+
     def add_constraint(
         self,
         coefficients: Dict[int, float],
@@ -365,20 +369,22 @@ class ConstrainedProblem(AnnealingProblem):
     ):
         """
         Add a linear constraint.
-        
+
         Args:
             coefficients: {variable: coefficient}
             sense: Comparison operator
             rhs: Right-hand side value
             label: Constraint label
         """
-        self.constraints.append({
-            "coefficients": coefficients,
-            "sense": sense,
-            "rhs": rhs,
-            "label": label or f"c{len(self.constraints)}",
-        })
-    
+        self.constraints.append(
+            {
+                "coefficients": coefficients,
+                "sense": sense,
+                "rhs": rhs,
+                "label": label or f"c{len(self.constraints)}",
+            }
+        )
+
     def add_quadratic_constraint(
         self,
         linear: Dict[int, float],
@@ -388,19 +394,21 @@ class ConstrainedProblem(AnnealingProblem):
         label: str = None,
     ):
         """Add a quadratic constraint."""
-        self.constraints.append({
-            "linear": linear,
-            "quadratic": quadratic,
-            "sense": sense,
-            "rhs": rhs,
-            "label": label or f"qc{len(self.constraints)}",
-            "is_quadratic": True,
-        })
-    
+        self.constraints.append(
+            {
+                "linear": linear,
+                "quadratic": quadratic,
+                "sense": sense,
+                "rhs": rhs,
+                "label": label or f"qc{len(self.constraints)}",
+                "is_quadratic": True,
+            }
+        )
+
     @property
     def num_variables(self) -> int:
         return self._num_variables
-    
+
     def to_qubo(self) -> Dict[Tuple[int, int], float]:
         """
         Convert to QUBO with penalty terms for constraints.
@@ -408,32 +416,32 @@ class ConstrainedProblem(AnnealingProblem):
         """
         qubo = self.objective.copy()
         penalty = 1000.0  # Large penalty
-        
+
         for constraint in self.constraints:
             if constraint.get("is_quadratic"):
                 continue  # Skip quadratic constraints in QUBO conversion
-            
+
             coeffs = constraint["coefficients"]
             rhs = constraint["rhs"]
             sense = constraint["sense"]
-            
+
             # Add penalty: P * (Σ a_i x_i - b)^2
             if sense == "==":
                 for i, a_i in coeffs.items():
-                    qubo[(i, i)] = qubo.get((i, i), 0) + penalty * (a_i**2 - 2*a_i*rhs)
+                    qubo[(i, i)] = qubo.get((i, i), 0) + penalty * (a_i**2 - 2 * a_i * rhs)
                     for j, a_j in coeffs.items():
                         if j > i:
                             key = (i, j)
                             qubo[key] = qubo.get(key, 0) + penalty * 2 * a_i * a_j
-        
+
         return qubo
-    
+
     def to_ising(self) -> Tuple[Dict[int, float], Dict[Tuple[int, int], float], float]:
         """Convert QUBO representation to Ising."""
         qubo = self.to_qubo()
         temp_qubo = QUBOProblem(qubo)
         return temp_qubo.to_ising()
-    
+
     def evaluate_solution(self, solution: Dict[int, int]) -> float:
         """Evaluate objective value."""
         total = 0.0
@@ -442,41 +450,43 @@ class ConstrainedProblem(AnnealingProblem):
             xj = solution.get(j, 0)
             total += coef * xi * xj
         return total
-    
+
     def check_constraints(self, solution: Dict[int, int]) -> List[Dict[str, Any]]:
         """Check which constraints are satisfied."""
         results = []
-        
+
         for constraint in self.constraints:
             if constraint.get("is_quadratic"):
                 continue
-            
+
             lhs = sum(c * solution.get(i, 0) for i, c in constraint["coefficients"].items())
             rhs = constraint["rhs"]
             sense = constraint["sense"]
-            
+
             if sense == "<=":
                 satisfied = lhs <= rhs
             elif sense == ">=":
                 satisfied = lhs >= rhs
             else:  # "=="
                 satisfied = abs(lhs - rhs) < 1e-6
-            
-            results.append({
-                "label": constraint["label"],
-                "lhs": lhs,
-                "rhs": rhs,
-                "sense": sense,
-                "satisfied": satisfied,
-            })
-        
+
+            results.append(
+                {
+                    "label": constraint["label"],
+                    "lhs": lhs,
+                    "rhs": rhs,
+                    "sense": sense,
+                    "satisfied": satisfied,
+                }
+            )
+
         return results
-    
+
     def decode_solution(self, solution: Dict[int, int]) -> Dict[str, Any]:
         """Decode solution with constraint checking."""
         constraint_results = self.check_constraints(solution)
         feasible = all(r["satisfied"] for r in constraint_results)
-        
+
         return {
             "solution": dict(solution),
             "objective_value": self.evaluate_solution(solution),

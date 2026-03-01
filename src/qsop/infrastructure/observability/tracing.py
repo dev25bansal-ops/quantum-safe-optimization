@@ -6,9 +6,10 @@ Provides request tracing across services.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from typing import Any, Generator
 import logging
+from collections.abc import Generator
+from contextlib import contextmanager
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ def configure_tracing(
 ) -> None:
     """
     Configure OpenTelemetry tracing.
-    
+
     Args:
         service_name: Name of the service for traces
         otlp_endpoint: OTLP collector endpoint
@@ -28,36 +29,38 @@ def configure_tracing(
     """
     try:
         from opentelemetry import trace
+        from opentelemetry.sdk.resources import Resource
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
-        from opentelemetry.sdk.resources import Resource
-        
+
         # Create resource
-        resource = Resource.create({
-            "service.name": service_name,
-        })
-        
+        resource = Resource.create(
+            {
+                "service.name": service_name,
+            }
+        )
+
         # Create tracer provider
         provider = TracerProvider(
             resource=resource,
             sampler=TraceIdRatioBased(sampling_ratio),
         )
-        
+
         # Configure exporter
         if otlp_endpoint:
             try:
                 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
                 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-                
+
                 exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
                 provider.add_span_processor(BatchSpanProcessor(exporter))
             except ImportError:
                 logger.warning("OTLP exporter not available")
-        
+
         trace.set_tracer_provider(provider)
-        
+
         logger.info(f"Tracing configured for {service_name}")
-        
+
     except ImportError:
         logger.warning("OpenTelemetry not installed. Tracing disabled.")
 
@@ -66,6 +69,7 @@ def get_tracer(name: str) -> Any:
     """Get a tracer instance."""
     try:
         from opentelemetry import trace
+
         return trace.get_tracer(name)
     except ImportError:
         return NoOpTracer()
@@ -73,7 +77,7 @@ def get_tracer(name: str) -> Any:
 
 class NoOpTracer:
     """No-op tracer when OpenTelemetry is not available."""
-    
+
     @contextmanager
     def start_as_current_span(
         self,
@@ -81,29 +85,29 @@ class NoOpTracer:
         **kwargs: Any,
     ) -> Generator[NoOpSpan, None, None]:
         yield NoOpSpan()
-    
+
     def start_span(self, name: str, **kwargs: Any) -> NoOpSpan:
         return NoOpSpan()
 
 
 class NoOpSpan:
     """No-op span."""
-    
+
     def set_attribute(self, key: str, value: Any) -> None:
         pass
-    
+
     def set_status(self, status: Any) -> None:
         pass
-    
+
     def record_exception(self, exception: Exception) -> None:
         pass
-    
+
     def end(self) -> None:
         pass
-    
+
     def __enter__(self) -> NoOpSpan:
         return self
-    
+
     def __exit__(self, *args: Any) -> None:
         pass
 
@@ -116,7 +120,7 @@ def traced_operation(
 ) -> Generator[Any, None, None]:
     """
     Context manager for tracing an operation.
-    
+
     Args:
         tracer: The tracer to use
         operation_name: Name of the operation
@@ -126,7 +130,7 @@ def traced_operation(
         if attributes:
             for key, value in attributes.items():
                 span.set_attribute(key, value)
-        
+
         try:
             yield span
         except Exception as e:

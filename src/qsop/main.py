@@ -1,27 +1,27 @@
 """FastAPI application entrypoint."""
 
 import logging
-import sys
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import structlog
 import uvicorn
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.responses import Response
 
 from qsop import __version__
-from qsop.settings import get_settings
-from qsop.infrastructure.observability.metrics import get_metrics
-from qsop.api.routers import create_api_router, auth_router
 from qsop.api.middleware.authn import AuthenticationMiddleware
-from qsop.api.middleware.request_id import RequestIDMiddleware
 from qsop.api.middleware.compliance import ComplianceMiddleware
+from qsop.api.middleware.request_id import RequestIDMiddleware
+from qsop.api.routers import auth_router, create_api_router
+from qsop.api.routers.advanced import router as advanced_router
+from qsop.infrastructure.observability.metrics import get_metrics
+from qsop.settings import get_settings
 
 settings = get_settings()
 
@@ -88,6 +88,7 @@ app.add_middleware(
     jwt_secret=settings.secret_key.get_secret_value(),
 )
 
+
 # Metrics Middleware (must be after Auth to have tenant_id)
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
@@ -100,18 +101,16 @@ async def metrics_middleware(request: Request, call_next):
 
     endpoint = request.url.path
     tenant_id = getattr(request.state, "tenant_id", "anonymous")
-    
+
     metrics = get_metrics()
     metrics.api_requests.labels(
         method=request.method,
         endpoint=endpoint,
         status_code=str(response.status_code),
-        tenant_id=tenant_id
+        tenant_id=tenant_id,
     ).inc()
     metrics.api_latency.labels(
-        method=request.method,
-        endpoint=endpoint,
-        tenant_id=tenant_id
+        method=request.method, endpoint=endpoint, tenant_id=tenant_id
     ).observe(duration)
 
     return response
@@ -120,6 +119,7 @@ async def metrics_middleware(request: Request, call_next):
 # API Routers
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(create_api_router(), prefix="/api/v1")
+app.include_router(advanced_router, prefix="/api/v1/advanced", tags=["Advanced Algorithms"])
 
 
 @app.middleware("http")
@@ -188,6 +188,14 @@ async def api_info() -> dict:
         "pqc_sig_algorithm": settings.crypto.sig_algorithm.value,
         "quantum_backend": settings.quantum.backend.value,
     }
+
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    """WebSocket endpoint for real-time job updates."""
+    from qsop.infrastructure.websocket.manager import websocket_endpoint as ws_handler
+
+    await ws_handler(websocket, client_id)
 
 
 # Static Files (Frontend) - Must be after all other routes

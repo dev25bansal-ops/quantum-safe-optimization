@@ -5,6 +5,7 @@ Uses Redis as message broker for job queue management.
 """
 
 import os
+
 from celery import Celery
 
 # Redis configuration
@@ -28,23 +29,18 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
-    
     # Task execution settings
     task_acks_late=True,  # Acknowledge after task completion
     task_reject_on_worker_lost=True,  # Re-queue if worker dies
-    
     # Result backend settings
     result_expires=86400,  # Results expire after 24 hours
     result_extended=True,  # Store task metadata
-    
     # Worker settings
     worker_prefetch_multiplier=1,  # One task at a time for fairness
     worker_concurrency=4,  # Number of concurrent workers
-    
     # Task time limits
     task_soft_time_limit=300,  # 5 minutes soft limit
     task_time_limit=600,  # 10 minutes hard limit
-    
     # Task routing based on priority
     task_routes={
         "api.tasks.workers.process_qaoa_job": {"queue": "optimization"},
@@ -52,7 +48,6 @@ celery_app.conf.update(
         "api.tasks.workers.process_annealing_job": {"queue": "optimization"},
         "api.tasks.workers.send_job_update": {"queue": "notifications"},
     },
-    
     # Priority queues
     task_queues={
         "optimization": {
@@ -60,11 +55,10 @@ celery_app.conf.update(
             "routing_key": "optimization",
         },
         "notifications": {
-            "exchange": "notifications", 
+            "exchange": "notifications",
             "routing_key": "notifications",
         },
     },
-    
     # Beat schedule for periodic tasks (optional)
     beat_schedule={
         "cleanup-expired-jobs": {
@@ -82,7 +76,7 @@ def get_celery_status() -> dict:
         stats = inspect.stats()
         active = inspect.active()
         reserved = inspect.reserved()
-        
+
         return {
             "status": "connected",
             "workers": list(stats.keys()) if stats else [],

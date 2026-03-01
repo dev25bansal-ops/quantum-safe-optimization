@@ -7,8 +7,7 @@ Provides automated rotation of KEM and signing keys.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from ...crypto.pqc import (
     KEMAlgorithm,
@@ -39,13 +38,13 @@ class KeyRotationService:
     def rotate_expired_keys(self) -> list[str]:
         """
         Identify and rotate keys that have expired or are nearing expiration.
-        
+
         Returns:
             List of new key IDs created.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         all_keys = self.keystore.list_keys(status=KeyStatus.ACTIVE)
-        
+
         rotated_ids = []
         for meta in all_keys:
             if self._should_rotate(meta, now):
@@ -55,21 +54,21 @@ class KeyRotationService:
                     rotated_ids.append(new_id)
                 except Exception as e:
                     logger.error(f"Failed to rotate key {meta.key_id}: {e}")
-                    
+
         return rotated_ids
 
     def rotate_key(self, key_id: str) -> str:
         """
         Force rotation of a specific key.
-        
+
         Args:
             key_id: The ID of the key to rotate.
-            
+
         Returns:
             The new key ID.
         """
         meta = self.keystore.get_metadata(key_id)
-        
+
         if meta.key_type == KeyType.KEM:
             alg = KEMAlgorithm(meta.algorithm)
             kem = get_kem(alg)
@@ -80,11 +79,9 @@ class KeyRotationService:
             public_key, secret_key = sig.keygen()
         else:
             raise ValueError(f"Rotation not supported for key type: {meta.key_type}")
-            
+
         return self.keystore.rotate_key(
-            key_id=key_id,
-            new_public_key=public_key,
-            new_secret_key=secret_key
+            key_id=key_id, new_public_key=public_key, new_secret_key=secret_key
         )
 
     def _should_rotate(self, meta: KeyMetadata, now: datetime) -> bool:
@@ -93,15 +90,15 @@ class KeyRotationService:
         if meta.expires_at:
             if now >= meta.expires_at - self.warning_period:
                 return True
-                
+
         # 2. Check rotation interval from creation
         if now >= meta.created_at + self.rotation_interval:
             return True
-            
+
         # 3. Check status
         if meta.status == KeyStatus.PENDING_ROTATION:
             return True
-            
+
         return False
 
     def schedule_rotation(self, key_id: str) -> None:

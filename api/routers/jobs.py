@@ -8,47 +8,42 @@ Features:
 - Result encryption with user's ML-KEM public key
 """
 
-import os
 import json
-import asyncio
-import uuid
 import logging
+import os
+import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union
+from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from .auth import get_current_user, _users_db, verify_pqc_token, check_token_revocation
-
 # Import PQC crypto for result encryption
-from quantum_safe_crypto import py_kem_encapsulate, py_encrypt, py_decrypt, EncryptedEnvelope
+from quantum_safe_crypto import EncryptedEnvelope, py_decrypt, py_encrypt
 
-# Import optimization runners
-from optimization.src.qaoa.runner import QAOARunner, QAOAConfig
-from optimization.src.qaoa.problems import MaxCutProblem, PortfolioProblem
-from optimization.src.vqe.runner import VQERunner, VQEConfig
-from optimization.src.vqe.hamiltonians import MolecularHamiltonian, IsingHamiltonian
-from optimization.src.annealing.runner import AnnealingRunner, AnnealingConfig
-from optimization.src.annealing.problems import QUBOProblem
+# Import security features
+from api.security.rate_limiter import RateLimits, limiter
 
 # Import advanced simulator
 from optimization.src.backends import (
     create_advanced_simulator,
-    AdvancedSimulatorConfig,
-    SimulatorType,
-    NoiseModel,
 )
+from optimization.src.qaoa.problems import MaxCutProblem, PortfolioProblem
 
-# Import security features
-from api.security.rate_limiter import limiter, RateLimits
+# Import optimization runners
+from optimization.src.qaoa.runner import QAOAConfig, QAOARunner
+from optimization.src.vqe.hamiltonians import IsingHamiltonian, MolecularHamiltonian
+from optimization.src.vqe.runner import VQEConfig, VQERunner
+
+from .auth import _users_db, check_token_revocation, get_current_user, verify_pqc_token
 
 # Import Cosmos DB repositories (with fallback to in-memory)
 try:
-    from api.db.cosmos import cosmos_manager, JobRepository
+    from api.db.cosmos import JobRepository, cosmos_manager
     from api.db.repository import get_job_store, get_key_store
+
     _cosmos_available = True
 except ImportError:
     _cosmos_available = False
@@ -57,8 +52,9 @@ except ImportError:
 
 # Import Celery workers (optional)
 try:
-    from api.tasks.workers import dispatch_job
     from api.tasks.celery_app import get_celery_status
+    from api.tasks.workers import dispatch_job
+
     _celery_available = True
 except ImportError:
     _celery_available = False
@@ -68,20 +64,23 @@ except ImportError:
 # Import webhook service
 try:
     from api.services.webhooks import (
-        send_job_webhook,
+        WebhookEvent,
         send_job_completed_webhook,
         send_job_failed_webhook,
-        WebhookEvent,
-        webhook_service,
+        send_job_webhook,
         validate_webhook_url,
+        webhook_service,
     )
+
     _webhooks_available = True
 except ImportError:
     _webhooks_available = False
 
 # Configuration
 USE_CELERY = os.getenv("USE_CELERY", "false").lower() == "true"
-DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"  # Allow unauthenticated access for demo
+DEMO_MODE = (
+    os.getenv("DEMO_MODE", "false").lower() == "true"
+)  # Allow unauthenticated access for demo
 
 # Logger for this module
 logger = logging.getLogger(__name__)
@@ -89,7 +88,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # In-memory job storage (fallback when repository is not initialized)
-_jobs_db: Dict[str, Dict[str, Any]] = {}
+_jobs_db: dict[str, dict[str, Any]] = {}
 
 # Lazy-initialized store
 _job_store = None
@@ -108,8 +107,7 @@ _optional_security = HTTPBearer(auto_error=False)
 
 
 async def get_optional_user(
-    request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_security)
+    request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(_optional_security)
 ) -> dict:
     """
     Optional authentication dependency for demo mode.
@@ -118,9 +116,9 @@ async def get_optional_user(
     # If credentials provided, try to validate
     if credentials:
         token = credentials.credentials
-        signing_keypair = getattr(request.app.state, 'signing_keypair', None)
+        signing_keypair = getattr(request.app.state, "signing_keypair", None)
         payload = verify_pqc_token(token, signing_keypair)
-        
+
         if payload:
             # Check if token revoked
             token_jti = payload.get("jti")
@@ -128,7 +126,7 @@ async def get_optional_user(
                 pass  # Fall through to demo user
             else:
                 return payload
-    
+
     # Demo mode: return demo user
     if DEMO_MODE:
         return {
@@ -136,7 +134,7 @@ async def get_optional_user(
             "username": "demo",
             "roles": ["user"],
         }
-    
+
     # Not demo mode and no valid token
     raise HTTPException(
         status_code=401,
@@ -146,7 +144,7 @@ async def get_optional_user(
 
 
 # Helper functions for database operations
-async def save_job(job_data: Dict[str, Any]) -> Dict[str, Any]:
+async def save_job(job_data: dict[str, Any]) -> dict[str, Any]:
     """Save or update a job to the store."""
     store = await get_or_create_job_store()
     if store:
@@ -160,25 +158,25 @@ async def save_job(job_data: Dict[str, Any]) -> Dict[str, Any]:
     return job_data
 
 
-async def get_job_data(job_id: str, user_id: str = None) -> Optional[Dict[str, Any]]:
+async def get_job_data(job_id: str, user_id: str = None) -> dict[str, Any] | None:
     """Get a job from the store."""
     # First check in-memory (for jobs created in this session)
     if job_id in _jobs_db:
         job = _jobs_db[job_id]
         if user_id is None or job.get("user_id") == user_id:
             return job
-    
+
     # Then check the store
     store = await get_or_create_job_store()
     if store:
         try:
             if user_id:
                 return await store.get(job_id, user_id)
-            elif hasattr(store, 'get_any_partition'):
+            elif hasattr(store, "get_any_partition"):
                 return await store.get_any_partition(job_id)
         except Exception as e:
             logger.warning(f"Failed to get job from store: {e}")
-    
+
     return None
 
 
@@ -199,14 +197,14 @@ async def delete_job_data(job_id: str, user_id: str) -> bool:
 
 async def list_user_jobs(
     user_id: str,
-    status: Optional[str] = None,
-    problem_type: Optional[str] = None,
+    status: str | None = None,
+    problem_type: str | None = None,
     limit: int = 20,
     offset: int = 0,
-) -> tuple[List[Dict[str, Any]], int]:
+) -> tuple[list[dict[str, Any]], int]:
     """List jobs for a user with pagination."""
     store = await get_or_create_job_store()
-    
+
     if store:
         try:
             filters = {}
@@ -214,88 +212,95 @@ async def list_user_jobs(
                 filters["status"] = status
             if problem_type:
                 filters["problem_type"] = problem_type.upper()
-            
+
             jobs = await store.list(user_id, filters, limit, offset)
             total = await store.count(user_id, filters)
             return jobs, total
         except Exception as e:
             logger.warning(f"Failed to list jobs from store: {e}")
-    
+
     # Fallback to in-memory
     user_jobs = [
-        job for job in _jobs_db.values()
-        if job["user_id"] == user_id and not job.get("deleted")
+        job for job in _jobs_db.values() if job["user_id"] == user_id and not job.get("deleted")
     ]
-    
+
     if status:
         user_jobs = [j for j in user_jobs if j["status"] == status]
     if problem_type:
         user_jobs = [j for j in user_jobs if j["problem_type"] == problem_type.upper()]
-    
+
     user_jobs.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     total = len(user_jobs)
-    
-    return user_jobs[offset:offset + limit], total
+
+    return user_jobs[offset : offset + limit], total
 
 
 class JobSubmissionRequest(BaseModel):
     """Request to submit an optimization job."""
+
     problem_type: str = Field(..., description="Type: QAOA, VQE, or ANNEALING")
-    problem_config: Dict[str, Any] = Field(..., description="Problem-specific configuration")
-    parameters: Dict[str, Any] = Field(default_factory=dict, description="Algorithm parameters")
-    backend: str = Field(default="local_simulator", description="Target backend: local_simulator, advanced_simulator, etc.")
-    encrypted_data: Optional[str] = Field(None, description="ML-KEM encrypted payload")
+    problem_config: dict[str, Any] = Field(..., description="Problem-specific configuration")
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Algorithm parameters")
+    backend: str = Field(
+        default="local_simulator",
+        description="Target backend: local_simulator, advanced_simulator, etc.",
+    )
+    encrypted_data: str | None = Field(None, description="ML-KEM encrypted payload")
     # Accept both integer and string priority from frontend
-    priority: Union[int, str] = Field(default=5, description="Job priority (1-10 or 'low'/'normal'/'high')")
-    callback_url: Optional[str] = Field(None, description="Webhook URL for completion notification")
+    priority: int | str = Field(
+        default=5, description="Job priority (1-10 or 'low'/'normal'/'high')"
+    )
+    callback_url: str | None = Field(None, description="Webhook URL for completion notification")
     encrypt_result: bool = Field(default=False, description="Encrypt result with user's ML-KEM key")
     # Accept frontend's naming convention as well
-    encrypted: Optional[bool] = Field(default=False, description="Alias for encrypt_result")
-    signed: Optional[bool] = Field(default=False, description="Whether request is signed")
-    
+    encrypted: bool | None = Field(default=False, description="Alias for encrypt_result")
+    signed: bool | None = Field(default=False, description="Whether request is signed")
+
     # Advanced simulator options
-    simulator_config: Optional[Dict[str, Any]] = Field(
-        default=None, 
-        description="Advanced simulator configuration (simulator_type, noise_model, error_mitigation, etc.)"
+    simulator_config: dict[str, Any] | None = Field(
+        default=None,
+        description="Advanced simulator configuration (simulator_type, noise_model, error_mitigation, etc.)",
     )
-    
+
     def get_priority_int(self) -> int:
         """Convert priority to integer."""
         if isinstance(self.priority, int):
             return max(1, min(10, self.priority))
         priority_map = {"low": 3, "normal": 5, "high": 8, "urgent": 10}
         return priority_map.get(str(self.priority).lower(), 5)
-    
+
     def should_encrypt_result(self) -> bool:
         """Check if result should be encrypted."""
         return self.encrypt_result or self.encrypted or False
 
 
-
 class JobResponse(BaseModel):
     """Job response model."""
+
     job_id: str
     status: str
     problem_type: str
     backend: str
     created_at: str
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    problem_config: Optional[Dict[str, Any]] = None  # Job configuration
-    result: Optional[Dict[str, Any]] = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    problem_config: dict[str, Any] | None = None  # Job configuration
+    result: dict[str, Any] | None = None
     encrypted: bool = False  # Whether job data is encrypted
-    encrypted_result: Optional[str] = None  # ML-KEM encrypted result
-    error: Optional[str] = None
-    message: Optional[str] = None
+    encrypted_result: str | None = None  # ML-KEM encrypted result
+    error: str | None = None
+    message: str | None = None
 
 
 class JobListResponse(BaseModel):
     """Response for job listing."""
-    jobs: List[JobResponse]
+
+    jobs: list[JobResponse]
 
 
 class DecryptResultRequest(BaseModel):
     """Request to decrypt encrypted job result."""
+
     secret_key: str = Field(..., description="User's ML-KEM secret key (base64) for decryption")
 
 
@@ -303,22 +308,22 @@ async def send_webhook_notification(
     callback_url: str,
     job_id: str,
     status: str,
-    result: Optional[Dict[str, Any]] = None,
-    error: Optional[str] = None,
+    result: dict[str, Any] | None = None,
+    error: str | None = None,
 ) -> bool:
     """
     Send webhook notification on job completion.
-    
+
     Uses enhanced webhook service with HMAC signatures and retry logic
     when available, falls back to simple HTTP POST otherwise.
-    
+
     Args:
         callback_url: URL to POST notification to
         job_id: The job identifier
         status: Job status (completed, failed)
         result: Job result (if completed)
         error: Error message (if failed)
-        
+
     Returns:
         True if webhook was sent successfully
     """
@@ -338,15 +343,15 @@ async def send_webhook_notification(
                     job_id=job_id,
                     error=error or "Unknown error",
                 )
-            
+
             if not delivery_result.success:
-                print(f"⚠️ Webhook delivery failed for job {job_id}: {delivery_result.error}")
-            
+                pass
+
             return delivery_result.success
-        except Exception as e:
-            print(f"⚠️ Webhook service error for job {job_id}: {e}")
+        except Exception:
+            pass
             # Fall through to legacy implementation
-    
+
     # Legacy implementation (fallback)
     try:
         payload = {
@@ -355,12 +360,12 @@ async def send_webhook_notification(
             "status": status,
             "timestamp": datetime.utcnow().isoformat(),
         }
-        
+
         if result:
             payload["result"] = result
         if error:
             payload["error"] = error
-        
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 callback_url,
@@ -372,102 +377,104 @@ async def send_webhook_notification(
                 },
             )
             return response.status_code < 400
-    except Exception as e:
-        print(f"⚠️ Webhook notification failed for job {job_id}: {e}")
+    except Exception:
         return False
 
 
-def encrypt_result_for_user(result: Dict[str, Any], user_public_key: str) -> Optional[str]:
+def encrypt_result_for_user(result: dict[str, Any], user_public_key: str) -> str | None:
     """
     Encrypt job result with user's ML-KEM public key.
-    
+
     Args:
         result: The job result dictionary
         user_public_key: User's ML-KEM-768 public key (base64)
-        
+
     Returns:
         JSON-serialized encrypted envelope, or None if encryption fails
     """
     try:
         # Serialize result to JSON
-        result_bytes = json.dumps(result).encode('utf-8')
-        
+        result_bytes = json.dumps(result).encode("utf-8")
+
         # Encrypt using hybrid encryption (ML-KEM + AES-256-GCM)
         encrypted_envelope = py_encrypt(result_bytes, user_public_key)
-        
+
         # Convert to JSON string for storage
         return encrypted_envelope.to_json()
-    except Exception as e:
-        print(f"⚠️ Result encryption failed: {e}")
+    except Exception:
         return None
 
 
-def get_user_public_key(user_id: str) -> Optional[str]:
+def get_user_public_key(user_id: str) -> str | None:
     """Get user's ML-KEM public key from the database."""
     # Find user by user_id
-    for username, user_data in _users_db.items():
+    for _username, user_data in _users_db.items():
         if user_data.get("user_id") == user_id:
             return user_data.get("kem_public_key")
     return None
 
 
-def decrypt_result_for_user(encrypted_envelope_json: str, user_secret_key: str) -> Optional[Dict[str, Any]]:
+def decrypt_result_for_user(
+    encrypted_envelope_json: str, user_secret_key: str
+) -> dict[str, Any] | None:
     """
     Decrypt job result with user's ML-KEM secret key.
-    
+
     Args:
         encrypted_envelope_json: JSON-serialized encrypted envelope
         user_secret_key: User's ML-KEM-768 secret key (base64)
-        
+
     Returns:
         Decrypted result dictionary, or None if decryption fails
     """
     try:
         # Parse encrypted envelope from JSON
         envelope = EncryptedEnvelope.from_json(encrypted_envelope_json)
-        
+
         # Decrypt using hybrid decryption (ML-KEM + AES-256-GCM)
         decrypted_bytes = py_decrypt(envelope, user_secret_key)
-        
+
         # Parse JSON result
-        return json.loads(decrypted_bytes.decode('utf-8'))
-    except Exception as e:
-        print(f"⚠️ Result decryption failed: {e}")
+        return json.loads(decrypted_bytes.decode("utf-8"))
+    except Exception:
         return None
 
 
-async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
+async def process_optimization_job(job_id: str, job_data: dict[str, Any]):
     """
     Background task to process optimization job.
-    
+
     Runs the actual optimization using QAOA, VQE, or Annealing runners.
     """
-    async def update_job(updates: Dict[str, Any]):
+
+    async def update_job(updates: dict[str, Any]):
         """Update job in storage."""
         # Update in-memory cache
         if job_id in _jobs_db:
             _jobs_db[job_id].update(updates)
         else:
             _jobs_db[job_id] = {**job_data, **updates}
-        
+
         # Persist to store
         try:
             await save_job(_jobs_db[job_id])
         except Exception as e:
             logger.warning(f"Failed to update job in store: {e}")
-    
+
     try:
-        await update_job({
-            "status": "running",
-            "started_at": datetime.utcnow().isoformat(),
-        })
-        
+        await update_job(
+            {
+                "status": "running",
+                "started_at": datetime.utcnow().isoformat(),
+            }
+        )
+
         problem_type = job_data.get("problem_type", "").upper()
         problem_config = job_data.get("problem_config", {})
         parameters = job_data.get("parameters", {})
         backend = job_data.get("backend", "local_simulator")
         simulator_config = job_data.get("simulator_config", {})
-        
+
         # Create advanced simulator if configured
         use_advanced = backend == "advanced_simulator" or simulator_config
         if use_advanced:
@@ -479,21 +486,23 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
                 two_qubit_error_rate=simulator_config.get("two_qubit_error_rate", 0.01),
             )
             await advanced_sim.connect()
-        
+
         result = None
-        
+
         if problem_type == "QAOA":
             # Create QAOA runner and problem
-            runner = QAOARunner(config=QAOAConfig(
-                layers=parameters.get("layers", 2),
-                optimizer=parameters.get("optimizer", "COBYLA"),
-                shots=parameters.get("shots", 1000),
-            ))
-            
+            runner = QAOARunner(
+                config=QAOAConfig(
+                    layers=parameters.get("layers", 2),
+                    optimizer=parameters.get("optimizer", "COBYLA"),
+                    shots=parameters.get("shots", 1000),
+                )
+            )
+
             # Use advanced simulator if configured
             if use_advanced:
                 runner.backend = advanced_sim
-            
+
             # Create problem based on problem_config
             problem_name = problem_config.get("problem", "maxcut")
             if problem_name == "maxcut":
@@ -503,7 +512,10 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
             elif problem_name == "portfolio":
                 problem = PortfolioProblem(
                     expected_returns=problem_config.get("expected_returns", [0.1, 0.12, 0.08]),
-                    covariance_matrix=problem_config.get("covariance_matrix", [[0.1, 0.02, 0.01], [0.02, 0.15, 0.03], [0.01, 0.03, 0.12]]),
+                    covariance_matrix=problem_config.get(
+                        "covariance_matrix",
+                        [[0.1, 0.02, 0.01], [0.02, 0.15, 0.03], [0.01, 0.03, 0.12]],
+                    ),
                     num_assets_to_select=problem_config.get("num_assets_to_select", 2),
                 )
             else:
@@ -512,28 +524,30 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
                     num_nodes=problem_config.get("num_nodes", 5),
                     edge_probability=problem_config.get("edge_probability", 0.5),
                 )
-            
+
             job_result = await runner.solve(problem)
             result = job_result.to_dict()
-            
+
         elif problem_type == "VQE":
             # Create VQE runner
-            runner = VQERunner(config=VQEConfig(
-                optimizer=parameters.get("optimizer", "COBYLA"),
-                shots=parameters.get("shots", 1000),
-                max_iterations=parameters.get("max_iterations", 100),
-                ansatz_type=parameters.get("ansatz_type", "UCCSD"),
-                ansatz_layers=parameters.get("ansatz_layers", 1),
-            ))
-            
+            runner = VQERunner(
+                config=VQEConfig(
+                    optimizer=parameters.get("optimizer", "COBYLA"),
+                    shots=parameters.get("shots", 1000),
+                    max_iterations=parameters.get("max_iterations", 100),
+                    ansatz_type=parameters.get("ansatz_type", "UCCSD"),
+                    ansatz_layers=parameters.get("ansatz_layers", 1),
+                )
+            )
+
             # Use advanced simulator if configured
             if use_advanced:
                 runner.backend = advanced_sim
-            
+
             # Create Hamiltonian based on problem_config
             hamiltonian_type = problem_config.get("hamiltonian", "h2")
             molecule = problem_config.get("molecule", hamiltonian_type)
-            
+
             if molecule in ["h2", "H2"]:
                 bond_length = problem_config.get("bond_length", 0.74)
                 hamiltonian = MolecularHamiltonian.h2(bond_length=bond_length)
@@ -555,26 +569,29 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
             else:
                 # Default to H2
                 hamiltonian = MolecularHamiltonian.h2()
-            
+
             job_result = await runner.solve(hamiltonian)
             result = job_result.to_dict()
-            
+
         elif problem_type == "ANNEALING":
             # Create QUBO problem
             qubo_matrix_raw = problem_config.get("qubo_matrix")
             qubo_matrix = {}
-            
+
             if qubo_matrix_raw:
                 # Handle different input formats
                 if isinstance(qubo_matrix_raw, list):
                     # Check if it's a 2D matrix (list of lists with same length)
                     if qubo_matrix_raw and isinstance(qubo_matrix_raw[0], list):
                         first_row_len = len(qubo_matrix_raw[0]) if qubo_matrix_raw else 0
-                        is_square_matrix = all(
-                            isinstance(row, list) and len(row) == first_row_len
-                            for row in qubo_matrix_raw
-                        ) and len(qubo_matrix_raw) == first_row_len
-                        
+                        is_square_matrix = (
+                            all(
+                                isinstance(row, list) and len(row) == first_row_len
+                                for row in qubo_matrix_raw
+                            )
+                            and len(qubo_matrix_raw) == first_row_len
+                        )
+
                         if is_square_matrix and first_row_len > 0:
                             # It's a square matrix - convert to QUBO dict format
                             for i, row in enumerate(qubo_matrix_raw):
@@ -599,7 +616,7 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
                         # Single list of values - treat as diagonal
                         for i, val in enumerate(qubo_matrix_raw):
                             qubo_matrix[(i, i)] = float(val)
-                            
+
                 elif isinstance(qubo_matrix_raw, dict):
                     # Convert from JSON format (string keys) to tuple keys
                     for key, value in qubo_matrix_raw.items():
@@ -611,7 +628,7 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
                                 qubo_matrix[(parts[0], parts[1])] = float(value)
                         elif isinstance(key, (list, tuple)) and len(key) == 2:
                             qubo_matrix[(int(key[0]), int(key[1]))] = float(value)
-            
+
             if not qubo_matrix:
                 # Generate a default QUBO for demo purposes (simple Max-Cut style)
                 num_vars = problem_config.get("num_variables", 4)
@@ -619,20 +636,24 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
                     qubo_matrix[(i, i)] = -1.0  # Linear terms
                     for j in range(i + 1, num_vars):
                         qubo_matrix[(i, j)] = 2.0  # Quadratic coupling
-            
+
             # Use advanced simulator if configured
             if use_advanced:
                 try:
-                    num_vars_actual = max(max(k) for k in qubo_matrix.keys()) + 1 if qubo_matrix else 4
+                    num_vars_actual = (
+                        max(max(k) for k in qubo_matrix.keys()) + 1 if qubo_matrix else 4
+                    )
                     annealing_result = advanced_sim.run_annealing(
                         qubo_matrix=qubo_matrix,
                         num_reads=parameters.get("num_reads", 1000),
                         schedule=parameters.get("schedule", "linear"),
                     )
-                    
-                    optimal_bitstring = ''.join(str(int(annealing_result.get("best_solution", {}).get(i, 0))) 
-                                                for i in range(num_vars_actual))
-                    
+
+                    optimal_bitstring = "".join(
+                        str(int(annealing_result.get("best_solution", {}).get(i, 0)))
+                        for i in range(num_vars_actual)
+                    )
+
                     result = {
                         "job_id": job_id,
                         "status": "completed",
@@ -649,29 +670,33 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
                     # Fall back to standard annealing on error
                     use_advanced = False
                     logger.warning(f"Advanced annealing failed, falling back to standard: {e}")
-            
+
             # Use simulated annealing for local demo (no D-Wave credentials needed)
             if not use_advanced:
                 try:
                     import dimod
                     import neal
-                    
+
                     # Create BQM from QUBO
                     bqm = dimod.BinaryQuadraticModel.from_qubo(qubo_matrix)
-                    
+
                     # Use simulated annealing sampler
                     sampler = neal.SimulatedAnnealingSampler()
                     num_reads = parameters.get("num_reads", 1000)
                     sampleset = sampler.sample(bqm, num_reads=num_reads)
-                    
+
                     # Get best solution
                     best_sample = sampleset.first.sample
                     best_energy = float(sampleset.first.energy)
-                    
+
                     # Convert to bitstring
-                    num_vars_actual = max(max(k) for k in qubo_matrix.keys()) + 1 if qubo_matrix else 0
-                    optimal_bitstring = ''.join(str(best_sample.get(i, 0)) for i in range(num_vars_actual))
-                    
+                    num_vars_actual = (
+                        max(max(k) for k in qubo_matrix.keys()) + 1 if qubo_matrix else 0
+                    )
+                    optimal_bitstring = "".join(
+                        str(best_sample.get(i, 0)) for i in range(num_vars_actual)
+                    )
+
                     # Build result
                     result = {
                         "job_id": job_id,
@@ -686,15 +711,17 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
                             "timing": {"total": 0.1},
                         },
                     }
-                    
+
                 except ImportError:
                     # Fallback to basic random search if neal not available
                     import random
-                    
-                    num_vars_actual = max(max(k) for k in qubo_matrix.keys()) + 1 if qubo_matrix else 4
-                    best_energy = float('inf')
+
+                    num_vars_actual = (
+                        max(max(k) for k in qubo_matrix.keys()) + 1 if qubo_matrix else 4
+                    )
+                    best_energy = float("inf")
                     best_solution = {}
-                    
+
                     for _ in range(parameters.get("num_reads", 1000)):
                         solution = {i: random.randint(0, 1) for i in range(num_vars_actual)}
                         energy = sum(
@@ -704,9 +731,11 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
                         if energy < best_energy:
                             best_energy = energy
                             best_solution = solution
-                    
-                    optimal_bitstring = ''.join(str(best_solution.get(i, 0)) for i in range(num_vars_actual))
-                    
+
+                    optimal_bitstring = "".join(
+                        str(best_solution.get(i, 0)) for i in range(num_vars_actual)
+                    )
+
                     result = {
                         "job_id": job_id,
                         "status": "completed",
@@ -717,7 +746,7 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
                     }
         else:
             raise ValueError(f"Unknown problem type: {problem_type}")
-        
+
         # Check if result should be encrypted
         encrypted_result = None
         if job_data.get("encrypt_result"):
@@ -725,14 +754,16 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
             user_public_key = get_user_public_key(user_id)
             if user_public_key:
                 encrypted_result = encrypt_result_for_user(result, user_public_key)
-        
-        await update_job({
-            "status": "completed",
-            "completed_at": datetime.utcnow().isoformat(),
-            "result": result if not encrypted_result else None,
-            "encrypted_result": encrypted_result,
-        })
-        
+
+        await update_job(
+            {
+                "status": "completed",
+                "completed_at": datetime.utcnow().isoformat(),
+                "result": result if not encrypted_result else None,
+                "encrypted_result": encrypted_result,
+            }
+        )
+
         # Send webhook notification if callback_url is set
         callback_url = job_data.get("callback_url")
         if callback_url:
@@ -742,15 +773,17 @@ async def process_optimization_job(job_id: str, job_data: Dict[str, Any]):
                 status="completed",
                 result=result if not encrypted_result else {"encrypted": True},
             )
-        
+
     except Exception as e:
         error_msg = str(e)
-        await update_job({
-            "status": "failed",
-            "error": error_msg,
-            "completed_at": datetime.utcnow().isoformat(),
-        })
-        
+        await update_job(
+            {
+                "status": "failed",
+                "error": error_msg,
+                "completed_at": datetime.utcnow().isoformat(),
+            }
+        )
+
         # Send webhook notification for failure
         callback_url = job_data.get("callback_url")
         if callback_url:
@@ -772,36 +805,32 @@ async def submit_job(
 ):
     """
     Submit a new optimization job.
-    
+
     Supports QAOA, VQE, and Quantum Annealing problems.
     Jobs are processed asynchronously and results can be retrieved later.
-    
+
     Features:
     - callback_url: Webhook notification on job completion
     - encrypt_result: Encrypt results with your ML-KEM public key
-    
+
     When USE_CELERY=true, jobs are dispatched to Celery workers for distributed processing.
     Otherwise, jobs run in FastAPI background tasks.
-    
+
     Rate limited to prevent resource exhaustion.
     """
     job_id = f"job_{uuid.uuid4().hex[:12]}"
-    
+
     # Validate callback URL if provided
     if job_request.callback_url:
         if not job_request.callback_url.startswith(("http://", "https://")):
             raise HTTPException(
-                status_code=400,
-                detail="callback_url must be a valid HTTP/HTTPS URL"
+                status_code=400, detail="callback_url must be a valid HTTP/HTTPS URL"
             )
         if _webhooks_available:
             is_valid, error = validate_webhook_url(job_request.callback_url)
             if not is_valid:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"callback_url rejected: {error}"
-                )
-    
+                raise HTTPException(status_code=400, detail=f"callback_url rejected: {error}")
+
     # Check if user has public key for result encryption
     should_encrypt = job_request.should_encrypt_result()
     if should_encrypt:
@@ -813,12 +842,12 @@ async def submit_job(
             else:
                 raise HTTPException(
                     status_code=400,
-                    detail="No ML-KEM public key registered. Use PUT /auth/keys/encryption-key first."
+                    detail="No ML-KEM public key registered. Use PUT /auth/keys/encryption-key first.",
                 )
-    
+
     # Convert priority to integer
     priority_int = job_request.get_priority_int()
-    
+
     job_data = {
         "job_id": job_id,
         "id": job_id,  # Cosmos DB document ID
@@ -839,11 +868,11 @@ async def submit_job(
         "callback_url": job_request.callback_url,
         "encrypt_result": should_encrypt,
     }
-    
+
     # Save to store (or in-memory fallback)
     await save_job(job_data)
     _jobs_db[job_id] = job_data  # Keep in local cache for background task access
-    
+
     # Dispatch to appropriate processing backend
     if USE_CELERY and _celery_available and dispatch_job:
         try:
@@ -861,7 +890,7 @@ async def submit_job(
         # Use FastAPI background tasks
         background_tasks.add_task(process_optimization_job, job_id, job_data)
         message = "Job submitted for background processing"
-    
+
     return JobResponse(
         job_id=job_id,
         status="queued",
@@ -878,7 +907,7 @@ async def get_worker_status(
 ):
     """
     Get Celery worker status (admin only).
-    
+
     Returns information about active workers and pending tasks.
     """
     if _celery_available and get_celery_status:
@@ -888,11 +917,11 @@ async def get_worker_status(
 
 @router.get("/webhooks/stats")
 async def get_webhook_statistics(
-    current_user: Dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get webhook delivery statistics.
-    
+
     Returns statistics about webhook delivery including:
     - Total deliveries attempted
     - Success/failure counts
@@ -903,7 +932,7 @@ async def get_webhook_statistics(
             "available": False,
             "message": "Webhook service not available",
         }
-    
+
     stats = webhook_service.get_statistics()
     return {
         "available": True,
@@ -915,7 +944,7 @@ async def get_webhook_statistics(
 async def get_encryption_info():
     """
     Get information about the ML-KEM encryption system.
-    
+
     Returns details about:
     - Supported algorithms and security levels
     - Key sizes
@@ -937,7 +966,7 @@ async def get_encryption_info():
                 {
                     "level": 3,
                     "algorithm": "ML-KEM-768",
-                    "security": "192-bit", 
+                    "security": "192-bit",
                     "public_key_size": 1184,
                     "secret_key_size": 2400,
                     "ciphertext_size": 1088,
@@ -978,20 +1007,20 @@ async def get_job(
 ):
     """
     Get status and results of a specific job.
-    
+
     If encrypt_result was enabled, the result will be in encrypted_result field
     and can only be decrypted with your ML-KEM secret key.
-    
+
     For real-time updates, use the WebSocket endpoint at /ws/jobs/{job_id}
     """
     job = await get_job_data(job_id, current_user["sub"])
-    
+
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     if job["user_id"] != current_user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     return JobResponse(
         job_id=job["job_id"],
         status=job["status"],
@@ -1013,8 +1042,8 @@ async def get_job(
 async def list_jobs(
     request: Request,
     current_user: dict = Depends(get_optional_user),
-    status: Optional[str] = Query(None, description="Filter by status"),
-    problem_type: Optional[str] = Query(None, description="Filter by problem type"),
+    status: str | None = Query(None, description="Filter by status"),
+    problem_type: str | None = Query(None, description="Filter by problem type"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
@@ -1028,7 +1057,7 @@ async def list_jobs(
         limit=limit,
         offset=offset,
     )
-    
+
     return JobListResponse(
         jobs=[
             JobResponse(
@@ -1059,31 +1088,30 @@ async def cancel_job(
 ):
     """
     Cancel a queued or running job.
-    
+
     Sets job status to 'cancelled' and stops any running background tasks.
     """
     job = await get_job_data(job_id, current_user["sub"])
-    
+
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     if job["user_id"] != current_user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     if job["status"] in ["completed", "failed", "cancelled"]:
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot cancel job with status: {job['status']}"
+            status_code=400, detail=f"Cannot cancel job with status: {job['status']}"
         )
-    
+
     # Update job status
     job["status"] = "cancelled"
     job["completed_at"] = datetime.utcnow().isoformat()
     job["cancellation_reason"] = "User requested cancellation"
-    
+
     # Persist to store
     await save_job(job)
-    
+
     # Send webhook notification if callback_url is set
     callback_url = job.get("callback_url")
     if callback_url:
@@ -1093,7 +1121,7 @@ async def cancel_job(
             status="cancelled",
             result={"reason": "User requested cancellation"},
         )
-    
+
     return {"message": "Job cancelled successfully", "job_id": job_id, "status": "cancelled"}
 
 
@@ -1104,28 +1132,27 @@ async def get_job_result(
 ):
     """
     Get detailed results of a completed job.
-    
+
     If the result was encrypted, returns the encrypted envelope.
     Use POST /{job_id}/decrypt to decrypt with your secret key.
     """
     job = await get_job_data(job_id, current_user["sub"])
-    
+
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     if job["user_id"] != current_user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     if job["status"] != "completed":
         raise HTTPException(
-            status_code=400,
-            detail=f"Job not completed. Current status: {job['status']}"
+            status_code=400, detail=f"Job not completed. Current status: {job['status']}"
         )
-    
+
     # Check if result is encrypted
     encrypted_result = job.get("encrypted_result")
     is_encrypted = encrypted_result is not None
-    
+
     return {
         "job_id": job_id,
         "status": "completed",
@@ -1149,28 +1176,27 @@ async def decrypt_job_result(
 ):
     """
     Decrypt an encrypted job result using your ML-KEM secret key.
-    
+
     ⚠️ Security Note: This endpoint accepts your secret key to decrypt the result.
     For maximum security, prefer client-side decryption where your secret key
     never leaves your device.
-    
+
     The encryption uses ML-KEM-768 (NIST FIPS 203) for key encapsulation
     combined with AES-256-GCM for symmetric encryption.
     """
     job = await get_job_data(job_id, current_user["sub"])
-    
+
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     if job["user_id"] != current_user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     if job["status"] != "completed":
         raise HTTPException(
-            status_code=400,
-            detail=f"Job not completed. Current status: {job['status']}"
+            status_code=400, detail=f"Job not completed. Current status: {job['status']}"
         )
-    
+
     encrypted_result = job.get("encrypted_result")
     if not encrypted_result:
         # Result wasn't encrypted, return plaintext
@@ -1180,16 +1206,16 @@ async def decrypt_job_result(
             "result": job.get("result"),
             "message": "Result was not encrypted",
         }
-    
+
     # Attempt decryption
     decrypted = decrypt_result_for_user(encrypted_result, request.secret_key)
-    
+
     if decrypted is None:
         raise HTTPException(
             status_code=400,
-            detail="Decryption failed. Ensure you're using the correct ML-KEM secret key."
+            detail="Decryption failed. Ensure you're using the correct ML-KEM secret key.",
         )
-    
+
     return {
         "job_id": job_id,
         "decrypted": True,
@@ -1208,22 +1234,19 @@ async def retry_job(
     Retry a failed job.
     """
     job = await get_job_data(job_id, current_user["sub"])
-    
+
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     if job["user_id"] != current_user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     if job["status"] != "failed":
-        raise HTTPException(
-            status_code=400,
-            detail="Only failed jobs can be retried"
-        )
-    
+        raise HTTPException(status_code=400, detail="Only failed jobs can be retried")
+
     # Create new job with same config
     new_job_id = f"job_{uuid.uuid4().hex[:12]}"
-    
+
     new_job = {
         **job,
         "job_id": new_job_id,
@@ -1237,13 +1260,13 @@ async def retry_job(
         "error": None,
         "retry_of": job_id,
     }
-    
+
     # Save to store and local cache
     await save_job(new_job)
     _jobs_db[new_job_id] = new_job
-    
+
     background_tasks.add_task(process_optimization_job, new_job_id, new_job)
-    
+
     return JobResponse(
         job_id=new_job_id,
         status="queued",
@@ -1254,12 +1277,12 @@ async def retry_job(
     )
 
 
-def _calculate_execution_time(job: Dict[str, Any]) -> Optional[int]:
+def _calculate_execution_time(job: dict[str, Any]) -> int | None:
     """Calculate job execution time in milliseconds."""
     if not job.get("started_at") or not job.get("completed_at"):
         return None
-    
+
     start = datetime.fromisoformat(job["started_at"])
     end = datetime.fromisoformat(job["completed_at"])
-    
+
     return int((end - start).total_seconds() * 1000)

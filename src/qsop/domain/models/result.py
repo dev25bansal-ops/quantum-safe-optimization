@@ -54,9 +54,7 @@ class OptimizationResult:
     iterations: int
     function_evaluations: int = 0
     gradient_evaluations: int = 0
-    convergence: ConvergenceInfo = field(
-        default_factory=lambda: ConvergenceInfo(converged=False)
-    )
+    convergence: ConvergenceInfo = field(default_factory=lambda: ConvergenceInfo(converged=False))
     objective_history: tuple[float, ...] = ()
     parameter_history: tuple[dict[str, float], ...] = ()
     constraint_values: dict[str, float] = field(default_factory=dict)
@@ -148,9 +146,7 @@ class QuantumExecutionResult:
         Returns:
             List of measurement results sorted by probability descending.
         """
-        sorted_measurements = sorted(
-            self.measurements, key=lambda m: m.probability, reverse=True
-        )
+        sorted_measurements = sorted(self.measurements, key=lambda m: m.probability, reverse=True)
         return list(sorted_measurements[:n])
 
     def get_probability(self, bitstring: str) -> float:

@@ -2,33 +2,32 @@
 Post-Quantum Cryptography algorithm definitions and parameters.
 """
 
-from enum import Enum
 from dataclasses import dataclass
-from typing import Dict
+from enum import Enum
 
 
 class KEMAlgorithm(Enum):
     """Key Encapsulation Mechanism algorithms."""
-    
+
     # ML-KEM (Kyber) - NIST standardized
     KYBER512 = "Kyber512"
     KYBER768 = "Kyber768"
     KYBER1024 = "Kyber1024"
-    
+
     # BIKE - NIST Round 4 alternate
     BIKE_L1 = "BIKE-L1"
     BIKE_L3 = "BIKE-L3"
-    
+
     @property
     def security_level(self) -> int:
         """NIST security level (1, 3, or 5)."""
         return KEM_PARAMETERS[self].security_level
-    
+
     @property
     def is_standardized(self) -> bool:
         """Whether this algorithm is NIST standardized."""
         return self in (self.KYBER512, self.KYBER768, self.KYBER1024)
-    
+
     @property
     def oqs_name(self) -> str:
         """Name used by liboqs."""
@@ -37,26 +36,26 @@ class KEMAlgorithm(Enum):
 
 class SignatureAlgorithm(Enum):
     """Digital signature algorithms."""
-    
+
     # ML-DSA (Dilithium) - NIST standardized
     DILITHIUM2 = "Dilithium2"
     DILITHIUM3 = "Dilithium3"
     DILITHIUM5 = "Dilithium5"
-    
+
     # SLH-DSA (SPHINCS+) - NIST standardized
     SPHINCS_SHA2_128s = "SPHINCS+-SHA2-128s-simple"
     SPHINCS_SHA2_256f = "SPHINCS+-SHA2-256f-simple"
-    
+
     @property
     def security_level(self) -> int:
         """NIST security level (1, 3, or 5)."""
         return SIGNATURE_PARAMETERS[self].security_level
-    
+
     @property
     def is_stateless(self) -> bool:
         """Whether this algorithm is stateless (safe for multiple signatures)."""
         return True  # All supported algorithms are stateless
-    
+
     @property
     def oqs_name(self) -> str:
         """Name used by liboqs."""
@@ -66,7 +65,7 @@ class SignatureAlgorithm(Enum):
 @dataclass(frozen=True)
 class KEMParameters:
     """Parameters for a KEM algorithm."""
-    
+
     oqs_name: str
     security_level: int
     public_key_size: int
@@ -78,7 +77,7 @@ class KEMParameters:
 @dataclass(frozen=True)
 class SignatureParameters:
     """Parameters for a signature algorithm."""
-    
+
     oqs_name: str
     security_level: int
     public_key_size: int
@@ -88,7 +87,7 @@ class SignatureParameters:
 
 # KEM algorithm parameters
 # Values from liboqs and NIST specifications
-KEM_PARAMETERS: Dict[KEMAlgorithm, KEMParameters] = {
+KEM_PARAMETERS: dict[KEMAlgorithm, KEMParameters] = {
     KEMAlgorithm.KYBER512: KEMParameters(
         oqs_name="Kyber512",
         security_level=1,
@@ -133,7 +132,7 @@ KEM_PARAMETERS: Dict[KEMAlgorithm, KEMParameters] = {
 
 
 # Signature algorithm parameters
-SIGNATURE_PARAMETERS: Dict[SignatureAlgorithm, SignatureParameters] = {
+SIGNATURE_PARAMETERS: dict[SignatureAlgorithm, SignatureParameters] = {
     SignatureAlgorithm.DILITHIUM2: SignatureParameters(
         oqs_name="Dilithium2",
         security_level=2,

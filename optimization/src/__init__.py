@@ -5,10 +5,10 @@ Provides quantum optimization algorithms (QAOA, VQE, Quantum Annealing)
 with a unified backend abstraction layer.
 """
 
-from src.backends import QuantumBackend, BackendType
-from src.qaoa import QAOARunner, MaxCutProblem, PortfolioProblem
-from src.vqe import VQERunner, MolecularHamiltonian
 from src.annealing import AnnealingRunner, QUBOProblem
+from src.backends import BackendType, QuantumBackend
+from src.qaoa import MaxCutProblem, PortfolioProblem, QAOARunner
+from src.vqe import MolecularHamiltonian, VQERunner
 
 __version__ = "0.1.0"
 

@@ -7,11 +7,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class JobStatus(str, Enum):
     """Job execution status."""
+
     PENDING = "pending"
     QUEUED = "queued"
     RUNNING = "running"
@@ -22,6 +23,7 @@ class JobStatus(str, Enum):
 
 class JobType(str, Enum):
     """Type of quantum optimization job."""
+
     QAOA = "qaoa"
     VQE = "vqe"
     ANNEALING = "annealing"
@@ -31,7 +33,7 @@ class JobType(str, Enum):
 class Job:
     """
     Represents a quantum optimization job.
-    
+
     Attributes:
         id: Unique job identifier
         job_type: Type of optimization (QAOA, VQE, Annealing)
@@ -47,22 +49,23 @@ class Job:
         progress: Execution progress (0-100)
         webhook_url: URL for completion notification
     """
+
     id: str
     job_type: JobType
     status: JobStatus
     backend: str
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    config: Dict[str, Any] = field(default_factory=dict)
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    updated_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    config: dict[str, Any] = field(default_factory=dict)
+    result: dict[str, Any] | None = None
+    error: str | None = None
     progress: float = 0.0
-    webhook_url: Optional[str] = None
-    
+    webhook_url: str | None = None
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Job":
+    def from_dict(cls, data: dict[str, Any]) -> Job:
         """Create Job from API response dictionary."""
         # Parse timestamps
         created_at = data.get("created_at")
@@ -70,28 +73,28 @@ class Job:
             created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
         elif created_at is None:
             created_at = datetime.now()
-            
+
         updated_at = data.get("updated_at")
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
-            
+
         started_at = data.get("started_at")
         if isinstance(started_at, str):
             started_at = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-            
+
         completed_at = data.get("completed_at")
         if isinstance(completed_at, str):
             completed_at = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
-        
+
         # Parse enums
         job_type = data.get("job_type", "qaoa")
         if isinstance(job_type, str):
             job_type = JobType(job_type.lower())
-            
+
         status = data.get("status", "pending")
         if isinstance(status, str):
             status = JobStatus(status.lower())
-        
+
         return cls(
             id=data.get("id", data.get("job_id", "")),
             job_type=job_type,
@@ -107,8 +110,8 @@ class Job:
             progress=data.get("progress", 0.0),
             webhook_url=data.get("webhook_url"),
         )
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert Job to dictionary."""
         return {
             "id": self.id,
@@ -125,19 +128,19 @@ class Job:
             "progress": self.progress,
             "webhook_url": self.webhook_url,
         }
-    
+
     @property
     def is_complete(self) -> bool:
         """Check if job has finished (completed, failed, or cancelled)."""
         return self.status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]
-    
+
     @property
     def is_successful(self) -> bool:
         """Check if job completed successfully."""
         return self.status == JobStatus.COMPLETED
-    
+
     @property
-    def duration(self) -> Optional[float]:
+    def duration(self) -> float | None:
         """Get job duration in seconds, if completed."""
         if self.started_at and self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()
@@ -148,7 +151,7 @@ class Job:
 class QAOAConfig:
     """
     Configuration for QAOA optimization jobs.
-    
+
     Attributes:
         p: Number of QAOA layers (circuit depth parameter)
         shots: Number of measurement shots
@@ -156,13 +159,14 @@ class QAOAConfig:
         initial_params: Initial variational parameters
         max_iterations: Maximum optimizer iterations
     """
+
     p: int = 1
     shots: int = 1000
     optimizer: str = "COBYLA"
-    initial_params: Optional[List[float]] = None
+    initial_params: list[float] | None = None
     max_iterations: int = 100
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "p": self.p,
@@ -173,11 +177,11 @@ class QAOAConfig:
         }
 
 
-@dataclass  
+@dataclass
 class VQEConfig:
     """
     Configuration for VQE optimization jobs.
-    
+
     Attributes:
         ansatz: Variational ansatz type (uccsd, hardware_efficient, etc.)
         shots: Number of measurement shots
@@ -185,13 +189,14 @@ class VQEConfig:
         initial_params: Initial variational parameters
         max_iterations: Maximum optimizer iterations
     """
+
     ansatz: str = "uccsd"
     shots: int = 1000
     optimizer: str = "COBYLA"
-    initial_params: Optional[List[float]] = None
+    initial_params: list[float] | None = None
     max_iterations: int = 100
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "ansatz": self.ansatz,
@@ -206,19 +211,20 @@ class VQEConfig:
 class AnnealingConfig:
     """
     Configuration for quantum annealing jobs.
-    
+
     Attributes:
         num_reads: Number of annealing reads/samples
         annealing_time: Annealing time in microseconds
         chain_strength: Chain strength for embedding
         auto_scale: Whether to auto-scale problem
     """
+
     num_reads: int = 1000
     annealing_time: int = 20
-    chain_strength: Optional[float] = None
+    chain_strength: float | None = None
     auto_scale: bool = True
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "num_reads": self.num_reads,
@@ -232,7 +238,7 @@ class AnnealingConfig:
 class CostEstimate:
     """
     Cost estimate for a quantum job.
-    
+
     Attributes:
         backend: Target quantum backend
         job_type: Type of optimization job
@@ -243,17 +249,18 @@ class CostEstimate:
         breakdown: Detailed cost breakdown
         notes: Additional notes about pricing
     """
+
     backend: str
     job_type: str
     estimated_cost_usd: float
     estimated_time_seconds: float
     shots: int
     currency: str = "USD"
-    breakdown: Optional[Dict[str, float]] = None
-    notes: Optional[str] = None
-    
+    breakdown: dict[str, float] | None = None
+    notes: str | None = None
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CostEstimate":
+    def from_dict(cls, data: dict[str, Any]) -> CostEstimate:
         """Create CostEstimate from API response dictionary."""
         return cls(
             backend=data.get("backend", "unknown"),
@@ -265,8 +272,8 @@ class CostEstimate:
             breakdown=data.get("breakdown"),
             notes=data.get("notes"),
         )
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "backend": self.backend,
@@ -284,7 +291,7 @@ class CostEstimate:
 class QuantumBackend:
     """
     Represents a quantum computing backend.
-    
+
     Attributes:
         name: Backend identifier
         provider: Backend provider (IBM, AWS, D-Wave, etc.)
@@ -295,17 +302,18 @@ class QuantumBackend:
         pricing: Pricing information
         features: Supported features
     """
+
     name: str
     provider: str
     backend_type: str
     num_qubits: int
     status: str = "online"
     queue_length: int = 0
-    pricing: Optional[Dict[str, Any]] = None
-    features: List[str] = field(default_factory=list)
-    
+    pricing: dict[str, Any] | None = None
+    features: list[str] = field(default_factory=list)
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "QuantumBackend":
+    def from_dict(cls, data: dict[str, Any]) -> QuantumBackend:
         """Create QuantumBackend from API response dictionary."""
         return cls(
             name=data.get("name", "unknown"),
@@ -317,8 +325,8 @@ class QuantumBackend:
             pricing=data.get("pricing"),
             features=data.get("features", []),
         )
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "name": self.name,
@@ -330,7 +338,7 @@ class QuantumBackend:
             "pricing": self.pricing,
             "features": self.features,
         }
-    
+
     @property
     def is_available(self) -> bool:
         """Check if backend is available for jobs."""

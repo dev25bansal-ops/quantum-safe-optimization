@@ -5,8 +5,8 @@ Defines the protocol for optimization algorithms including classical,
 quantum, and hybrid approaches.
 """
 
-from typing import Any, Protocol, runtime_checkable
 from collections.abc import Callable
+from typing import Any, Protocol, runtime_checkable
 
 from qsop.domain.models.problem import OptimizationProblem
 from qsop.domain.models.result import OptimizationResult

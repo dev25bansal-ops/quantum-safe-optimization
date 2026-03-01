@@ -5,12 +5,12 @@ Provides signing and verification with canonicalization support.
 """
 
 from qsop.crypto.signing.signatures import (
+    MultiSigner,
+    SignatureBundle,
     Signer,
     Verifier,
-    SignatureBundle,
     canonicalize,
     generate_keypair,
-    MultiSigner,
 )
 
 __all__ = [

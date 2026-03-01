@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Callable
+from collections.abc import Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -19,15 +19,15 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: Callable[[Request], Response]
     ) -> Response:
         request_id = request.headers.get(REQUEST_ID_HEADER)
-        
+
         if not request_id:
             request_id = str(uuid.uuid4())
-        
+
         request.state.request_id = request_id
-        
+
         response = await call_next(request)
         response.headers[REQUEST_ID_HEADER] = request_id
-        
+
         return response
 
 

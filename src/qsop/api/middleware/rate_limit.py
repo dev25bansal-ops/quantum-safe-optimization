@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -30,7 +29,7 @@ class RateLimitBucket:
     def consume(self, now: float, tokens: int = 1) -> tuple[bool, int, int]:
         """
         Try to consume tokens from the bucket.
-        
+
         Returns:
             tuple of (allowed, remaining, reset_seconds)
         """
@@ -64,7 +63,7 @@ class RateLimitStore:
     ) -> tuple[bool, int, int]:
         """
         Check and update rate limit for a key.
-        
+
         Returns:
             tuple of (allowed, remaining, reset_seconds)
         """
@@ -153,11 +152,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         tenant_id = getattr(request.state, "tenant_id", None)
         if tenant_id:
             return f"tenant:{tenant_id}"
-        
+
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
             ip = forwarded.split(",")[0].strip()
         else:
             ip = request.client.host if request.client else "unknown"
-        
+
         return f"ip:{ip}"

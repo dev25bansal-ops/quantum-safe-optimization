@@ -5,10 +5,11 @@ Defines the core structures for representing optimization problems including
 variables, constraints, and problem metadata.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 from uuid import UUID, uuid4
 
 
@@ -173,9 +174,7 @@ class OptimizationProblem:
     metadata: ProblemMetadata = field(default_factory=ProblemMetadata)
     minimize: bool = True
     gradient: Callable[[dict[str, float]], dict[str, float]] | None = None
-    hessian: (
-        Callable[[dict[str, float]], dict[str, dict[str, float]]] | None
-    ) = None
+    hessian: Callable[[dict[str, float]], dict[str, dict[str, float]]] | None = None
 
     def __post_init__(self) -> None:
         """Validate problem configuration."""
@@ -228,9 +227,7 @@ class OptimizationProblem:
         if isinstance(values, dict):
             return self.objective(values)
         # Convert list to dict using variable names
-        value_dict = {
-            self.variables[i].name: values[i] for i in range(len(values))
-        }
+        value_dict = {self.variables[i].name: values[i] for i in range(len(values))}
         return self.objective(value_dict)
 
     def check_constraints(self, values: dict[str, float]) -> dict[str, bool]:
@@ -274,11 +271,14 @@ class OptimizationProblem:
             Array with lower bounds in column 0, upper bounds in column 1.
         """
         import numpy as np
+
         bounds = self.get_bounds()
-        return np.array([
-            [lb if lb is not None else -np.inf, ub if ub is not None else np.inf]
-            for lb, ub in bounds
-        ])
+        return np.array(
+            [
+                [lb if lb is not None else -np.inf, ub if ub is not None else np.inf]
+                for lb, ub in bounds
+            ]
+        )
 
     def get_initial_point(self) -> dict[str, float]:
         """
@@ -289,6 +289,5 @@ class OptimizationProblem:
             Uses 0.0 for variables without specified initial values.
         """
         return {
-            v.name: v.initial_value if v.initial_value is not None else 0.0
-            for v in self.variables
+            v.name: v.initial_value if v.initial_value is not None else 0.0 for v in self.variables
         }

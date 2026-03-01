@@ -2,16 +2,18 @@
 Cost estimation router - Estimate costs for quantum backend jobs.
 """
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
 from enum import Enum
+from typing import Any
+
+from fastapi import APIRouter
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/costs", tags=["Cost Estimation"])
 
 
 class JobTypeEnum(str, Enum):
     """Supported job types."""
+
     QAOA = "qaoa"
     VQE = "vqe"
     ANNEALING = "annealing"
@@ -19,6 +21,7 @@ class JobTypeEnum(str, Enum):
 
 class QuantumBackendEnum(str, Enum):
     """Supported quantum backends."""
+
     SIMULATOR = "simulator"
     IBM_QUANTUM = "ibm_quantum"
     IBM_BRISBANE = "ibm_brisbane"
@@ -37,13 +40,14 @@ class QuantumBackendEnum(str, Enum):
 
 class CostEstimateRequest(BaseModel):
     """Request model for cost estimation."""
+
     job_type: JobTypeEnum = Field(..., description="Type of quantum job")
     backend: str = Field(..., description="Target quantum backend")
     shots: int = Field(default=1000, ge=1, le=100000, description="Number of shots/reads")
-    circuit_depth: Optional[int] = Field(default=None, ge=1, description="Estimated circuit depth")
-    num_qubits: Optional[int] = Field(default=None, ge=1, le=5000, description="Number of qubits")
-    problem_size: Optional[int] = Field(default=None, ge=1, description="Size of optimization problem")
-    
+    circuit_depth: int | None = Field(default=None, ge=1, description="Estimated circuit depth")
+    num_qubits: int | None = Field(default=None, ge=1, le=5000, description="Number of qubits")
+    problem_size: int | None = Field(default=None, ge=1, description="Size of optimization problem")
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -51,13 +55,14 @@ class CostEstimateRequest(BaseModel):
                 "backend": "ibm_quantum",
                 "shots": 10000,
                 "circuit_depth": 50,
-                "num_qubits": 20
+                "num_qubits": 20,
             }
         }
 
 
 class CostBreakdown(BaseModel):
     """Detailed cost breakdown."""
+
     compute_cost: float = Field(..., description="Core compute cost")
     queue_cost: float = Field(default=0.0, description="Queue/priority cost")
     data_transfer_cost: float = Field(default=0.0, description="Data transfer cost")
@@ -66,6 +71,7 @@ class CostBreakdown(BaseModel):
 
 class CostEstimateResponse(BaseModel):
     """Response model for cost estimation."""
+
     backend: str
     job_type: str
     estimated_cost_usd: float = Field(..., description="Total estimated cost in USD")
@@ -73,9 +79,9 @@ class CostEstimateResponse(BaseModel):
     shots: int
     currency: str = "USD"
     breakdown: CostBreakdown
-    notes: Optional[str] = None
+    notes: str | None = None
     pricing_tier: str = Field(default="standard", description="Pricing tier applied")
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -89,10 +95,10 @@ class CostEstimateResponse(BaseModel):
                     "compute_cost": 2.00,
                     "queue_cost": 0.25,
                     "data_transfer_cost": 0.15,
-                    "storage_cost": 0.10
+                    "storage_cost": 0.10,
                 },
                 "notes": "Prices are estimates and may vary based on queue length and availability.",
-                "pricing_tier": "standard"
+                "pricing_tier": "standard",
             }
         }
 
@@ -106,9 +112,8 @@ BACKEND_PRICING = {
         "per_qubit": 0.0,
         "per_second": 0.001,
         "queue_multiplier": 1.0,
-        "notes": "Local simulator - compute costs only"
+        "notes": "Local simulator - compute costs only",
     },
-    
     # IBM Quantum
     "ibm_quantum": {
         "base_rate": 1.60,
@@ -116,7 +121,7 @@ BACKEND_PRICING = {
         "per_qubit": 0.01,
         "per_second": 0.02,
         "queue_multiplier": 1.2,
-        "notes": "IBM Quantum Network pricing. Actual costs depend on your plan."
+        "notes": "IBM Quantum Network pricing. Actual costs depend on your plan.",
     },
     "ibm_brisbane": {
         "base_rate": 1.60,
@@ -124,7 +129,7 @@ BACKEND_PRICING = {
         "per_qubit": 0.01,
         "per_second": 0.02,
         "queue_multiplier": 1.5,
-        "notes": "IBM Brisbane (127 qubits). Premium pricing due to high demand."
+        "notes": "IBM Brisbane (127 qubits). Premium pricing due to high demand.",
     },
     "ibm_osaka": {
         "base_rate": 1.60,
@@ -132,9 +137,8 @@ BACKEND_PRICING = {
         "per_qubit": 0.01,
         "per_second": 0.02,
         "queue_multiplier": 1.3,
-        "notes": "IBM Osaka (127 qubits)."
+        "notes": "IBM Osaka (127 qubits).",
     },
-    
     # AWS Braket
     "aws_braket": {
         "base_rate": 0.30,
@@ -142,7 +146,7 @@ BACKEND_PRICING = {
         "per_qubit": 0.005,
         "per_second": 0.015,
         "queue_multiplier": 1.0,
-        "notes": "AWS Braket on-demand pricing."
+        "notes": "AWS Braket on-demand pricing.",
     },
     "aws_sv1": {
         "base_rate": 0.0,
@@ -150,7 +154,7 @@ BACKEND_PRICING = {
         "per_qubit": 0.0,
         "per_second": 0.075,  # $4.50/min = $0.075/sec
         "queue_multiplier": 1.0,
-        "notes": "AWS SV1 state vector simulator. Billed per minute."
+        "notes": "AWS SV1 state vector simulator. Billed per minute.",
     },
     "aws_dm1": {
         "base_rate": 0.0,
@@ -158,7 +162,7 @@ BACKEND_PRICING = {
         "per_qubit": 0.0,
         "per_second": 0.075,
         "queue_multiplier": 1.0,
-        "notes": "AWS DM1 density matrix simulator."
+        "notes": "AWS DM1 density matrix simulator.",
     },
     "aws_tn1": {
         "base_rate": 0.0,
@@ -166,9 +170,8 @@ BACKEND_PRICING = {
         "per_qubit": 0.0,
         "per_second": 0.275,  # Higher for tensor network
         "queue_multiplier": 1.0,
-        "notes": "AWS TN1 tensor network simulator."
+        "notes": "AWS TN1 tensor network simulator.",
     },
-    
     # Azure Quantum
     "azure_quantum": {
         "base_rate": 0.50,
@@ -176,15 +179,15 @@ BACKEND_PRICING = {
         "per_qubit": 0.008,
         "per_second": 0.02,
         "queue_multiplier": 1.1,
-        "notes": "Azure Quantum general pricing."
+        "notes": "Azure Quantum general pricing.",
     },
     "azure_ionq": {
         "base_rate": 0.97,
         "per_shot": 0.00003,  # ~$0.97 per 1-qubit gate
-        "per_qubit": 0.22,     # 2-qubit gate premium
+        "per_qubit": 0.22,  # 2-qubit gate premium
         "per_second": 0.0,
         "queue_multiplier": 1.2,
-        "notes": "IonQ on Azure. Pricing based on gate count."
+        "notes": "IonQ on Azure. Pricing based on gate count.",
     },
     "azure_quantinuum": {
         "base_rate": 5.00,
@@ -192,9 +195,8 @@ BACKEND_PRICING = {
         "per_qubit": 0.50,
         "per_second": 0.0,
         "queue_multiplier": 1.5,
-        "notes": "Quantinuum H-Series. Premium trapped-ion pricing."
+        "notes": "Quantinuum H-Series. Premium trapped-ion pricing.",
     },
-    
     # D-Wave (Quantum Annealing)
     "dwave": {
         "base_rate": 0.0,
@@ -202,7 +204,7 @@ BACKEND_PRICING = {
         "per_qubit": 0.0,
         "per_second": 0.22,  # ~$220/hour
         "queue_multiplier": 1.0,
-        "notes": "D-Wave Leap pricing. Billed per second of QPU access."
+        "notes": "D-Wave Leap pricing. Billed per second of QPU access.",
     },
     "dwave_advantage": {
         "base_rate": 0.0,
@@ -210,7 +212,7 @@ BACKEND_PRICING = {
         "per_qubit": 0.0,
         "per_second": 0.22,
         "queue_multiplier": 1.0,
-        "notes": "D-Wave Advantage (5000+ qubits). Annealing time based."
+        "notes": "D-Wave Advantage (5000+ qubits). Annealing time based.",
     },
     "dwave_2000q": {
         "base_rate": 0.0,
@@ -218,7 +220,7 @@ BACKEND_PRICING = {
         "per_qubit": 0.0,
         "per_second": 0.18,
         "queue_multiplier": 1.0,
-        "notes": "D-Wave 2000Q (legacy). Lower rate."
+        "notes": "D-Wave 2000Q (legacy). Lower rate.",
     },
 }
 
@@ -229,7 +231,7 @@ DEFAULT_PRICING = {
     "per_qubit": 0.01,
     "per_second": 0.02,
     "queue_multiplier": 1.0,
-    "notes": "Estimated pricing for unknown backend."
+    "notes": "Estimated pricing for unknown backend.",
 }
 
 
@@ -237,24 +239,24 @@ def estimate_execution_time(
     job_type: str,
     backend: str,
     shots: int,
-    circuit_depth: Optional[int],
-    num_qubits: Optional[int],
-    problem_size: Optional[int],
+    circuit_depth: int | None,
+    num_qubits: int | None,
+    problem_size: int | None,
 ) -> float:
     """
     Estimate job execution time in seconds.
-    
+
     This is a simplified model - real execution times vary significantly
     based on hardware, queue length, and job complexity.
     """
     base_time = 5.0  # Base overhead
-    
+
     # Simulator - fast
     if "simulator" in backend.lower():
         shot_time = shots * 0.0001  # 0.1ms per shot
         qubit_factor = (num_qubits or 10) * 0.1
         return base_time + shot_time + qubit_factor
-    
+
     # D-Wave annealing
     if "dwave" in backend.lower():
         annealing_time = 20  # microseconds default
@@ -263,27 +265,27 @@ def estimate_execution_time(
         # Total time = setup + (annealing_time * num_reads) + readout
         total_us = 1000 + (annealing_time * shots) + (shots * 10)
         return base_time + (total_us / 1_000_000) + 30  # Add queue/setup overhead
-    
+
     # Gate-based quantum computers
     if job_type == "qaoa":
         # QAOA: multiple optimization iterations
         iterations = 50  # Typical COBYLA iterations
         depth = circuit_depth or 10
         qubits = num_qubits or 10
-        
+
         # Time per circuit execution
         circuit_time = (depth * qubits * 0.001) + (shots * 0.001)
         return base_time + (circuit_time * iterations) + 60  # Queue overhead
-    
+
     elif job_type == "vqe":
         # VQE: more iterations typically
         iterations = 100
         depth = circuit_depth or 20
         qubits = num_qubits or 10
-        
+
         circuit_time = (depth * qubits * 0.0015) + (shots * 0.001)
         return base_time + (circuit_time * iterations) + 60
-    
+
     # Default
     return base_time + (shots * 0.01) + 60
 
@@ -293,39 +295,39 @@ def calculate_cost(
     backend: str,
     shots: int,
     execution_time: float,
-    num_qubits: Optional[int],
+    num_qubits: int | None,
 ) -> tuple[float, CostBreakdown]:
     """
     Calculate estimated cost for a quantum job.
-    
+
     Returns total cost and breakdown.
     """
     pricing = BACKEND_PRICING.get(backend.lower(), DEFAULT_PRICING)
-    
+
     # Base compute cost
     compute_cost = pricing["base_rate"]
     compute_cost += shots * pricing["per_shot"]
     compute_cost += (num_qubits or 10) * pricing["per_qubit"]
     compute_cost += execution_time * pricing["per_second"]
-    
+
     # Queue cost (priority factor)
     queue_cost = compute_cost * (pricing["queue_multiplier"] - 1.0)
-    
+
     # Data transfer (minimal for most jobs)
     data_transfer_cost = 0.05 if compute_cost > 0.5 else 0.01
-    
+
     # Storage (results storage)
     storage_cost = 0.02 if shots > 1000 else 0.01
-    
+
     breakdown = CostBreakdown(
         compute_cost=round(compute_cost, 4),
         queue_cost=round(queue_cost, 4),
         data_transfer_cost=round(data_transfer_cost, 4),
         storage_cost=round(storage_cost, 4),
     )
-    
+
     total_cost = compute_cost + queue_cost + data_transfer_cost + storage_cost
-    
+
     return round(total_cost, 2), breakdown
 
 
@@ -333,13 +335,13 @@ def calculate_cost(
 async def estimate_cost(request: CostEstimateRequest) -> CostEstimateResponse:
     """
     Estimate the cost of a quantum job before submission.
-    
+
     Provides pricing estimates for various quantum backends including:
     - IBM Quantum (gate-based)
     - AWS Braket (simulators and QPUs)
     - Azure Quantum (IonQ, Quantinuum)
     - D-Wave (quantum annealing)
-    
+
     **Note**: These are estimates only. Actual costs may vary based on:
     - Current queue length and wait times
     - Your pricing tier/subscription
@@ -360,7 +362,7 @@ async def estimate_cost(request: CostEstimateRequest) -> CostEstimateResponse:
             matched = request.backend
     else:
         matched = backend_lower
-    
+
     # Estimate execution time
     execution_time = estimate_execution_time(
         job_type=request.job_type.value,
@@ -370,7 +372,7 @@ async def estimate_cost(request: CostEstimateRequest) -> CostEstimateResponse:
         num_qubits=request.num_qubits,
         problem_size=request.problem_size,
     )
-    
+
     # Calculate cost
     total_cost, breakdown = calculate_cost(
         job_type=request.job_type.value,
@@ -379,10 +381,10 @@ async def estimate_cost(request: CostEstimateRequest) -> CostEstimateResponse:
         execution_time=execution_time,
         num_qubits=request.num_qubits,
     )
-    
+
     # Get notes
     pricing = BACKEND_PRICING.get(matched, DEFAULT_PRICING)
-    
+
     return CostEstimateResponse(
         backend=request.backend,
         job_type=request.job_type.value,
@@ -397,29 +399,31 @@ async def estimate_cost(request: CostEstimateRequest) -> CostEstimateResponse:
 
 
 @router.get("/backends")
-async def list_backend_pricing() -> Dict[str, Any]:
+async def list_backend_pricing() -> dict[str, Any]:
     """
     Get pricing information for all supported backends.
-    
+
     Returns base rates, per-shot costs, and other pricing details
     for planning quantum computing budgets.
     """
     backend_info = []
-    
+
     for backend, pricing in BACKEND_PRICING.items():
-        backend_info.append({
-            "name": backend,
-            "base_rate_usd": pricing["base_rate"],
-            "per_shot_usd": pricing["per_shot"],
-            "per_qubit_usd": pricing["per_qubit"],
-            "per_second_usd": pricing["per_second"],
-            "notes": pricing.get("notes", ""),
-        })
-    
+        backend_info.append(
+            {
+                "name": backend,
+                "base_rate_usd": pricing["base_rate"],
+                "per_shot_usd": pricing["per_shot"],
+                "per_qubit_usd": pricing["per_qubit"],
+                "per_second_usd": pricing["per_second"],
+                "notes": pricing.get("notes", ""),
+            }
+        )
+
     return {
         "backends": backend_info,
         "currency": "USD",
-        "disclaimer": "Prices are estimates and subject to change. Contact providers for exact pricing."
+        "disclaimer": "Prices are estimates and subject to change. Contact providers for exact pricing.",
     }
 
 
@@ -427,16 +431,16 @@ async def list_backend_pricing() -> Dict[str, Any]:
 async def compare_backend_costs(
     job_type: JobTypeEnum,
     shots: int = 1000,
-    num_qubits: Optional[int] = 10,
-    circuit_depth: Optional[int] = 20,
-) -> Dict[str, Any]:
+    num_qubits: int | None = 10,
+    circuit_depth: int | None = 20,
+) -> dict[str, Any]:
     """
     Compare costs across all backends for a given job configuration.
-    
+
     Useful for selecting the most cost-effective backend for your workload.
     """
     comparisons = []
-    
+
     for backend in BACKEND_PRICING.keys():
         # Skip simulators for real hardware comparison
         execution_time = estimate_execution_time(
@@ -447,7 +451,7 @@ async def compare_backend_costs(
             num_qubits=num_qubits,
             problem_size=None,
         )
-        
+
         total_cost, breakdown = calculate_cost(
             job_type=job_type.value,
             backend=backend,
@@ -455,17 +459,19 @@ async def compare_backend_costs(
             execution_time=execution_time,
             num_qubits=num_qubits,
         )
-        
-        comparisons.append({
-            "backend": backend,
-            "estimated_cost_usd": total_cost,
-            "estimated_time_seconds": round(execution_time, 1),
-            "cost_per_shot": round(total_cost / shots, 6) if shots > 0 else 0,
-        })
-    
+
+        comparisons.append(
+            {
+                "backend": backend,
+                "estimated_cost_usd": total_cost,
+                "estimated_time_seconds": round(execution_time, 1),
+                "cost_per_shot": round(total_cost / shots, 6) if shots > 0 else 0,
+            }
+        )
+
     # Sort by cost
     comparisons.sort(key=lambda x: x["estimated_cost_usd"])
-    
+
     return {
         "job_type": job_type.value,
         "shots": shots,
@@ -473,5 +479,5 @@ async def compare_backend_costs(
         "circuit_depth": circuit_depth,
         "comparisons": comparisons,
         "cheapest": comparisons[0]["backend"] if comparisons else None,
-        "note": "Costs are estimates. Simulator is typically free but results may differ from real hardware."
+        "note": "Costs are estimates. Simulator is typically free but results may differ from real hardware.",
     }

@@ -6,11 +6,18 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, update, func
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from qsop.domain.models.job import JobResult, JobSpec, JobStatus, AlgorithmSettings, BackendSettings, CryptoSettings
+from qsop.domain.models.job import (
+    AlgorithmSettings,
+    BackendSettings,
+    JobResult,
+    JobSpec,
+    JobStatus,
+)
 from qsop.domain.models.problem import OptimizationProblem
+
 from .models import JobModel
 
 
@@ -36,7 +43,9 @@ class SQLAlchemyJobRepository:
             ),
             backend=BackendSettings(
                 backend_name=model.backend,
-            ) if model.backend else None,
+            )
+            if model.backend
+            else None,
             priority=model.priority,
             owner_id=model.tenant_id,
             created_at=model.created_at,
@@ -44,14 +53,14 @@ class SQLAlchemyJobRepository:
                 "name": model.name,
                 "callback_url": model.callback_url,
                 "progress": model.progress,
-            }
+            },
         )
 
     def _to_domain_result(self, model: JobModel) -> JobResult | None:
         """Map ORM model to domain JobResult."""
         if model.status != "completed" and model.status != "failed":
             return None
-        
+
         return JobResult(
             job_id=model.id,
             status=JobStatus(model.status),
@@ -60,7 +69,7 @@ class SQLAlchemyJobRepository:
             completed_at=model.completed_at,
             metadata={
                 "progress": model.progress,
-            }
+            },
         )
 
     # API Router compatibility methods
@@ -104,7 +113,7 @@ class SQLAlchemyJobRepository:
         )
         if tenant_id:
             stmt = stmt.where(JobModel.tenant_id == tenant_id)
-        
+
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -121,25 +130,20 @@ class SQLAlchemyJobRepository:
             JobModel.tenant_id == tenant_id,
             JobModel.deleted_at.is_(None),
         )
-        
+
         if status:
             base_query = base_query.where(JobModel.status == status)
-        
+
         # Count query
         count_stmt = select(func.count()).select_from(base_query.subquery())
         total_result = await self.session.execute(count_stmt)
         total = total_result.scalar() or 0
-        
+
         # Data query with pagination
-        stmt = (
-            base_query
-            .order_by(JobModel.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = base_query.order_by(JobModel.created_at.desc()).limit(limit).offset(offset)
         result = await self.session.execute(stmt)
         jobs = list(result.scalars().all())
-        
+
         return jobs, total
 
     # JobStore Port Implementation
@@ -181,24 +185,21 @@ class SQLAlchemyJobRepository:
         """Update job status."""
         status_val = status.value if isinstance(status, JobStatus) else status
         update_data: dict[str, Any] = {"status": status_val}
-        
+
         if error_message is not None:
             update_data["error_message"] = error_message
         if progress is not None:
             update_data["progress"] = progress
-        
+
         # Set timing fields based on status
         now = datetime.utcnow()
         if status_val == "running":
             update_data["started_at"] = now
         elif status_val in ("completed", "failed", "cancelled"):
             update_data["completed_at"] = now
-        
+
         stmt = (
-            update(JobModel)
-            .where(JobModel.id == job_id)
-            .values(**update_data)
-            .returning(JobModel)
+            update(JobModel).where(JobModel.id == job_id).values(**update_data).returning(JobModel)
         )
         result = await self.session.execute(stmt)
         await self.session.flush()
@@ -231,7 +232,7 @@ class SQLAlchemyJobRepository:
     ) -> list[JobSpec]:
         """List jobs matching the given criteria."""
         stmt = select(JobModel).where(JobModel.deleted_at.is_(None))
-        
+
         if status:
             stmt = stmt.where(JobModel.status == status.value)
         if owner_id:
@@ -240,7 +241,7 @@ class SQLAlchemyJobRepository:
             stmt = stmt.where(JobModel.created_at >= created_after)
         if created_before:
             stmt = stmt.where(JobModel.created_at < created_before)
-            
+
         stmt = stmt.order_by(JobModel.created_at.desc()).limit(limit).offset(offset)
         result = await self.session.execute(stmt)
         return [self._to_domain_spec(row) for row in result.scalars().all()]
@@ -256,7 +257,7 @@ class SQLAlchemyJobRepository:
             stmt = stmt.where(JobModel.status == status.value)
         if owner_id:
             stmt = stmt.where(JobModel.tenant_id == owner_id)
-        
+
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
@@ -276,7 +277,7 @@ class SQLAlchemyJobRepository:
             stmt = stmt.order_by(JobModel.priority.desc(), JobModel.created_at.asc())
         else:
             stmt = stmt.order_by(JobModel.created_at.asc())
-        
+
         stmt = stmt.limit(1)
         result = await self.session.execute(stmt)
         job = result.scalar_one_or_none()
@@ -308,12 +309,8 @@ class SQLAlchemyJobRepository:
         update_data: dict[str, Any] = {"progress": progress}
         if estimated_completion:
             update_data["estimated_completion"] = estimated_completion
-        
-        stmt = (
-            update(JobModel)
-            .where(JobModel.id == job_id)
-            .values(**update_data)
-        )
+
+        stmt = update(JobModel).where(JobModel.id == job_id).values(**update_data)
         await self.session.execute(stmt)
         await self.session.flush()
 
@@ -360,15 +357,13 @@ class SQLAlchemyJobRepository:
         threshold = datetime.utcnow()
         # Calculate threshold based on minutes
         from datetime import timedelta
+
         threshold = threshold - timedelta(minutes=stale_threshold_minutes)
-        
-        stmt = (
-            select(JobModel)
-            .where(
-                JobModel.status == "running",
-                JobModel.started_at < threshold,
-                JobModel.deleted_at.is_(None),
-            )
+
+        stmt = select(JobModel).where(
+            JobModel.status == "running",
+            JobModel.started_at < threshold,
+            JobModel.deleted_at.is_(None),
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
