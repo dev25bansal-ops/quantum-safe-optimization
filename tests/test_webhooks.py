@@ -183,7 +183,7 @@ async def test_webhook_retry_on_failure():
                 status="completed",
                 result={},
             )
-except Exception:  # noqa: BLE001 - Test failure ignored
+        except Exception:  # noqa: BLE001 - Test failure ignored
             pass  # May or may not retry depending on implementation
 
 
@@ -218,7 +218,7 @@ async def test_webhook_invalid_url():
         await send_webhook_notification(
             callback_url="not-a-valid-url", job_id="invalid-url-job", status="completed", result={}
         )
-except Exception:  # noqa: BLE001 - Test failure ignored
+    except Exception:  # noqa: BLE001 - Test failure ignored
         pass  # Expected to fail gracefully
 
 
@@ -382,7 +382,7 @@ async def test_webhook_http_error_codes():
                     status="completed",
                     result={},
                 )
-except Exception:  # noqa: BLE001 - Test failure ignored
+            except Exception:  # noqa: BLE001 - Test failure ignored
                 pass  # Some implementations may raise
 
 
@@ -402,5 +402,5 @@ async def test_webhook_ssl_error():
                 status="completed",
                 result={},
             )
-except Exception:  # noqa: BLE001 - Test failure ignored
+        except Exception:  # noqa: BLE001 - Test failure ignored
             pass  # Expected to fail

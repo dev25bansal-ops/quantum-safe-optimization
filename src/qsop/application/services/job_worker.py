@@ -5,6 +5,7 @@ Consumes job.created events and orchestrates workflow execution.
 """
 
 import logging
+from typing import Optional
 from uuid import UUID
 
 from qsop.domain.models.job import JobResult, JobStatus

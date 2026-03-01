@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Allow: /dashboard
+
+Disallow: /api/
+Disallow: /admin/
+Disallow: /private/
+Disallow: /_/source/
+Disallow: /logs/
+Disallow: /*?*
+
+Sitemap: https://quantum-safe-optimization.com/sitemap.xml

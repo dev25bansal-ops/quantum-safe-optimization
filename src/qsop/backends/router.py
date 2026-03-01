@@ -169,9 +169,5 @@ class FailoverRouter(BackendRouter):
             backends = self.pool.list_backends(only_online=True)
             if not backends:
                 raise RuntimeError("No online quantum backends available even for failover")
-
-            except RuntimeError as e:
-                raise RuntimeError("No online quantum backends available even for failover") from e
-
             # Use least busy as absolute fallback
             return min(backends, key=lambda b: b.capabilities.pending_jobs)
