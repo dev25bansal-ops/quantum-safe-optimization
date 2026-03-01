@@ -70,3 +70,9 @@ Thumbs.db
 *.pem
 *.key
 secrets/
+
+# Rust build artifacts
+crypto/target/
+**/*.rlib
+**/*.rmeta
+**/*.pdb
