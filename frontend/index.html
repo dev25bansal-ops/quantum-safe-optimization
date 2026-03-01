@@ -32,6 +32,7 @@
     <title>QuantumSafe Optimize | Quantum-Safe Secure Optimization Platform</title>
     
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/components.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <!-- Theme Color -->
@@ -1458,7 +1459,31 @@ result = client.optimize(
                 <button class="btn btn-primary" onclick="goToDashboard()">Go to Dashboard</button>
             </div>
         </div>
-    </div>
+     </div>
+
+    <!-- Component System -->
+    <script type="module">
+        import Component from './js/components/Component.js';
+        import ToastContainer from './js/components/ToastContainer.js';
+        import Modal from './js/components/Modal.js';
+        import ConfirmModal from './js/components/Modal.js';
+        
+        // Expose to global scope for compatibility
+        window.Component = Component;
+        window.ToastContainer = ToastContainer;
+        window.Modal = Modal;
+        window.ConfirmModal = ConfirmModal;
+        
+        // Initialize global toast container
+        window.toastContainer = new ToastContainer();
+        window.toastContainer.mount(document.body);
+        
+        // Make toast functions available globally
+        window.showSuccess = (title, message, duration) => window.toastContainer.success(title, message, duration);
+        window.showError = (title, message, duration) => window.toastContainer.error(title, message, duration);
+        window.showWarning = (title, message, duration) => window.toastContainer.warning(title, message, duration);
+        window.showInfo = (title, message, duration) => window.toastContainer.info(title, message, duration);
+    </script>
 
     <script src="js/main.js"></script>
 </body>
