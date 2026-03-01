@@ -19,7 +19,7 @@ class QuantumMetrics(BaseModel):
     execution_time_ms: float = Field(..., description="Backend execution time in milliseconds")
     queue_time_ms: float | None = Field(None, description="Time spent in queue")
     transpilation_time_ms: float | None = None
-    
+
     # Error metrics (if available)
     readout_error: float | None = None
     gate_error: float | None = None
@@ -40,7 +40,7 @@ class OptimizationResult(BaseModel):
     )
     iterations: int = Field(..., description="Number of optimization iterations")
     converged: bool = Field(..., description="Whether optimization converged")
-    
+
     # Additional solution info
     solution_quality: float | None = Field(
         None,
@@ -73,7 +73,7 @@ class JobResultsResponse(BaseModel):
     algorithm: str
     backend: str
     status: str = "completed"
-    
+
     # Core results
     optimization: OptimizationResult | None = None
     counts: CountsResult | None = None
@@ -81,25 +81,25 @@ class JobResultsResponse(BaseModel):
         None,
         description="Raw backend results (backend-specific format)",
     )
-    
+
     # Metrics
     quantum_metrics: QuantumMetrics
-    
+
     # Timing
     total_time_ms: float
     created_at: datetime
     completed_at: datetime
-    
+
     # Artifacts
     circuit_diagram_url: str | None = None
     results_file_url: str | None = None
-    
+
     # Security
     result_artifact_id: UUID | None = None
     signature: str | None = Field(None, description="Hex-encoded signature of the result")
     is_verified: bool = False
     is_encrypted: bool = True
-    
+
     # Reproducibility
     random_seed: int | None = None
     backend_version: str | None = None

@@ -4,13 +4,13 @@ QAOA (Quantum Approximate Optimization Algorithm) Module
 Provides implementations for various combinatorial optimization problems.
 """
 
-from .runner import QAOARunner
 from .problems import (
+    GraphColoringProblem,
     MaxCutProblem,
     PortfolioProblem,
     TSPProblem,
-    GraphColoringProblem,
 )
+from .runner import QAOARunner
 
 __all__ = [
     "QAOARunner",

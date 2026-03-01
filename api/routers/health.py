@@ -7,22 +7,23 @@ Provides:
 - Detailed health: Full system status with dependencies
 """
 
-import os
 import asyncio
-from datetime import datetime
+import os
 import time
-from typing import Dict, Any, Optional
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from enum import Enum
+from typing import Any
 
-from fastapi import APIRouter, Response, status
 import redis.asyncio as redis
+from fastapi import APIRouter, Response, status
 
 router = APIRouter()
 
 
 class HealthStatus(str, Enum):
     """Health check status values."""
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -31,26 +32,28 @@ class HealthStatus(str, Enum):
 @dataclass
 class ComponentHealth:
     """Health status of a single component."""
+
     name: str
     status: HealthStatus
-    latency_ms: Optional[float] = None
-    message: Optional[str] = None
-    details: Dict[str, Any] = field(default_factory=dict)
+    latency_ms: float | None = None
+    message: str | None = None
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class SystemHealth:
     """Overall system health status."""
+
     status: HealthStatus
     version: str
     environment: str
     timestamp: str
     uptime_seconds: float
-    components: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    components: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 # Track service start time
-_service_start_time: Optional[datetime] = None
+_service_start_time: datetime | None = None
 
 
 def get_uptime() -> float:
@@ -65,11 +68,11 @@ async def check_cosmos_health() -> ComponentHealth:
     """Check Cosmos DB connection health."""
     try:
         from api.db.cosmos import cosmos_manager
-        
+
         start = datetime.utcnow()
         health_status = await cosmos_manager.health_check()
         latency = (datetime.utcnow() - start).total_seconds() * 1000
-        
+
         if health_status.healthy:
             return ComponentHealth(
                 name="cosmos_db",
@@ -100,20 +103,20 @@ async def check_cosmos_health() -> ComponentHealth:
 async def check_redis_health() -> ComponentHealth:
     """Check Redis connection health."""
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    
+
     try:
         start = datetime.utcnow()
         client = redis.from_url(redis_url, decode_responses=True)
-        
+
         # Ping Redis
         await client.ping()
-        
+
         # Get some stats
         info = await client.info("server")
         latency = (datetime.utcnow() - start).total_seconds() * 1000
-        
+
         await client.close()
-        
+
         return ComponentHealth(
             name="redis",
             status=HealthStatus.HEALTHY,
@@ -135,24 +138,24 @@ async def check_crypto_health() -> ComponentHealth:
     """Check PQC crypto module health."""
     try:
         import quantum_safe_crypto as pqc
-        
+
         start = datetime.utcnow()
-        
+
         # Quick test of crypto operations
         kem_keys = pqc.KemKeyPair()
         sign_keys = pqc.SigningKeyPair()
-        
+
         # Test encryption/decryption
         ct, ss1 = pqc.py_kem_encapsulate(kem_keys.public_key)
         ss2 = pqc.py_kem_decapsulate(ct, kem_keys.secret_key)
-        
+
         # Test signing/verification
         msg = b"health_check"
         sig = sign_keys.sign(msg)
         valid = sign_keys.verify(msg, sig)
-        
+
         latency = (datetime.utcnow() - start).total_seconds() * 1000
-        
+
         if ss1 == ss2 and valid:
             # Get supported levels
             levels = pqc.py_get_supported_levels()
@@ -190,15 +193,15 @@ async def check_secrets_health() -> ComponentHealth:
     """Check secrets manager health."""
     try:
         from api.security.secrets_manager import SecretsManager
-        
+
         start = datetime.utcnow()
         manager = SecretsManager.get_instance()
-        
+
         # Try to get a known secret (JWT secret should always exist)
         jwt_secret = await manager.get_secret("jwt-secret", fallback="default")
-        
+
         latency = (datetime.utcnow() - start).total_seconds() * 1000
-        
+
         return ComponentHealth(
             name="secrets_manager",
             status=HealthStatus.HEALTHY,
@@ -219,7 +222,7 @@ async def check_secrets_health() -> ComponentHealth:
 def determine_overall_status(components: list[ComponentHealth]) -> HealthStatus:
     """Determine overall health based on component statuses."""
     statuses = [c.status for c in components]
-    
+
     if all(s == HealthStatus.HEALTHY for s in statuses):
         return HealthStatus.HEALTHY
     elif any(s == HealthStatus.UNHEALTHY for s in statuses):
@@ -234,10 +237,10 @@ def determine_overall_status(components: list[ComponentHealth]) -> HealthStatus:
 
 
 @router.get("/health")
-async def health_check() -> Dict[str, Any]:
+async def health_check() -> dict[str, Any]:
     """
     Basic health check endpoint.
-    
+
     Returns service status and version information.
     Quick response for load balancer health checks.
     """
@@ -250,10 +253,10 @@ async def health_check() -> Dict[str, Any]:
 
 
 @router.get("/health/ready")
-async def readiness_check(response: Response) -> Dict[str, Any]:
+async def readiness_check(response: Response) -> dict[str, Any]:
     """
     Kubernetes readiness probe.
-    
+
     Checks if the service is ready to accept traffic.
     All critical dependencies must be available.
     """
@@ -261,44 +264,44 @@ async def readiness_check(response: Response) -> Dict[str, Any]:
     cosmos_task = asyncio.create_task(check_cosmos_health())
     redis_task = asyncio.create_task(check_redis_health())
     crypto_task = asyncio.create_task(check_crypto_health())
-    
+
     # Wait for all checks (with timeout)
     try:
         results = await asyncio.wait_for(
             asyncio.gather(cosmos_task, redis_task, crypto_task, return_exceptions=True),
             timeout=10.0,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
             "ready": False,
             "reason": "Health checks timed out",
             "timestamp": datetime.utcnow().isoformat(),
         }
-    
+
     # Process results
     components = {}
     all_ready = True
-    
+
     for result in results:
         if isinstance(result, Exception):
             all_ready = False
             continue
-        
+
         components[result.name] = {
             "status": result.status.value,
             "latency_ms": result.latency_ms,
             "message": result.message,
         }
-        
+
         # Critical components must be healthy
         if result.name in {"cosmos_db", "pqc_crypto"}:
             if result.status != HealthStatus.HEALTHY:
                 all_ready = False
-    
+
     if not all_ready:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-    
+
     return {
         "ready": all_ready,
         "components": components,
@@ -307,10 +310,10 @@ async def readiness_check(response: Response) -> Dict[str, Any]:
 
 
 @router.get("/health/live")
-async def liveness_check() -> Dict[str, str]:
+async def liveness_check() -> dict[str, str]:
     """
     Kubernetes liveness probe.
-    
+
     Simple check that the service is alive and responsive.
     Should always return quickly without checking dependencies.
     """
@@ -321,10 +324,10 @@ async def liveness_check() -> Dict[str, str]:
 
 
 @router.get("/health/detailed")
-async def detailed_health_check(response: Response) -> Dict[str, Any]:
+async def detailed_health_check(response: Response) -> dict[str, Any]:
     """
     Detailed health check with all component statuses.
-    
+
     Provides comprehensive system health information for monitoring
     and debugging. Not suitable for frequent polling.
     """
@@ -336,28 +339,30 @@ async def detailed_health_check(response: Response) -> Dict[str, Any]:
         check_secrets_health(),
         return_exceptions=True,
     )
-    
+
     # Process results
     components = []
     for result in checks:
         if isinstance(result, Exception):
-            components.append(ComponentHealth(
-                name="unknown",
-                status=HealthStatus.UNHEALTHY,
-                message=str(result),
-            ))
+            components.append(
+                ComponentHealth(
+                    name="unknown",
+                    status=HealthStatus.UNHEALTHY,
+                    message=str(result),
+                )
+            )
         else:
             components.append(result)
-    
+
     # Determine overall status
     overall_status = determine_overall_status(components)
-    
+
     # Set response status code
     if overall_status == HealthStatus.UNHEALTHY:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     elif overall_status == HealthStatus.DEGRADED:
         response.status_code = status.HTTP_200_OK  # Still operational
-    
+
     # Build response
     health = SystemHealth(
         status=overall_status,
@@ -375,12 +380,12 @@ async def detailed_health_check(response: Response) -> Dict[str, Any]:
             for comp in components
         },
     )
-    
+
     return asdict(health)
 
 
 @router.get("/health/crypto")
-async def crypto_health() -> Dict[str, Any]:
+async def crypto_health() -> dict[str, Any]:
     """
     Post-Quantum Cryptography status endpoint.
 

@@ -9,12 +9,11 @@ and callback management.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import (
     Any,
-    Callable,
-    Generic,
     Protocol,
     TypeVar,
     runtime_checkable,
@@ -64,9 +63,7 @@ class OptimizationHistory:
         """Append a state to the history."""
         self.x_history.append(state.x.copy())
         self.fx_history.append(state.fx)
-        self.gradient_history.append(
-            state.gradient.copy() if state.gradient is not None else None
-        )
+        self.gradient_history.append(state.gradient.copy() if state.gradient is not None else None)
         if state.step_size is not None:
             self.step_sizes.append(state.step_size)
         self.constraint_violations.append(state.constraint_violation)
@@ -233,9 +230,7 @@ class ConvergenceChecker:
 
         if self._prev_x is not None:
             if self.config.relative_tolerance:
-                x_diff = np.linalg.norm(x - self._prev_x) / max(
-                    np.linalg.norm(self._prev_x), 1e-10
-                )
+                x_diff = np.linalg.norm(x - self._prev_x) / max(np.linalg.norm(self._prev_x), 1e-10)
             else:
                 x_diff = np.linalg.norm(x - self._prev_x)
             if x_diff < self.config.xtol:
@@ -384,9 +379,7 @@ class BaseClassicalOptimizer(ABC):
         """
         ...
 
-    def _evaluate_objective(
-        self, objective: ObjectiveFunction, x: NDArray[np.float64]
-    ) -> float:
+    def _evaluate_objective(self, objective: ObjectiveFunction, x: NDArray[np.float64]) -> float:
         """Evaluate objective and track function evaluations."""
         self._n_function_evals += 1
         return objective(x)
@@ -437,7 +430,7 @@ class BaseClassicalOptimizer(ABC):
     def _log(self, message: str) -> None:
         """Log a message if verbose mode is enabled."""
         if self.verbose:
-            print(message)
+            pass
 
     @property
     def name(self) -> str:

@@ -23,6 +23,7 @@ class JobStatus(str, Enum):
 
 from .crypto import CryptoSettings
 
+
 class JobCreate(BaseModel):
     """Request body for creating a new job."""
 

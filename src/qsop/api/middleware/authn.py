@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import jwt
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -57,7 +57,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         auth_context: AuthContext | None = None
 
         if auth_header.startswith(BEARER_PREFIX):
-            token = auth_header[len(BEARER_PREFIX):]
+            token = auth_header[len(BEARER_PREFIX) :]
             auth_context = self._validate_jwt(token)
         elif api_key:
             auth_context = await self._validate_api_key(api_key)
@@ -117,11 +117,13 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
 def require_scope(scope: str):
     """Dependency that requires a specific scope."""
+
     def checker(request: Request) -> bool:
         auth_context: AuthContext | None = getattr(request.state, "auth_context", None)
         if auth_context is None:
             return False
         return scope in auth_context.scopes or "admin" in auth_context.scopes
+
     return checker
 
 

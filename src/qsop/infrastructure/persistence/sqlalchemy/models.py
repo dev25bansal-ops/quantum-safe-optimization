@@ -16,7 +16,6 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import JSON, TypeDecorator
@@ -75,7 +74,7 @@ class JobModel(Base):
     progress: Mapped[float | None] = mapped_column(Float, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     callback_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
-    
+
     # Timing
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -94,7 +93,7 @@ class JobModel(Base):
         DateTime(timezone=True),
         nullable=True,
     )
-    
+
     # Soft delete
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -121,11 +120,11 @@ class KeyModel(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     algorithm: Mapped[str] = mapped_column(String(100), nullable=False)
     key_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    
+
     # Key material references (actual keys stored in keystore)
     public_key_id: Mapped[str] = mapped_column(String(255), nullable=False)
     private_key_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    
+
     # Lifecycle
     status: Mapped[str] = mapped_column(
         String(50),
@@ -134,18 +133,18 @@ class KeyModel(Base):
         index=True,
     )
     version: Mapped[int] = mapped_column(Integer, default=1)
-    
+
     # Metadata
     metadata_json: Mapped[dict[str, Any]] = mapped_column(
         JSON,
         default=dict,
         name="metadata",
     )
-    
+
     # Auto-rotation settings
     auto_rotate: Mapped[bool] = mapped_column(Boolean, default=False)
     rotation_period_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -168,7 +167,7 @@ class KeyModel(Base):
         DateTime(timezone=True),
         nullable=True,
     )
-    
+
     # Usage tracking
     usage_count: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -202,6 +201,4 @@ class KeyVersionModel(Base):
         nullable=True,
     )
 
-    __table_args__ = (
-        Index("ix_key_versions_key_version", "key_id", "version", unique=True),
-    )
+    __table_args__ = (Index("ix_key_versions_key_version", "key_id", "version", unique=True),)

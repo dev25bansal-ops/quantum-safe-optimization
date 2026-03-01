@@ -4,11 +4,11 @@ Hardware-aware transpilation service implementation.
 Uses Qiskit's transpiler to optimize circuits for specific backend topologies.
 """
 
-from typing import Any
 import logging
+from typing import Any
 
-from qsop.domain.ports.transpilation import TranspilationService
 from qsop.domain.ports.quantum_backend import BackendCapabilities
+from qsop.domain.ports.transpilation import TranspilationService
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class QiskitTranspilationService(TranspilationService):
     """
     Qiskit-based transpilation service.
-    
+
     Provides hardware-aware optimization and algorithm-specific layout mapping.
     """
 
@@ -39,7 +39,9 @@ class QiskitTranspilationService(TranspilationService):
 
         # Convert BackendCapabilities to Qiskit-compatible objects
         basis_gates = list(capabilities.basis_gates) if capabilities.basis_gates else None
-        coupling_map = CouplingMap(list(capabilities.coupling_map)) if capabilities.coupling_map else None
+        coupling_map = (
+            CouplingMap(list(capabilities.coupling_map)) if capabilities.coupling_map else None
+        )
 
         logger.debug(
             f"Transpiling for backend {capabilities.name} "
@@ -64,7 +66,7 @@ class QiskitTranspilationService(TranspilationService):
     ) -> Any:
         """
         Optimize QAOA layout to minimize SWAP gates on constrained topologies.
-        
+
         Uses noise-adaptive or Sabre layout if available.
         """
         try:
@@ -77,7 +79,7 @@ class QiskitTranspilationService(TranspilationService):
             return self.transpile_for_backend(circuit, capabilities, optimization_level=3)
 
         coupling_map = CouplingMap(list(capabilities.coupling_map))
-        
+
         # QAOA specific: we prefer SabreLayout for initial mapping
         # and SabreSwap for routing as they perform well on structured circuits.
         # We override optimization_level to 3 for QAOA layout optimization
@@ -86,7 +88,7 @@ class QiskitTranspilationService(TranspilationService):
             circuit,
             coupling_map=coupling_map,
             basis_gates=list(capabilities.basis_gates) if capabilities.basis_gates else None,
-            layout_method='sabre',
-            routing_method='sabre',
+            layout_method="sabre",
+            routing_method="sabre",
             **final_options,
         )

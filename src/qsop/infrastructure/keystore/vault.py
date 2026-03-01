@@ -9,11 +9,11 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ...domain.errors import KeyStoreError
-from ...domain.ports.keystore import KeyMetadata, KeyStatus, KeyStore, KeyType
+from ...domain.ports.keystore import KeyMetadata, KeyStatus, KeyType
 
 logger = logging.getLogger(__name__)
 
@@ -22,34 +22,34 @@ logger = logging.getLogger(__name__)
 class VaultKeyStore:
     """
     HashiCorp Vault keystore adapter.
-    
+
     Uses Vault's KV V2 engine for key storage.
     """
-    
+
     vault_addr: str = "http://localhost:8200"
     vault_token: str | None = None
     vault_namespace: str | None = None
     kv_mount_point: str = "secret"
     _client: Any = field(default=None, repr=False)
-    
+
     def __post_init__(self) -> None:
         """Initialize Vault client."""
         self._initialize_client()
-    
+
     def _initialize_client(self) -> None:
         """Set up the Vault client."""
         try:
             import hvac
-            
+
             self._client = hvac.Client(
                 url=self.vault_addr,
                 token=self.vault_token,
                 namespace=self.vault_namespace,
             )
-            
+
             if not self._client.is_authenticated():
                 logger.warning("Vault client not authenticated")
-                
+
         except ImportError:
             logger.warning("hvac not installed. Install with: pip install hvac")
             self._client = None
@@ -75,15 +75,15 @@ class VaultKeyStore:
     ) -> str:
         """Store a new key pair in Vault."""
         self._check_client()
-        
+
         actual_key_id = key_id or f"key-{uuid.uuid4().hex[:16]}"
-        
+
         key_data = {
             "key_id": actual_key_id,
             "key_type": key_type.value,
             "algorithm": algorithm,
             "owner_id": owner_id,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "expires_at": expires_at.isoformat() if expires_at else None,
             "status": KeyStatus.ACTIVE.value,
             "tags": list(tags),
@@ -93,7 +93,7 @@ class VaultKeyStore:
             "secret_key": secret_key.hex(),
             "custom_data": metadata,
         }
-        
+
         try:
             self._client.secrets.kv.v2.create_or_update_secret(
                 mount_point=self.kv_mount_point,
@@ -102,7 +102,9 @@ class VaultKeyStore:
             )
             return actual_key_id
         except Exception as e:
-            raise KeyStoreError(f"Failed to store key in Vault: {e}", key_id=actual_key_id, operation="store_key") from e
+            raise KeyStoreError(
+                f"Failed to store key in Vault: {e}", key_id=actual_key_id, operation="store_key"
+            ) from e
 
     def get_public_key(self, key_id: str) -> bytes:
         """Retrieve a public key from Vault."""
@@ -115,7 +117,9 @@ class VaultKeyStore:
             data = response["data"]["data"]
             return bytes.fromhex(data["public_key"])
         except Exception as e:
-            raise KeyStoreError(f"Key not found in Vault: {key_id}", key_id=key_id, operation="get_public_key") from e
+            raise KeyStoreError(
+                f"Key not found in Vault: {key_id}", key_id=key_id, operation="get_public_key"
+            ) from e
 
     def get_secret_key(self, key_id: str) -> bytes:
         """Retrieve a secret key from Vault."""
@@ -126,15 +130,21 @@ class VaultKeyStore:
                 path=f"qsop/keys/{key_id}",
             )
             data = response["data"]["data"]
-            
+
             if data["status"] != KeyStatus.ACTIVE.value:
-                raise KeyStoreError(f"Key {key_id} is not active (status: {data['status']})", key_id=key_id)
-                
+                raise KeyStoreError(
+                    f"Key {key_id} is not active (status: {data['status']})", key_id=key_id
+                )
+
             return bytes.fromhex(data["secret_key"])
         except KeyStoreError:
             raise
         except Exception as e:
-            raise KeyStoreError(f"Key not found or access denied in Vault: {key_id}", key_id=key_id, operation="get_secret_key") from e
+            raise KeyStoreError(
+                f"Key not found or access denied in Vault: {key_id}",
+                key_id=key_id,
+                operation="get_secret_key",
+            ) from e
 
     def get_metadata(self, key_id: str) -> KeyMetadata:
         """Retrieve key metadata from Vault."""
@@ -151,17 +161,25 @@ class VaultKeyStore:
                 algorithm=kd["algorithm"],
                 status=KeyStatus(kd["status"]),
                 created_at=datetime.fromisoformat(kd["created_at"]),
-                expires_at=datetime.fromisoformat(kd["expires_at"]) if kd.get("expires_at") else None,
+                expires_at=datetime.fromisoformat(kd["expires_at"])
+                if kd.get("expires_at")
+                else None,
                 rotated_from=kd.get("rotated_from"),
                 rotated_to=kd.get("rotated_to"),
                 owner_id=kd.get("owner_id"),
                 usage_count=kd.get("usage_count", 0),
-                last_used_at=datetime.fromisoformat(kd["last_used_at"]) if kd.get("last_used_at") else None,
+                last_used_at=datetime.fromisoformat(kd["last_used_at"])
+                if kd.get("last_used_at")
+                else None,
                 tags=tuple(kd.get("tags", [])),
                 custom_data=kd.get("custom_data", {}),
             )
         except Exception as e:
-            raise KeyStoreError(f"Key metadata not found in Vault: {key_id}", key_id=key_id, operation="get_metadata") from e
+            raise KeyStoreError(
+                f"Key metadata not found in Vault: {key_id}",
+                key_id=key_id,
+                operation="get_metadata",
+            ) from e
 
     def list_keys(
         self,
@@ -178,7 +196,7 @@ class VaultKeyStore:
                 mount_point=self.kv_mount_point,
                 path="qsop/keys",
             )
-            
+
             for key_id in response["data"]["keys"]:
                 key_id = key_id.rstrip("/")
                 try:
@@ -194,10 +212,10 @@ class VaultKeyStore:
                     results.append(meta)
                 except KeyStoreError:
                     continue
-                    
+
         except Exception as e:
             logger.error(f"Failed to list keys in Vault: {e}")
-            
+
         return results
 
     def rotate_key(
@@ -210,7 +228,7 @@ class VaultKeyStore:
         """Rotate a key in Vault."""
         self._check_client()
         old_meta = self.get_metadata(key_id)
-        
+
         # Mark old key as inactive
         try:
             response = self._client.secrets.kv.v2.read_secret_version(
@@ -219,7 +237,7 @@ class VaultKeyStore:
             )
             old_data = response["data"]["data"]
             old_data["status"] = KeyStatus.INACTIVE.value
-            
+
             # Store new key
             new_id = self.store_key(
                 key_type=old_meta.key_type,
@@ -230,19 +248,21 @@ class VaultKeyStore:
                 owner_id=old_meta.owner_id,
                 tags=old_meta.tags,
                 rotated_from=key_id,
-                **old_meta.custom_data
+                **old_meta.custom_data,
             )
-            
+
             old_data["rotated_to"] = new_id
             self._client.secrets.kv.v2.create_or_update_secret(
                 mount_point=self.kv_mount_point,
                 path=f"qsop/keys/{key_id}",
                 secret=old_data,
             )
-            
+
             return new_id
         except Exception as e:
-            raise KeyStoreError(f"Failed to rotate key in Vault: {e}", key_id=key_id, operation="rotate_key") from e
+            raise KeyStoreError(
+                f"Failed to rotate key in Vault: {e}", key_id=key_id, operation="rotate_key"
+            ) from e
 
     def revoke_key(self, key_id: str, reason: str = "") -> None:
         """Revoke a key in Vault."""
@@ -255,14 +275,16 @@ class VaultKeyStore:
             data = response["data"]["data"]
             data["status"] = KeyStatus.REVOKED.value
             data["custom_data"]["revocation_reason"] = reason
-            
+
             self._client.secrets.kv.v2.create_or_update_secret(
                 mount_point=self.kv_mount_point,
                 path=f"qsop/keys/{key_id}",
                 secret=data,
             )
         except Exception as e:
-            raise KeyStoreError(f"Failed to revoke key in Vault: {e}", key_id=key_id, operation="revoke_key") from e
+            raise KeyStoreError(
+                f"Failed to revoke key in Vault: {e}", key_id=key_id, operation="revoke_key"
+            ) from e
 
     def delete_key(self, key_id: str) -> None:
         """Permanently delete a key from Vault."""
@@ -273,7 +295,9 @@ class VaultKeyStore:
                 path=f"qsop/keys/{key_id}",
             )
         except Exception as e:
-            raise KeyStoreError(f"Failed to delete key in Vault: {e}", key_id=key_id, operation="delete_key") from e
+            raise KeyStoreError(
+                f"Failed to delete key in Vault: {e}", key_id=key_id, operation="delete_key"
+            ) from e
 
     def record_usage(self, key_id: str) -> None:
         """Record key usage in Vault."""
@@ -285,12 +309,14 @@ class VaultKeyStore:
             )
             data = response["data"]["data"]
             data["usage_count"] = data.get("usage_count", 0) + 1
-            data["last_used_at"] = datetime.now(timezone.utc).isoformat()
-            
+            data["last_used_at"] = datetime.now(UTC).isoformat()
+
             self._client.secrets.kv.v2.create_or_update_secret(
                 mount_point=self.kv_mount_point,
                 path=f"qsop/keys/{key_id}",
                 secret=data,
             )
         except Exception as e:
-            raise KeyStoreError(f"Failed to record usage in Vault: {e}", key_id=key_id, operation="record_usage") from e
+            raise KeyStoreError(
+                f"Failed to record usage in Vault: {e}", key_id=key_id, operation="record_usage"
+            ) from e

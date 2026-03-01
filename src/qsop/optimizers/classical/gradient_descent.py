@@ -8,9 +8,9 @@ various learning rate schedules.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,11 +18,9 @@ from numpy.typing import NDArray
 from .base import (
     BaseClassicalOptimizer,
     Bounds,
-    CallbackManager,
     ClassicalOptimizationResult,
     ConstraintFunction,
     ConvergenceChecker,
-    ConvergenceConfig,
     ConvergenceStatus,
     GradientFunction,
     ObjectiveFunction,
@@ -109,9 +107,9 @@ class LearningRateScheduler:
             )
 
         elif self.config.schedule_type == LRScheduleType.COSINE_ANNEALING:
-            lr = self.config.min_lr + 0.5 * (
-                self.config.initial_lr - self.config.min_lr
-            ) * (1 + np.cos(np.pi * effective_iter / self.config.T_max))
+            lr = self.config.min_lr + 0.5 * (self.config.initial_lr - self.config.min_lr) * (
+                1 + np.cos(np.pi * effective_iter / self.config.T_max)
+            )
 
         elif self.config.schedule_type == LRScheduleType.LINEAR_WARMUP:
             remaining = self.config.T_max - self.config.warmup_steps
@@ -395,7 +393,9 @@ class GradientDescentOptimizer(BaseClassicalOptimizer):
         x = self._apply_bounds(x0.copy().astype(np.float64))
         n = len(x)
 
-        grad_fn = gradient if gradient is not None else lambda x: self._numerical_gradient(objective, x)
+        grad_fn = (
+            gradient if gradient is not None else lambda x: self._numerical_gradient(objective, x)
+        )
 
         state = self._init_optimizer_state(n)
         lr_scheduler = LearningRateScheduler(self.lr_config)
@@ -416,7 +416,11 @@ class GradientDescentOptimizer(BaseClassicalOptimizer):
 
             if self.variant == GDVariant.NESTEROV:
                 x_lookahead = x - self.momentum * state.velocity
-                g = self._evaluate_gradient(grad_fn, x_lookahead) if gradient else grad_fn(x_lookahead)
+                g = (
+                    self._evaluate_gradient(grad_fn, x_lookahead)
+                    if gradient
+                    else grad_fn(x_lookahead)
+                )
 
             if self.use_line_search and self.variant in (GDVariant.VANILLA, GDVariant.MOMENTUM):
                 direction = -g
@@ -427,9 +431,7 @@ class GradientDescentOptimizer(BaseClassicalOptimizer):
                     self._n_function_evals += nf
                     self._n_gradient_evals += ng
                 else:
-                    alpha, fx_new, nf = LineSearch.backtracking(
-                        objective, x, direction, g, fx
-                    )
+                    alpha, fx_new, nf = LineSearch.backtracking(objective, x, direction, g, fx)
                     self._n_function_evals += nf
                 step = alpha * direction
 

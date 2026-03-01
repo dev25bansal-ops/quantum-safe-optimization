@@ -5,6 +5,7 @@ Defines the protocol for hardware-aware circuit transpilation and optimization.
 """
 
 from typing import Any, Protocol, runtime_checkable
+
 from qsop.domain.ports.quantum_backend import BackendCapabilities
 
 
@@ -12,7 +13,7 @@ from qsop.domain.ports.quantum_backend import BackendCapabilities
 class TranspilationService(Protocol):
     """
     Protocol for circuit transpilation services.
-    
+
     Optimizes quantum circuits for specific hardware topologies and gate sets.
     """
 

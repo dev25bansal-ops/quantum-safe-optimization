@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Protocol, Sequence
+from typing import Any, Protocol
 
 import numpy as np
 from numpy.typing import NDArray
@@ -15,7 +15,7 @@ from qiskit.circuit import Parameter
 
 class AnsatzType(Enum):
     """Types of variational ansatz circuits."""
-    
+
     RY = "ry"
     RY_RZ = "ry_rz"
     HARDWARE_EFFICIENT = "hardware_efficient"
@@ -26,12 +26,12 @@ class AnsatzType(Enum):
 @dataclass
 class PauliTerm:
     """A Pauli term in a Hamiltonian.
-    
+
     Attributes:
         coefficient: Complex coefficient.
         paulis: Dictionary mapping qubit index to Pauli operator ('I', 'X', 'Y', 'Z').
     """
-    
+
     coefficient: complex
     paulis: dict[int, str]
 
@@ -45,12 +45,12 @@ class PauliTerm:
 @dataclass
 class Hamiltonian:
     """Represents a quantum Hamiltonian as sum of Pauli terms.
-    
+
     Attributes:
         terms: List of PauliTerm objects.
         num_qubits: Number of qubits.
     """
-    
+
     terms: list[PauliTerm]
     num_qubits: int
 
@@ -62,7 +62,7 @@ class Hamiltonian:
         offset: float = 0.0,
     ) -> Hamiltonian:
         """Create Hamiltonian from Ising model.
-        
+
         H = sum_i h_i Z_i + sum_{ij} J_{ij} Z_i Z_j + offset
         """
         all_qubits = set(h.keys())
@@ -70,20 +70,20 @@ class Hamiltonian:
             all_qubits.add(i)
             all_qubits.add(j)
         num_qubits = max(all_qubits) + 1 if all_qubits else 0
-        
+
         terms: list[PauliTerm] = []
-        
+
         if offset != 0:
             terms.append(PauliTerm(coefficient=offset, paulis={}))
-        
+
         for qubit, coeff in h.items():
             if coeff != 0:
                 terms.append(PauliTerm(coefficient=coeff, paulis={qubit: "Z"}))
-        
+
         for (i, j), coeff in J.items():
             if coeff != 0:
                 terms.append(PauliTerm(coefficient=coeff, paulis={i: "Z", j: "Z"}))
-        
+
         return cls(terms=terms, num_qubits=num_qubits)
 
     @classmethod
@@ -92,22 +92,22 @@ class Hamiltonian:
         pauli_list: list[tuple[str, complex]],
     ) -> Hamiltonian:
         """Create Hamiltonian from list of (pauli_string, coefficient) tuples.
-        
+
         Example: [("ZZ", 1.0), ("XI", 0.5), ("IY", -0.3)]
         """
         if not pauli_list:
             return cls(terms=[], num_qubits=0)
-        
+
         num_qubits = len(pauli_list[0][0])
         terms: list[PauliTerm] = []
-        
+
         for pauli_str, coeff in pauli_list:
             paulis: dict[int, str] = {}
             for i, p in enumerate(pauli_str):
                 if p != "I":
                     paulis[i] = p
             terms.append(PauliTerm(coefficient=coeff, paulis=paulis))
-        
+
         return cls(terms=terms, num_qubits=num_qubits)
 
     def to_matrix(self) -> NDArray[np.complex128]:
@@ -117,24 +117,24 @@ class Hamiltonian:
         Y = np.array([[0, -1j], [1j, 0]], dtype=np.complex128)
         Z = np.array([[1, 0], [0, -1]], dtype=np.complex128)
         pauli_map = {"I": I, "X": X, "Y": Y, "Z": Z}
-        
+
         dim = 2**self.num_qubits
         H = np.zeros((dim, dim), dtype=np.complex128)
-        
+
         for term in self.terms:
             term_matrix = np.array([[1.0]], dtype=np.complex128)
             for qubit in range(self.num_qubits):
                 pauli = term.paulis.get(qubit, "I")
                 term_matrix = np.kron(term_matrix, pauli_map[pauli])
             H += term.coefficient * term_matrix
-        
+
         return H
 
 
 @dataclass
 class VQEResult:
     """Result from VQE optimization.
-    
+
     Attributes:
         optimal_params: Optimized variational parameters.
         optimal_value: Lowest energy eigenvalue found.
@@ -142,7 +142,7 @@ class VQEResult:
         num_iterations: Number of optimization iterations.
         history: Energy values at each iteration.
     """
-    
+
     optimal_params: NDArray[np.float64]
     optimal_value: float
     eigenstate: NDArray[np.complex128] | None = None
@@ -152,7 +152,7 @@ class VQEResult:
 
 class QuantumBackend(Protocol):
     """Protocol for quantum backends."""
-    
+
     def run(
         self,
         circuit: QuantumCircuit,
@@ -171,17 +171,17 @@ class QuantumBackend(Protocol):
 
 class VQEOptimizer:
     """VQE optimizer for finding ground state energies.
-    
+
     Implements the Variational Quantum Eigensolver with configurable
     ansatz circuits and Hamiltonian encoding.
-    
+
     Example:
         >>> hamiltonian = Hamiltonian.from_ising(h={0: 1.0}, J={(0, 1): -1.0})
         >>> optimizer = VQEOptimizer(ansatz_type=AnsatzType.RY, depth=2)
         >>> result = optimizer.optimize(hamiltonian, backend=backend)
         >>> print(f"Ground state energy: {result.optimal_value}")
     """
-    
+
     def __init__(
         self,
         ansatz_type: AnsatzType = AnsatzType.HARDWARE_EFFICIENT,
@@ -190,7 +190,7 @@ class VQEOptimizer:
         seed: int | None = None,
     ):
         """Initialize VQE optimizer.
-        
+
         Args:
             ansatz_type: Type of variational ansatz.
             depth: Number of ansatz layers.
@@ -201,7 +201,7 @@ class VQEOptimizer:
         self.depth = depth
         self.entanglement = entanglement
         self.rng = np.random.default_rng(seed)
-        
+
         self._params: list[Parameter] = []
         self._backend: QuantumBackend | None = None
 
@@ -209,7 +209,7 @@ class VQEOptimizer:
         """Get qubit pairs for entanglement based on pattern."""
         if num_qubits < 2:
             return []
-        
+
         if self.entanglement == "linear":
             return [(i, i + 1) for i in range(num_qubits - 1)]
         elif self.entanglement == "circular":
@@ -227,30 +227,30 @@ class VQEOptimizer:
         params: list[Parameter] | None = None,
     ) -> QuantumCircuit:
         """Build RY variational ansatz.
-        
+
         Args:
             num_qubits: Number of qubits.
             params: Optional parameter list.
-            
+
         Returns:
             Parameterized circuit.
         """
         circuit = QuantumCircuit(num_qubits)
         param_idx = 0
-        
+
         if params is None:
             total_params = num_qubits * self.depth
             params = [Parameter(f"θ_{i}") for i in range(total_params)]
             self._params = params
-        
-        for layer in range(self.depth):
+
+        for _layer in range(self.depth):
             for qubit in range(num_qubits):
                 circuit.ry(params[param_idx], qubit)
                 param_idx += 1
-            
+
             for i, j in self._get_entanglement_map(num_qubits):
                 circuit.cx(i, j)
-        
+
         return circuit
 
     def build_ry_rz_ansatz(
@@ -261,23 +261,23 @@ class VQEOptimizer:
         """Build RY-RZ variational ansatz."""
         circuit = QuantumCircuit(num_qubits)
         param_idx = 0
-        
+
         if params is None:
             total_params = 2 * num_qubits * self.depth
             params = [Parameter(f"θ_{i}") for i in range(total_params)]
             self._params = params
-        
-        for layer in range(self.depth):
+
+        for _layer in range(self.depth):
             for qubit in range(num_qubits):
                 circuit.ry(params[param_idx], qubit)
                 param_idx += 1
             for qubit in range(num_qubits):
                 circuit.rz(params[param_idx], qubit)
                 param_idx += 1
-            
+
             for i, j in self._get_entanglement_map(num_qubits):
                 circuit.cx(i, j)
-        
+
         return circuit
 
     def build_hardware_efficient_ansatz(
@@ -288,20 +288,20 @@ class VQEOptimizer:
         """Build hardware-efficient variational ansatz."""
         circuit = QuantumCircuit(num_qubits)
         param_idx = 0
-        
+
         if params is None:
             total_params = 3 * num_qubits * self.depth + num_qubits
             params = [Parameter(f"θ_{i}") for i in range(total_params)]
             self._params = params
-        
+
         for qubit in range(num_qubits):
             circuit.ry(params[param_idx], qubit)
             param_idx += 1
-        
-        for layer in range(self.depth):
+
+        for _layer in range(self.depth):
             for i, j in self._get_entanglement_map(num_qubits):
                 circuit.cx(i, j)
-            
+
             for qubit in range(num_qubits):
                 circuit.ry(params[param_idx], qubit)
                 param_idx += 1
@@ -309,7 +309,7 @@ class VQEOptimizer:
                 param_idx += 1
                 circuit.ry(params[param_idx], qubit)
                 param_idx += 1
-        
+
         return circuit
 
     def build_uccsd_ansatz(
@@ -319,23 +319,23 @@ class VQEOptimizer:
         params: list[Parameter] | None = None,
     ) -> QuantumCircuit:
         """Build UCCSD-inspired ansatz for chemistry problems.
-        
+
         This is a simplified UCCSD-like ansatz. For full UCCSD,
         use specialized chemistry libraries.
         """
         circuit = QuantumCircuit(num_qubits)
-        
+
         num_singles = num_electrons * (num_qubits - num_electrons)
         num_doubles = num_singles * (num_singles - 1) // 2
         total_params = num_singles + num_doubles
-        
+
         if params is None:
             params = [Parameter(f"t_{i}") for i in range(max(1, total_params))]
             self._params = params
-        
+
         for i in range(num_electrons):
             circuit.x(i)
-        
+
         param_idx = 0
         for i in range(num_electrons):
             for a in range(num_electrons, num_qubits):
@@ -344,7 +344,7 @@ class VQEOptimizer:
                     circuit.ry(params[param_idx], a)
                     circuit.cx(i, a)
                     param_idx += 1
-        
+
         return circuit
 
     def build_ansatz(
@@ -354,12 +354,12 @@ class VQEOptimizer:
         **kwargs: Any,
     ) -> QuantumCircuit:
         """Build variational ansatz based on configured type.
-        
+
         Args:
             num_qubits: Number of qubits.
             params: Optional parameter list.
             **kwargs: Additional arguments for specific ansatz types.
-            
+
         Returns:
             Parameterized circuit.
         """
@@ -401,41 +401,41 @@ class VQEOptimizer:
         shots: int = 1024,
     ) -> float:
         """Measure expectation value of a Pauli term.
-        
+
         Args:
             circuit: Ansatz circuit (without measurements).
             term: PauliTerm to measure.
             backend: Quantum backend.
             shots: Number of measurement shots.
-            
+
         Returns:
             Expectation value estimate.
         """
         if not term.paulis:
             return float(term.coefficient.real)
-        
+
         meas_circuit = circuit.copy()
         meas_circuit.add_register(circuit.qregs[0])
-        
+
         measured_qubits = sorted(term.paulis.keys())
-        
+
         for qubit, pauli in term.paulis.items():
             if pauli == "X":
                 meas_circuit.h(qubit)
             elif pauli == "Y":
                 meas_circuit.sdg(qubit)
                 meas_circuit.h(qubit)
-        
+
         meas_circuit.measure(measured_qubits, list(range(len(measured_qubits))))
-        
+
         counts = backend.run(meas_circuit, shots=shots)
-        
+
         expectation = 0.0
         for bitstring, count in counts.items():
             parity = sum(int(b) for b in bitstring) % 2
             expectation += (1 - 2 * parity) * count
         expectation /= shots
-        
+
         return float(term.coefficient.real) * expectation
 
     def compute_expectation_statevector(
@@ -445,12 +445,12 @@ class VQEOptimizer:
         backend: QuantumBackend,
     ) -> float:
         """Compute expectation value using statevector simulation.
-        
+
         Args:
             circuit: Ansatz circuit.
             hamiltonian: Hamiltonian to measure.
             backend: Quantum backend with statevector support.
-            
+
         Returns:
             Expectation value.
         """
@@ -467,13 +467,13 @@ class VQEOptimizer:
         shots: int = 1024,
     ) -> float:
         """Compute expectation value using shot-based measurements.
-        
+
         Args:
             circuit: Ansatz circuit.
             hamiltonian: Hamiltonian to measure.
             backend: Quantum backend.
             shots: Number of shots per term.
-            
+
         Returns:
             Expectation value estimate.
         """
@@ -492,7 +492,7 @@ class VQEOptimizer:
         callback: Callable[[NDArray[np.float64], float], None] | None = None,
     ) -> VQEResult:
         """Run VQE optimization to find ground state energy.
-        
+
         Args:
             hamiltonian: Hamiltonian to minimize.
             backend: Quantum backend.
@@ -500,59 +500,51 @@ class VQEOptimizer:
             shots: Number of shots (None for statevector mode).
             maxiter: Maximum optimization iterations.
             callback: Optional callback(params, energy) at each iteration.
-            
+
         Returns:
             VQEResult with optimal parameters and energy.
         """
         from scipy.optimize import minimize
-        
+
         self._backend = backend
         num_params = self.get_num_parameters(hamiltonian.num_qubits)
-        
+
         if initial_params is None:
             initial_params = self.rng.uniform(0, 2 * np.pi, num_params)
-        
+
         history: list[float] = []
-        
+
         def objective(params: NDArray[np.float64]) -> float:
             param_list = [Parameter(f"θ_{i}") for i in range(len(params))]
             circuit = self.build_ansatz(hamiltonian.num_qubits, param_list)
-            
-            bound_circuit = circuit.assign_parameters(
-                {p: v for p, v in zip(param_list, params)}
-            )
-            
+
+            bound_circuit = circuit.assign_parameters(dict(zip(param_list, params, strict=False)))
+
             if shots is None:
-                energy = self.compute_expectation_statevector(
-                    bound_circuit, hamiltonian, backend
-                )
+                energy = self.compute_expectation_statevector(bound_circuit, hamiltonian, backend)
             else:
-                energy = self.compute_expectation_shots(
-                    bound_circuit, hamiltonian, backend, shots
-                )
-            
+                energy = self.compute_expectation_shots(bound_circuit, hamiltonian, backend, shots)
+
             history.append(energy)
             if callback:
                 callback(params, energy)
-            
+
             return energy
-        
+
         result = minimize(
             objective,
             initial_params,
             method="COBYLA",
             options={"maxiter": maxiter},
         )
-        
+
         eigenstate = None
         if shots is None:
             param_list = [Parameter(f"θ_{i}") for i in range(len(result.x))]
             circuit = self.build_ansatz(hamiltonian.num_qubits, param_list)
-            bound_circuit = circuit.assign_parameters(
-                {p: v for p, v in zip(param_list, result.x)}
-            )
+            bound_circuit = circuit.assign_parameters(dict(zip(param_list, result.x, strict=False)))
             eigenstate = backend.get_statevector(bound_circuit)
-        
+
         return VQEResult(
             optimal_params=result.x,
             optimal_value=result.fun,

@@ -8,11 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Optional
 
-from .key_rotation import KeyRotationService
 from ...domain.ports.keystore import KeyStore
+from .key_rotation import KeyRotationService
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +18,11 @@ logger = logging.getLogger(__name__)
 class KeyLifecycleManager:
     """
     Background service for automated key lifecycle management.
-    
+
     Periodically runs the KeyRotationService to ensure keys are rotated
     according to security policies.
     """
-    
+
     def __init__(
         self,
         keystore: KeyStore,
@@ -39,13 +37,13 @@ class KeyLifecycleManager:
         )
         self._check_interval = check_interval_seconds
         self._is_running = False
-        self._task: Optional[asyncio.Task[None]] = None
+        self._task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """Start the lifecycle management background task."""
         if self._is_running:
             return
-            
+
         self._is_running = True
         self._task = asyncio.create_task(self._run_lifecycle_loop())
         logger.info("KeyLifecycleManager started")
@@ -54,7 +52,7 @@ class KeyLifecycleManager:
         """Stop the lifecycle management background task."""
         if not self._is_running:
             return
-            
+
         self._is_running = False
         if self._task:
             self._task.cancel()
@@ -74,7 +72,7 @@ class KeyLifecycleManager:
                     logger.info(f"Automated rotation completed. Rotated {len(rotated_ids)} keys.")
             except Exception as e:
                 logger.exception(f"Error during key lifecycle check: {e}")
-            
+
             try:
                 await asyncio.sleep(self._check_interval)
             except asyncio.CancelledError:

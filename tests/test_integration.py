@@ -4,10 +4,11 @@ Integration Tests for Quantum-Safe Optimization Platform.
 Full workflow tests: login → submit → poll → results
 """
 
-import os
 import asyncio
+import os
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 # Disable rate limiting in test environment
 os.environ["TESTING"] = "1"
@@ -31,24 +32,21 @@ async def client():
 @pytest.fixture
 async def auth_token(client: AsyncClient) -> str:
     """Get authentication token for tests."""
-    response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
-    )
+    response = await client.post("/auth/login", json={"username": "admin", "password": "admin123!"})
     assert response.status_code == 200
     return response.json()["access_token"]
 
 
 class TestFullJobWorkflow:
     """Test complete job lifecycle from submission to results."""
-    
+
     @pytest.mark.anyio
     async def test_qaoa_maxcut_full_workflow(self, client: AsyncClient, auth_token: str):
         """
         Full QAOA MaxCut workflow: login → submit → poll → results.
         """
         headers = {"Authorization": f"Bearer {auth_token}"}
-        
+
         # Step 1: Submit QAOA job
         submit_response = await client.post(
             "/jobs",
@@ -72,12 +70,12 @@ class TestFullJobWorkflow:
         job_id = job_data["job_id"]
         assert job_data["status"] == "queued"
         assert job_data["problem_type"] == "QAOA"
-        
+
         # Step 2: Poll for completion (with timeout)
         max_polls = 30
         poll_interval = 0.5
         final_status = None
-        
+
         for _ in range(max_polls):
             poll_response = await client.get(
                 f"/jobs/{job_id}",
@@ -86,20 +84,20 @@ class TestFullJobWorkflow:
             assert poll_response.status_code == 200
             job_status = poll_response.json()
             final_status = job_status["status"]
-            
+
             if final_status in ("completed", "failed"):
                 break
-            
+
             await asyncio.sleep(poll_interval)
-        
+
         # Step 3: Verify results
         assert final_status == "completed", f"Job failed or timed out: {job_status}"
-        
+
         result = job_status.get("result")
         assert result is not None, "Completed job should have result"
         assert "optimal_value" in result or "optimal_bitstring" in result
         assert job_status.get("completed_at") is not None
-    
+
     @pytest.mark.anyio
     async def test_vqe_full_workflow(self, client: AsyncClient, auth_token: str):
         """
@@ -107,7 +105,7 @@ class TestFullJobWorkflow:
         Note: VQE requires specific Hamiltonian setup; may fail if backend not configured.
         """
         headers = {"Authorization": f"Bearer {auth_token}"}
-        
+
         # Step 1: Submit VQE job
         submit_response = await client.post(
             "/jobs",
@@ -127,20 +125,20 @@ class TestFullJobWorkflow:
         )
         assert submit_response.status_code == 202
         job_id = submit_response.json()["job_id"]
-        
+
         # Step 2: Poll for completion
         final_status = await self._poll_job(client, job_id, headers)
-        
+
         # Step 3: Verify job completed (may fail if backend not fully configured)
         job_response = await client.get(f"/jobs/{job_id}", headers=headers)
         job_data = job_response.json()
-        
+
         # VQE may fail if the specific Hamiltonian setup is not supported
         assert final_status in ("completed", "failed")
         if final_status == "completed":
             result = job_data.get("result")
             assert result is not None
-    
+
     @pytest.mark.anyio
     async def test_annealing_qubo_full_workflow(self, client: AsyncClient, auth_token: str):
         """
@@ -148,14 +146,14 @@ class TestFullJobWorkflow:
         Note: Requires D-Wave API token; may fail if not configured.
         """
         headers = {"Authorization": f"Bearer {auth_token}"}
-        
+
         # Simple QUBO matrix for testing
         qubo_matrix = [
             [1.0, -0.5, 0.0],
             [-0.5, 1.0, -0.5],
             [0.0, -0.5, 1.0],
         ]
-        
+
         # Step 1: Submit Annealing job
         submit_response = await client.post(
             "/jobs",
@@ -174,20 +172,20 @@ class TestFullJobWorkflow:
         )
         assert submit_response.status_code == 202
         job_id = submit_response.json()["job_id"]
-        
+
         # Step 2: Poll for completion
         final_status = await self._poll_job(client, job_id, headers)
-        
+
         # Step 3: Verify results (may fail if D-Wave token not configured)
         job_response = await client.get(f"/jobs/{job_id}", headers=headers)
         job_data = job_response.json()
-        
+
         # Annealing requires D-Wave API token, so failure is expected without it
         assert final_status in ("completed", "failed")
         if final_status == "completed":
             result = job_data.get("result")
             assert result is not None
-    
+
     async def _poll_job(
         self,
         client: AsyncClient,
@@ -208,14 +206,14 @@ class TestFullJobWorkflow:
 
 class TestJobListAndPagination:
     """Test job listing and pagination."""
-    
+
     @pytest.mark.anyio
     async def test_list_jobs_pagination(self, client: AsyncClient, auth_token: str):
         """Test job listing with pagination."""
         headers = {"Authorization": f"Bearer {auth_token}"}
-        
+
         # Submit multiple jobs
-        for i in range(3):
+        for _i in range(3):
             await client.post(
                 "/jobs",
                 json={
@@ -225,7 +223,7 @@ class TestJobListAndPagination:
                 },
                 headers=headers,
             )
-        
+
         # List jobs with pagination
         response = await client.get(
             "/jobs?limit=2&offset=0",
@@ -237,12 +235,12 @@ class TestJobListAndPagination:
         assert len(data["jobs"]) <= 2
         assert data["limit"] == 2
         assert data["offset"] == 0
-    
+
     @pytest.mark.anyio
     async def test_list_jobs_filter_by_status(self, client: AsyncClient, auth_token: str):
         """Test filtering jobs by status."""
         headers = {"Authorization": f"Bearer {auth_token}"}
-        
+
         response = await client.get(
             "/jobs?status=queued",
             headers=headers,
@@ -256,12 +254,12 @@ class TestJobListAndPagination:
 
 class TestErrorHandlingWorkflow:
     """Test error scenarios in job workflow."""
-    
+
     @pytest.mark.anyio
     async def test_invalid_problem_type(self, client: AsyncClient, auth_token: str):
         """Test submission with invalid problem type."""
         headers = {"Authorization": f"Bearer {auth_token}"}
-        
+
         response = await client.post(
             "/jobs",
             json={
@@ -273,12 +271,12 @@ class TestErrorHandlingWorkflow:
         )
         # Should accept but fail during processing
         assert response.status_code in (202, 400)
-    
+
     @pytest.mark.anyio
     async def test_missing_required_config(self, client: AsyncClient, auth_token: str):
         """Test submission with minimal/empty configuration."""
         headers = {"Authorization": f"Bearer {auth_token}"}
-        
+
         # ANNEALING with empty config - should generate default QUBO
         response = await client.post(
             "/jobs",
@@ -292,7 +290,7 @@ class TestErrorHandlingWorkflow:
         # Job should be accepted
         assert response.status_code == 202
         job_id = response.json()["job_id"]
-        
+
         # Poll and verify job processes (with defaults)
         await asyncio.sleep(2)
         status_response = await client.get(
@@ -302,12 +300,12 @@ class TestErrorHandlingWorkflow:
         job_data = status_response.json()
         # Should complete successfully with default QUBO or be processing
         assert job_data["status"] in ("completed", "failed", "running", "queued")
-    
+
     @pytest.mark.anyio
     async def test_job_not_found(self, client: AsyncClient, auth_token: str):
         """Test getting non-existent job."""
         headers = {"Authorization": f"Bearer {auth_token}"}
-        
+
         response = await client.get(
             "/jobs/nonexistent-job-id",
             headers=headers,
@@ -317,12 +315,12 @@ class TestErrorHandlingWorkflow:
 
 class TestAuthWorkflow:
     """Test authentication workflow integration."""
-    
+
     @pytest.mark.anyio
     async def test_full_auth_lifecycle(self, client: AsyncClient):
         """Test complete auth lifecycle: register → login → use → refresh → logout."""
         import secrets
-        
+
         # Step 1: Register new user
         username = f"workflow_test_{secrets.token_hex(4)}"
         register_response = await client.post(
@@ -331,59 +329,52 @@ class TestAuthWorkflow:
                 "username": username,
                 "password": "SecurePassword123!",
                 "email": f"{username}@test.com",
-            }
+            },
         )
         assert register_response.status_code == 201
-        
+
         # Step 2: Login
         login_response = await client.post(
-            "/auth/login",
-            json={"username": username, "password": "SecurePassword123!"}
+            "/auth/login", json={"username": username, "password": "SecurePassword123!"}
         )
         assert login_response.status_code == 200
         token = login_response.json()["access_token"]
-        
+
         # Step 3: Use token to access protected resource
-        me_response = await client.get(
-            "/auth/me",
-            headers={"Authorization": f"Bearer {token}"}
-        )
+        me_response = await client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert me_response.status_code == 200
         assert me_response.json()["username"] == username
-        
+
         # Step 4: Refresh token
         refresh_response = await client.post(
-            "/auth/refresh",
-            headers={"Authorization": f"Bearer {token}"}
+            "/auth/refresh", headers={"Authorization": f"Bearer {token}"}
         )
         assert refresh_response.status_code == 200
         new_token = refresh_response.json()["access_token"]
-        
+
         # Step 5: Logout
         logout_response = await client.post(
-            "/auth/logout",
-            headers={"Authorization": f"Bearer {new_token}"}
+            "/auth/logout", headers={"Authorization": f"Bearer {new_token}"}
         )
         assert logout_response.status_code == 200
-        
+
         # Step 6: Verify token is revoked
         verify_response = await client.get(
-            "/auth/me",
-            headers={"Authorization": f"Bearer {new_token}"}
+            "/auth/me", headers={"Authorization": f"Bearer {new_token}"}
         )
         assert verify_response.status_code == 401
 
 
 class TestEncryptedResultWorkflow:
     """Test job workflow with encrypted results."""
-    
+
     @pytest.mark.anyio
     async def test_job_with_result_encryption(self, client: AsyncClient, auth_token: str):
         """Test job that encrypts results with user's public key."""
         from quantum_safe_crypto import KemKeyPair
-        
+
         headers = {"Authorization": f"Bearer {auth_token}"}
-        
+
         # Step 1: Generate and set encryption key
         keypair = KemKeyPair()
         key_response = await client.put(
@@ -395,7 +386,7 @@ class TestEncryptedResultWorkflow:
             headers=headers,
         )
         assert key_response.status_code == 200
-        
+
         # Step 2: Submit job with encryption enabled
         submit_response = await client.post(
             "/jobs",
@@ -409,7 +400,7 @@ class TestEncryptedResultWorkflow:
         )
         assert submit_response.status_code == 202
         job_id = submit_response.json()["job_id"]
-        
+
         # Step 3: Poll for completion
         final_status = None
         for _ in range(30):
@@ -422,7 +413,7 @@ class TestEncryptedResultWorkflow:
             if final_status in ("completed", "failed"):
                 break
             await asyncio.sleep(0.5)
-        
+
         # Step 4: Verify encrypted result
         assert final_status == "completed"
         # If encryption is enabled, result should be encrypted (returned as JSON string)

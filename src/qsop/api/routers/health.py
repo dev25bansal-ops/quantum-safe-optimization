@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 
-from qsop.api.deps import get_db, get_settings, Settings
+from qsop.api.deps import Settings, get_db, get_settings
 
 router = APIRouter()
 
@@ -42,7 +42,7 @@ class LivenessStatus(BaseModel):
 async def health_check() -> HealthStatus:
     """
     General health check endpoint.
-    
+
     Returns basic health information about the service.
     """
     return HealthStatus(
@@ -58,12 +58,12 @@ async def readiness_check(
 ) -> ReadinessStatus:
     """
     Readiness probe for Kubernetes.
-    
+
     Checks if the service is ready to accept traffic.
     Returns 503 if any critical dependency is not ready.
     """
     checks: dict[str, bool] = {}
-    
+
     # Check database connectivity
     try:
         async for db in get_db():
@@ -77,7 +77,7 @@ async def readiness_check(
     checks["config"] = bool(settings.jwt_secret)
 
     all_ready = all(checks.values())
-    
+
     if not all_ready:
         response.status_code = 503
 
@@ -88,7 +88,7 @@ async def readiness_check(
 async def liveness_check() -> LivenessStatus:
     """
     Liveness probe for Kubernetes.
-    
+
     Basic check to verify the service process is running.
     If this fails, Kubernetes should restart the pod.
     """
@@ -99,17 +99,17 @@ async def liveness_check() -> LivenessStatus:
 async def startup_check(response: Response) -> dict[str, Any]:
     """
     Startup probe for Kubernetes.
-    
+
     Used during initial startup to allow slow-starting containers.
     """
     uptime = time.time() - _start_time
-    
+
     # Consider started after basic initialization
     started = uptime > 1.0
-    
+
     if not started:
         response.status_code = 503
-    
+
     return {
         "started": started,
         "uptime_seconds": uptime,

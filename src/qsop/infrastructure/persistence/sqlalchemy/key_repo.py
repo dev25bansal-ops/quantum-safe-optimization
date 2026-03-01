@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, update, func
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import KeyModel, KeyVersionModel
@@ -35,7 +35,7 @@ class SQLAlchemyKeyRepository:
         expires_at = None
         if expires_in_days:
             expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
-        
+
         key = KeyModel(
             tenant_id=tenant_id,
             name=name,
@@ -52,7 +52,7 @@ class SQLAlchemyKeyRepository:
         )
         self.session.add(key)
         await self.session.flush()
-        
+
         # Create initial version record
         version = KeyVersionModel(
             key_id=key.id,
@@ -63,7 +63,7 @@ class SQLAlchemyKeyRepository:
         self.session.add(version)
         await self.session.flush()
         await self.session.refresh(key)
-        
+
         return key
 
     async def get_by_id(
@@ -75,7 +75,7 @@ class SQLAlchemyKeyRepository:
         stmt = select(KeyModel).where(KeyModel.id == key_id)
         if tenant_id:
             stmt = stmt.where(KeyModel.tenant_id == tenant_id)
-        
+
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -102,25 +102,20 @@ class SQLAlchemyKeyRepository:
     ) -> tuple[list[KeyModel], int]:
         """List keys for a tenant with pagination."""
         base_query = select(KeyModel).where(KeyModel.tenant_id == tenant_id)
-        
+
         if status:
             base_query = base_query.where(KeyModel.status == status)
-        
+
         # Count query
         count_stmt = select(func.count()).select_from(base_query.subquery())
         total_result = await self.session.execute(count_stmt)
         total = total_result.scalar() or 0
-        
+
         # Data query with pagination
-        stmt = (
-            base_query
-            .order_by(KeyModel.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = base_query.order_by(KeyModel.created_at.desc()).limit(limit).offset(offset)
         result = await self.session.execute(stmt)
         keys = list(result.scalars().all())
-        
+
         return keys, total
 
     async def rotate(
@@ -133,7 +128,7 @@ class SQLAlchemyKeyRepository:
         key = await self.get_by_id(key_id)
         if key is None:
             raise ValueError(f"Key {key_id} not found")
-        
+
         # Retire current version
         await self.session.execute(
             update(KeyVersionModel)
@@ -143,9 +138,9 @@ class SQLAlchemyKeyRepository:
             )
             .values(retired_at=datetime.utcnow())
         )
-        
+
         new_version = key.version + 1
-        
+
         # Update key with new version
         stmt = (
             update(KeyModel)
@@ -160,7 +155,7 @@ class SQLAlchemyKeyRepository:
         )
         result = await self.session.execute(stmt)
         updated_key = result.scalar_one()
-        
+
         # Create new version record
         version = KeyVersionModel(
             key_id=key_id,
@@ -170,7 +165,7 @@ class SQLAlchemyKeyRepository:
         )
         self.session.add(version)
         await self.session.flush()
-        
+
         return updated_key
 
     async def revoke(self, key_id: UUID) -> bool:
@@ -216,18 +211,15 @@ class SQLAlchemyKeyRepository:
     async def get_keys_for_rotation(self) -> list[KeyModel]:
         """Get keys that need automatic rotation."""
         now = datetime.utcnow()
-        
-        stmt = (
-            select(KeyModel)
-            .where(
-                KeyModel.auto_rotate.is_(True),
-                KeyModel.status == "active",
-                KeyModel.rotation_period_days.isnot(None),
-            )
+
+        stmt = select(KeyModel).where(
+            KeyModel.auto_rotate.is_(True),
+            KeyModel.status == "active",
+            KeyModel.rotation_period_days.isnot(None),
         )
         result = await self.session.execute(stmt)
         keys = result.scalars().all()
-        
+
         # Filter keys that need rotation based on last rotation time
         keys_to_rotate = []
         for key in keys:
@@ -235,7 +227,7 @@ class SQLAlchemyKeyRepository:
             next_rotation = last_rotation + timedelta(days=key.rotation_period_days)
             if now >= next_rotation:
                 keys_to_rotate.append(key)
-        
+
         return keys_to_rotate
 
     async def get_expiring_keys(
@@ -244,14 +236,11 @@ class SQLAlchemyKeyRepository:
     ) -> list[KeyModel]:
         """Get keys that will expire soon."""
         threshold = datetime.utcnow() + timedelta(days=days_until_expiry)
-        
-        stmt = (
-            select(KeyModel)
-            .where(
-                KeyModel.status == "active",
-                KeyModel.expires_at.isnot(None),
-                KeyModel.expires_at <= threshold,
-            )
+
+        stmt = select(KeyModel).where(
+            KeyModel.status == "active",
+            KeyModel.expires_at.isnot(None),
+            KeyModel.expires_at <= threshold,
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

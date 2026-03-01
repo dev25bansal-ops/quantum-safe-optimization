@@ -5,9 +5,10 @@ Provides distributed tracing across API, optimization, and backend services.
 """
 
 import os
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from functools import wraps
-from typing import Any, Callable, Generator, TypeVar
+from typing import Any, TypeVar
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -15,17 +16,15 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.propagate import set_global_textmap
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
-from opentelemetry.sdk.trace import TracerProvider, SpanProcessor
+from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
+from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 from opentelemetry.sdk.trace.sampling import (
-    ParentBasedTraceIdRatio,
-    TraceIdRatioBased,
     ALWAYS_ON,
+    ParentBasedTraceIdRatio,
 )
-from opentelemetry.trace import Status, StatusCode, Span
+from opentelemetry.trace import Span, Status, StatusCode
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
-
 
 # Type variable for decorated functions
 F = TypeVar("F", bound=Callable[..., Any])
@@ -33,7 +32,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 class TelemetryConfig:
     """Configuration for OpenTelemetry setup."""
-    
+
     def __init__(
         self,
         service_name: str = "quantum-api",
@@ -56,10 +55,10 @@ class TelemetryConfig:
 def setup_telemetry(config: TelemetryConfig | None = None) -> TracerProvider:
     """
     Initialize OpenTelemetry tracing with the provided configuration.
-    
+
     Args:
         config: TelemetryConfig instance with tracing settings
-        
+
     Returns:
         Configured TracerProvider
     """
@@ -72,27 +71,29 @@ def setup_telemetry(config: TelemetryConfig | None = None) -> TracerProvider:
             sample_rate=float(os.getenv("OTEL_TRACES_SAMPLER_ARG", "1.0")),
             console_export=os.getenv("OTEL_CONSOLE_EXPORT", "false").lower() == "true",
         )
-    
+
     # Create resource with service information
-    resource = Resource.create({
-        SERVICE_NAME: config.service_name,
-        SERVICE_VERSION: config.service_version,
-        "deployment.environment": config.environment,
-        "service.namespace": "quantum-platform",
-    })
-    
+    resource = Resource.create(
+        {
+            SERVICE_NAME: config.service_name,
+            SERVICE_VERSION: config.service_version,
+            "deployment.environment": config.environment,
+            "service.namespace": "quantum-platform",
+        }
+    )
+
     # Configure sampler based on sample rate
     if config.sample_rate >= 1.0:
         sampler = ALWAYS_ON
     else:
         sampler = ParentBasedTraceIdRatio(config.sample_rate)
-    
+
     # Create tracer provider
     provider = TracerProvider(
         resource=resource,
         sampler=sampler,
     )
-    
+
     # Add OTLP exporter for production
     if config.otlp_endpoint and os.getenv("OTEL_ENABLED", "true").lower() == "true":
         otlp_exporter = OTLPSpanExporter(
@@ -100,25 +101,25 @@ def setup_telemetry(config: TelemetryConfig | None = None) -> TracerProvider:
             insecure=config.environment != "production",
         )
         provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
-    
+
     # Add console exporter for development/debugging
     if config.console_export:
         console_exporter = ConsoleSpanExporter()
         provider.add_span_processor(BatchSpanProcessor(console_exporter))
-    
+
     # Set as global tracer provider
     trace.set_tracer_provider(provider)
-    
+
     # Set up context propagation (W3C Trace Context + B3 for compatibility)
     set_global_textmap(TraceContextTextMapPropagator())
-    
+
     return provider
 
 
 def instrument_fastapi(app) -> None:
     """
     Instrument FastAPI application with OpenTelemetry.
-    
+
     Args:
         app: FastAPI application instance
     """
@@ -132,7 +133,7 @@ def instrument_dependencies() -> None:
     """Instrument common dependencies (Redis, HTTP clients)."""
     # Instrument Redis
     RedisInstrumentor().instrument()
-    
+
     # Instrument HTTPX client
     HTTPXClientInstrumentor().instrument()
 
@@ -140,10 +141,10 @@ def instrument_dependencies() -> None:
 def get_tracer(name: str = "quantum-api") -> trace.Tracer:
     """
     Get a tracer instance for creating spans.
-    
+
     Args:
         name: Tracer name (typically module or component name)
-        
+
     Returns:
         Tracer instance
     """
@@ -159,13 +160,13 @@ def create_span(
 ) -> Generator[Span, None, None]:
     """
     Context manager for creating traced spans.
-    
+
     Args:
         name: Span name
         tracer_name: Name of the tracer to use
         attributes: Optional span attributes
         kind: Span kind (INTERNAL, SERVER, CLIENT, PRODUCER, CONSUMER)
-        
+
     Yields:
         Active span
     """
@@ -190,18 +191,19 @@ def traced(
 ) -> Callable[[F], F]:
     """
     Decorator for tracing functions.
-    
+
     Args:
         name: Optional span name (defaults to function name)
         tracer_name: Name of the tracer to use
         attributes: Optional span attributes
-        
+
     Returns:
         Decorated function
     """
+
     def decorator(func: F) -> F:
         span_name = name or f"{func.__module__}.{func.__name__}"
-        
+
         @wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             tracer = get_tracer(tracer_name)
@@ -218,7 +220,7 @@ def traced(
                     span.set_status(Status(StatusCode.ERROR, str(e)))
                     span.record_exception(e)
                     raise
-        
+
         @wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             tracer = get_tracer(tracer_name)
@@ -234,25 +236,26 @@ def traced(
                     span.set_status(Status(StatusCode.ERROR, str(e)))
                     span.record_exception(e)
                     raise
-        
+
         import asyncio
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper  # type: ignore
         return sync_wrapper  # type: ignore
-    
+
     return decorator
 
 
 class OptimizationTracer:
     """
     Specialized tracer for optimization operations.
-    
+
     Provides pre-configured tracing for QAOA, VQE, and annealing operations.
     """
-    
+
     def __init__(self, tracer_name: str = "quantum-optimization"):
         self.tracer = get_tracer(tracer_name)
-    
+
     @contextmanager
     def trace_optimization_job(
         self,
@@ -263,7 +266,7 @@ class OptimizationTracer:
     ) -> Generator[Span, None, None]:
         """
         Trace an optimization job execution.
-        
+
         Args:
             job_id: Unique job identifier
             algorithm: Algorithm name (QAOA, VQE, ANNEALING)
@@ -276,14 +279,14 @@ class OptimizationTracer:
             "optimization.problem_type": problem_type,
             **extra_attributes,
         }
-        
+
         with self.tracer.start_as_current_span(
             f"optimization.{algorithm.lower()}",
             kind=trace.SpanKind.INTERNAL,
             attributes=attributes,
         ) as span:
             yield span
-    
+
     @contextmanager
     def trace_iteration(
         self,
@@ -299,7 +302,7 @@ class OptimizationTracer:
             },
         ) as span:
             yield span
-    
+
     def record_result(
         self,
         span: Span,
@@ -316,13 +319,13 @@ class OptimizationTracer:
 class CryptoTracer:
     """
     Specialized tracer for cryptographic operations.
-    
+
     Traces PQC operations without exposing sensitive data.
     """
-    
+
     def __init__(self, tracer_name: str = "quantum-crypto"):
         self.tracer = get_tracer(tracer_name)
-    
+
     @contextmanager
     def trace_key_generation(
         self,
@@ -339,7 +342,7 @@ class CryptoTracer:
             },
         ) as span:
             yield span
-    
+
     @contextmanager
     def trace_encryption(
         self,
@@ -356,7 +359,7 @@ class CryptoTracer:
             },
         ) as span:
             yield span
-    
+
     @contextmanager
     def trace_decryption(
         self,
@@ -371,7 +374,7 @@ class CryptoTracer:
             },
         ) as span:
             yield span
-    
+
     @contextmanager
     def trace_signing(
         self,
@@ -388,7 +391,7 @@ class CryptoTracer:
             },
         ) as span:
             yield span
-    
+
     @contextmanager
     def trace_verification(
         self,

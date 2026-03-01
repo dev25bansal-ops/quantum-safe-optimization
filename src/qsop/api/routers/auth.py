@@ -1,12 +1,12 @@
 """Authentication router."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, EmailStr
 
 from qsop.settings import get_settings
 
@@ -16,18 +16,21 @@ settings = get_settings()
 
 class LoginRequest(BaseModel):
     """Login request body."""
+
     username: str
     password: str
 
 
 class LoginResponse(BaseModel):
     """Login response body."""
+
     access_token: str
     token_type: str = "bearer"
 
 
 class RegisterRequest(BaseModel):
     """Registration request body."""
+
     username: str
     email: EmailStr
     password: str
@@ -35,6 +38,7 @@ class RegisterRequest(BaseModel):
 
 class RegisterResponse(BaseModel):
     """Registration response body."""
+
     user_id: str
     username: str
     created_at: datetime
@@ -48,7 +52,7 @@ async def register(request: RegisterRequest) -> Any:
     return {
         "user_id": user_id,
         "username": request.username,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
     }
 
 
@@ -64,20 +68,20 @@ async def login(request: LoginRequest) -> Any:
         )
 
     # Create JWT
-    expiration = datetime.now(timezone.utc) + timedelta(days=1)
+    expiration = datetime.now(UTC) + timedelta(days=1)
     payload = {
         "sub": request.username,
         "tenant_id": "default",
         "scopes": ["read", "write"],
         "exp": int(expiration.timestamp()),
     }
-    
+
     token = jwt.encode(
         payload,
         settings.secret_key.get_secret_value(),
         algorithm="HS256",
     )
-    
+
     return {
         "access_token": token,
         "token_type": "bearer",

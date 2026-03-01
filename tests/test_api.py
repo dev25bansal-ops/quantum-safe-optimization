@@ -3,8 +3,9 @@ Tests for the Quantum-Safe Optimization Platform API.
 """
 
 import os
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 # Disable rate limiting in test environment
 os.environ["TESTING"] = "1"
@@ -76,8 +77,7 @@ async def test_root_endpoint(client: AsyncClient):
 async def test_login_invalid_credentials(client: AsyncClient):
     """Test login with invalid credentials fails."""
     response = await client.post(
-        "/auth/login",
-        json={"username": "invalid", "password": "wrongpassword123"}
+        "/auth/login", json={"username": "invalid", "password": "wrongpassword123"}
     )
     assert response.status_code == 401
 
@@ -98,8 +98,8 @@ async def test_submit_job_unauthorized(client: AsyncClient):
         json={
             "problem_type": "QAOA",
             "problem_config": {"graph_edges": [[0, 1], [1, 2]]},
-            "backend": "local_simulator"
-        }
+            "backend": "local_simulator",
+        },
     )
     # In DEMO_MODE, returns 202 (accepted) with guest access; otherwise 401
     assert response.status_code in [202, 401]
@@ -108,10 +108,7 @@ async def test_submit_job_unauthorized(client: AsyncClient):
 @pytest.mark.anyio
 async def test_login_valid_credentials(client: AsyncClient):
     """Test login with valid credentials returns PQC-signed token."""
-    response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
-    )
+    response = await client.post("/auth/login", json={"username": "admin", "password": "admin123!"})
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
@@ -128,21 +125,20 @@ async def test_authenticated_job_submission(client: AsyncClient):
     """Test job submission with valid authentication."""
     # First login
     login_response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
+        "/auth/login", json={"username": "admin", "password": "admin123!"}
     )
     assert login_response.status_code == 200
     token = login_response.json()["access_token"]
-    
+
     # Submit job with auth token
     response = await client.post(
         "/jobs",
         json={
             "problem_type": "QAOA",
             "problem_config": {"problem": "maxcut", "edges": [[0, 1], [1, 2], [2, 0]]},
-            "backend": "local_simulator"
+            "backend": "local_simulator",
         },
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 202
     data = response.json()
@@ -156,16 +152,12 @@ async def test_get_user_info(client: AsyncClient):
     """Test getting current user info with valid token."""
     # Login
     login_response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
+        "/auth/login", json={"username": "admin", "password": "admin123!"}
     )
     token = login_response.json()["access_token"]
-    
+
     # Get user info
-    response = await client.get(
-        "/auth/me",
-        headers={"Authorization": f"Bearer {token}"}
-    )
+    response = await client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     data = response.json()
     assert data["username"] == "admin"
@@ -177,15 +169,13 @@ async def test_generate_encryption_key(client: AsyncClient):
     """Test ML-KEM key generation endpoint."""
     # Login
     login_response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
+        "/auth/login", json={"username": "admin", "password": "admin123!"}
     )
     token = login_response.json()["access_token"]
-    
+
     # Generate KEM key
     response = await client.post(
-        "/auth/keys/generate",
-        headers={"Authorization": f"Bearer {token}"}
+        "/auth/keys/generate", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -201,31 +191,23 @@ async def test_logout_revokes_token(client: AsyncClient):
     """Test that logout properly revokes the token."""
     # Login
     login_response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
+        "/auth/login", json={"username": "admin", "password": "admin123!"}
     )
     token = login_response.json()["access_token"]
-    
+
     # Verify token works
-    me_response = await client.get(
-        "/auth/me",
-        headers={"Authorization": f"Bearer {token}"}
-    )
+    me_response = await client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me_response.status_code == 200
-    
+
     # Logout
     logout_response = await client.post(
-        "/auth/logout",
-        headers={"Authorization": f"Bearer {token}"}
+        "/auth/logout", headers={"Authorization": f"Bearer {token}"}
     )
     assert logout_response.status_code == 200
     assert "revoked_jti" in logout_response.json()
-    
+
     # Token should now be rejected
-    me_response2 = await client.get(
-        "/auth/me",
-        headers={"Authorization": f"Bearer {token}"}
-    )
+    me_response2 = await client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me_response2.status_code == 401
 
 
@@ -234,24 +216,19 @@ async def test_token_refresh(client: AsyncClient):
     """Test token refresh functionality."""
     # Login
     login_response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
+        "/auth/login", json={"username": "admin", "password": "admin123!"}
     )
     old_token = login_response.json()["access_token"]
-    
+
     # Refresh token
     refresh_response = await client.post(
-        "/auth/refresh",
-        headers={"Authorization": f"Bearer {old_token}"}
+        "/auth/refresh", headers={"Authorization": f"Bearer {old_token}"}
     )
     assert refresh_response.status_code == 200
     new_token = refresh_response.json()["access_token"]
-    
+
     # New token should work
-    me_response = await client.get(
-        "/auth/me",
-        headers={"Authorization": f"Bearer {new_token}"}
-    )
+    me_response = await client.get("/auth/me", headers={"Authorization": f"Bearer {new_token}"})
     assert me_response.status_code == 200
     assert me_response.json()["username"] == "admin"
 
@@ -259,27 +236,27 @@ async def test_token_refresh(client: AsyncClient):
 @pytest.mark.anyio
 async def test_signature_verification_endpoint(client: AsyncClient):
     """Test the signature verification endpoint with valid signed payload."""
-    from quantum_safe_crypto import SigningKeyPair
     import base64
     import time
-    
+
+    from quantum_safe_crypto import SigningKeyPair
+
     # Login
     login_response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
+        "/auth/login", json={"username": "admin", "password": "admin123!"}
     )
     token = login_response.json()["access_token"]
-    
+
     # Create a signed payload
     signing_key = SigningKeyPair()
     test_data = b"test payload data for verification"
-    payload_b64 = base64.b64encode(test_data).decode('utf-8')
+    payload_b64 = base64.b64encode(test_data).decode("utf-8")
     timestamp = time.time()
-    
+
     # Sign the payload + timestamp
     signed_data = f"{payload_b64}:{timestamp}"
-    signature = signing_key.sign(signed_data.encode('utf-8'))
-    
+    signature = signing_key.sign(signed_data.encode("utf-8"))
+
     # Verify via API
     response = await client.post(
         "/auth/verify-signature",
@@ -289,7 +266,7 @@ async def test_signature_verification_endpoint(client: AsyncClient):
             "signer_public_key": signing_key.public_key,
             "timestamp": timestamp,
         },
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -302,16 +279,14 @@ async def test_worker_status_endpoint(client: AsyncClient):
     """Test the Celery worker status endpoint."""
     # Login first
     login_response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
+        "/auth/login", json={"username": "admin", "password": "admin123!"}
     )
     assert login_response.status_code == 200
     token = login_response.json()["access_token"]
-    
+
     # Check worker status
     response = await client.get(
-        "/jobs/workers/status",
-        headers={"Authorization": f"Bearer {token}"}
+        "/jobs/workers/status", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -324,12 +299,11 @@ async def test_job_submission_with_message(client: AsyncClient):
     """Test that job submission returns informative message."""
     # Login first
     login_response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
+        "/auth/login", json={"username": "admin", "password": "admin123!"}
     )
     assert login_response.status_code == 200
     token = login_response.json()["access_token"]
-    
+
     # Submit a job
     response = await client.post(
         "/jobs",
@@ -339,7 +313,7 @@ async def test_job_submission_with_message(client: AsyncClient):
             "backend": "local_simulator",
             "priority": 5,
         },
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 202
     data = response.json()
@@ -353,28 +327,27 @@ async def test_job_submission_with_message(client: AsyncClient):
 async def test_user_registration(client: AsyncClient):
     """Test user registration endpoint."""
     import secrets
-    
+
     # Generate unique username
     unique_username = f"testuser_{secrets.token_hex(4)}"
-    
+
     response = await client.post(
         "/auth/register",
         json={
             "username": unique_username,
             "password": "TestPassword123!",
             "email": f"{unique_username}@test.com",
-        }
+        },
     )
     assert response.status_code == 201
     data = response.json()
     assert data["username"] == unique_username
     assert "user_id" in data
     assert "Registration successful" in data["message"]
-    
+
     # Try to login with new user
     login_response = await client.post(
-        "/auth/login",
-        json={"username": unique_username, "password": "TestPassword123!"}
+        "/auth/login", json={"username": unique_username, "password": "TestPassword123!"}
     )
     assert login_response.status_code == 200
 
@@ -387,7 +360,7 @@ async def test_registration_duplicate_username(client: AsyncClient):
         json={
             "username": "admin",  # Already exists
             "password": "TestPassword123!",
-        }
+        },
     )
     assert response.status_code == 409
     assert "already exists" in response.json()["detail"]
@@ -398,18 +371,14 @@ async def test_api_versioning(client: AsyncClient):
     """Test that API versioning works correctly."""
     # Test versioned login endpoint works
     login_response = await client.post(
-        "/api/v1/auth/login",
-        json={"username": "admin", "password": "admin123!"}
+        "/api/v1/auth/login", json={"username": "admin", "password": "admin123!"}
     )
     assert login_response.status_code == 200
     assert "access_token" in login_response.json()
-    
+
     # Test versioned jobs endpoint works (with auth)
     token = login_response.json()["access_token"]
-    jobs_response = await client.get(
-        "/api/v1/jobs",
-        headers={"Authorization": f"Bearer {token}"}
-    )
+    jobs_response = await client.get("/api/v1/jobs", headers={"Authorization": f"Bearer {token}"})
     assert jobs_response.status_code == 200
 
 
@@ -418,11 +387,10 @@ async def test_job_with_callback_url_validation(client: AsyncClient):
     """Test that invalid callback URLs are rejected."""
     # Login first
     login_response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
+        "/auth/login", json={"username": "admin", "password": "admin123!"}
     )
     token = login_response.json()["access_token"]
-    
+
     # Submit with invalid callback URL
     response = await client.post(
         "/jobs",
@@ -431,7 +399,7 @@ async def test_job_with_callback_url_validation(client: AsyncClient):
             "problem_config": {"problem": "maxcut", "edges": [[0, 1]]},
             "callback_url": "invalid-url",  # Not http/https
         },
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 400
     assert "callback_url" in response.json()["detail"]
@@ -441,17 +409,16 @@ async def test_job_with_callback_url_validation(client: AsyncClient):
 async def test_update_encryption_key(client: AsyncClient):
     """Test updating user's encryption key."""
     from quantum_safe_crypto import KemKeyPair
-    
+
     # Login
     login_response = await client.post(
-        "/auth/login",
-        json={"username": "admin", "password": "admin123!"}
+        "/auth/login", json={"username": "admin", "password": "admin123!"}
     )
     token = login_response.json()["access_token"]
-    
+
     # Generate a KEM keypair
     keypair = KemKeyPair()
-    
+
     # Update encryption key
     response = await client.put(
         "/auth/keys/encryption-key",
@@ -459,7 +426,7 @@ async def test_update_encryption_key(client: AsyncClient):
             "public_key": keypair.public_key,
             "key_type": "ML-KEM-768",
         },
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     assert "updated successfully" in response.json()["message"]
