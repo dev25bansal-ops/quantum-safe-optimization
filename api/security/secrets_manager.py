@@ -11,7 +11,7 @@ Features:
 
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from azure.core.exceptions import ClientAuthenticationError, ResourceNotFoundError
@@ -44,7 +44,7 @@ class SecretsCacheEntry:
         self.version: str | None = None
 
     def is_expired(self) -> bool:
-        return datetime.utcnow() >= self.expires_at
+        return datetime.now(timezone.utc) >= self.expires_at
 
 
 class SecretsManager:
@@ -105,10 +105,29 @@ class SecretsManager:
 
         # Try to connect to Key Vault if URI is provided
         if self.config.key_vault_uri:
-        try:
-            await self._load_from_key_vault()
-        except Exception:  # noqa: BLE001 - KeyVault failure is OK during local development
-            pass  # Will use local memory storage
+            try:
+                credential = (
+                    ManagedIdentityCredential()
+                    if self.config.use_managed_identity
+                    else DefaultAzureCredential()
+                )
+                self._client = SecretClient(
+                    vault_url=self.config.key_vault_uri,
+                    credential=credential,
+                )
+                # Test connection
+                await self._client.get_secret("test-connectivity")
+            except ResourceNotFoundError:
+                # Connection works, secret just doesn't exist - that's fine
+                pass
+            except (ClientAuthenticationError, Exception):  # noqa: BLE001
+                # Key Vault unavailable, fall back to local
+                self._client = None
+                self._use_local = True
+        else:
+            self._use_local = True
+
+        self._initialized = True
 
     async def close(self):
         """Close the secrets manager."""
@@ -159,7 +178,7 @@ class SecretsManager:
         if value is not None:
             self._cache[name] = SecretsCacheEntry(
                 value=value,
-                expires_at=datetime.utcnow() + timedelta(seconds=self.config.cache_ttl_seconds),
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=self.config.cache_ttl_seconds),
             )
 
         return value
@@ -211,7 +230,7 @@ class SecretsManager:
             # Update cache
             self._cache[name] = SecretsCacheEntry(
                 value=value,
-                expires_at=datetime.utcnow() + timedelta(seconds=self.config.cache_ttl_seconds),
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=self.config.cache_ttl_seconds),
             )
             return True
         except Exception:  # noqa: BLE001 - Non-critical exception

@@ -292,7 +292,7 @@ class AppSettings(BaseSettings):
     debug: bool = Field(default=False, alias="DEBUG")
 
     # Server settings
-    host: str = Field(default="0.0.0.0", alias="API_HOST"),  # noqa: S104 - Accepting connections from all interfaces
+    host: str = Field(default="0.0.0.0", alias="API_HOST")  # noqa: S104 - Accepting connections from all interfaces
     port: int = Field(default=8000, alias="API_PORT", ge=1, le=65535)
     workers: int = Field(default=4, alias="API_WORKERS", ge=1, le=32)
 

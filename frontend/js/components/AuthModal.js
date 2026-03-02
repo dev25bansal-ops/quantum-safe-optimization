@@ -3,7 +3,7 @@
  * Reusable authentication modal using the new Modal component
  */
 
-import { Modal } from './components/Modal.js';
+import { Modal } from './Modal.js';
 
 class AuthModal {
     constructor() {
@@ -22,25 +22,35 @@ class AuthModal {
     }
 
     setupEventHandlers() {
-        this.modal.element.closest('.modal-overlay').addEventListener('click', (e) => {
-            if (e.target === this.modal.element.closest('.modal-overlay')) {
-                this.close();
+        // Defer overlay click handler - overlay only exists after modal.open()/render()
+        const originalOpen = this.modal.open.bind(this.modal);
+        this.modal.open = (...args) => {
+            originalOpen(...args);
+            const overlay = this.modal.element?.querySelector('[data-modal-overlay]');
+            if (overlay) {
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) {
+                        this.close();
+                    }
+                });
             }
-        });
+        };
     }
 
     openLogin() {
         this.currentMode = 'login';
-        this.modal.setTitle('<i class="fas fa-user-lock"></i> Sign In');
-        this.getLoginContent();
-        this.modal.open();
+        this.modal.open();  // setState queues render via microtask
+        this.modal.setTitle('Sign In');
+        // Defer content setup until after batched render completes
+        setTimeout(() => this.getLoginContent(), 0);
     }
 
     openRegister() {
         this.currentMode = 'register';
-        this.modal.setTitle('<i class="fas fa-user-plus"></i> Create Account');
-        this.getRegisterContent();
-        this.modal.open();
+        this.modal.open();  // setState queues render via microtask
+        this.modal.setTitle('Create Account');
+        // Defer content setup until after batched render completes
+        setTimeout(() => this.getRegisterContent(), 0);
     }
 
     getLoginContent() {
@@ -145,11 +155,9 @@ class AuthModal {
                 ? email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_')
                 : email.toLowerCase();
 
-            const CONFIG = {
-                apiUrl: localStorage.getItem('apiUrl') || 'http://localhost:8001/api/v1'
-            };
+            const apiUrl = localStorage.getItem('apiUrl') || (window.location.origin + '/api/v1');
 
-            const response = await fetch(`${CONFIG.apiUrl}/auth/login`, {
+            const response = await fetch(`${apiUrl}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
@@ -185,7 +193,7 @@ class AuthModal {
             // SECURITY: Demo tokens must be issued by server, not client-side
             // Client-side token generation via btoa() is a CRITICAL vulnerability
             if (error.message.includes('fetch') || error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
-                showToast('error', 'API Unavailable', 'Server authentication is required. Please check your connection.');
+                if (window.showToast) window.showToast('error', 'API Unavailable', 'Server authentication is required. Please check your connection.');
                 errorDiv.textContent = 'Authentication server available. Please check your connection.';
                 errorDiv.style.display = 'block';
             } else {
@@ -231,11 +239,10 @@ class AuthModal {
                 ? email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_')
                 : email.toLowerCase();
 
-            const CONFIG = {
-                apiUrl: localStorage.getItem('apiUrl') || 'http://localhost:8001/api/v1'
-            };
+            const apiUrl = localStorage.getItem('apiUrl') || (window.location.origin + '/api/v1');
 
-            const response = await fetch(`${CONFIG.apiUrl}/auth/register`, {
+            // Step 1: Register the user
+            const regResponse = await fetch(`${apiUrl}/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -246,10 +253,23 @@ class AuthModal {
                 })
             });
 
-            const data = await response.json();
+            const regData = await regResponse.json();
 
-            if (response.ok && data.access_token) {
-                localStorage.setItem('authToken', data.access_token);
+            if (!regResponse.ok) {
+                throw new Error(regData.detail || regData.message || 'Registration failed');
+            }
+
+            // Step 2: Auto-login after successful registration
+            const loginResponse = await fetch(`${apiUrl}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            const loginData = await loginResponse.json();
+
+            if (loginResponse.ok && loginData.access_token) {
+                localStorage.setItem('authToken', loginData.access_token);
                 localStorage.setItem('quantumSafeUser', JSON.stringify({
                     email: email,
                     username: username,
@@ -257,8 +277,8 @@ class AuthModal {
                     signedInAt: new Date().toISOString()
                 }));
 
-                if (data.refresh_token) {
-                    localStorage.setItem('refreshToken', data.refresh_token);
+                if (loginData.refresh_token) {
+                    localStorage.setItem('refreshToken', loginData.refresh_token);
                 }
 
                 this.close();
@@ -267,17 +287,19 @@ class AuthModal {
                 }
 
                 if (window.showToast) {
-                    window.showToast('success', 'Account Created!', 'Your account has been created successfully');
+                    window.showToast('success', 'Account Created!', 'Your account has been created and you are now signed in');
                 }
             } else {
-                throw new Error(data.detail || data.message || 'Registration failed');
+                // Registration succeeded but auto-login failed - prompt to sign in
+                this.close();
+                if (window.showToast) {
+                    window.showToast('success', 'Account Created!', regData.message || 'You can now sign in with your credentials');
+                }
             }
         } catch (error) {
-            // SECURITY: Demo tokens must be issued by server, not client-side
-            // Client-side token generation via btoa() is a CRITICAL vulnerability
             if (error.message.includes('fetch') || error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
-                showToast('error', 'API Unavailable', 'Server authentication is required. Please check your connection.');
-                errorDiv.textContent = 'Authentication server available. Please check your connection.';
+                if (window.showToast) window.showToast('error', 'API Unavailable', 'Server authentication is required. Please check your connection.');
+                errorDiv.textContent = 'Authentication server unavailable. Please check your connection.';
                 errorDiv.style.display = 'block';
             } else {
                 errorDiv.textContent = error.message;

@@ -20,10 +20,14 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 try:
+    from azure.identity.aio import DefaultAzureCredential as AsyncDefaultAzureCredential
+    from azure.keyvault.secrets.aio import SecretClient as AsyncSecretClient
+
+    # Also import sync versions as fallback
     from azure.identity import DefaultAzureCredential
     from azure.keyvault.secrets import SecretClient
 
@@ -69,8 +73,8 @@ class CredentialManager:
     def _init_azure_backend(self):
         """Initialize Azure Key Vault client."""
         try:
-            credential = DefaultAzureCredential()
-            client = SecretClient(
+            credential = AsyncDefaultAzureCredential()
+            client = AsyncSecretClient(
                 vault_url=self._key_vault_url,
                 credential=credential,
             )
@@ -147,8 +151,8 @@ class CredentialManager:
             "credential_type": credential_type,
             "value": value,  # Backend will encrypt this
             "metadata": metadata or {},
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
         try:

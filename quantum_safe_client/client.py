@@ -216,7 +216,7 @@ class AsyncQuantumSafeClient:
         if webhook_url:
             data["webhook_url"] = webhook_url
 
-        response = await self._request("POST", "/jobs/submit", data=data)
+        response = await self._request("POST", "/jobs", data=data)
         return Job.from_dict(response)
 
     async def submit_vqe_job(
@@ -257,7 +257,7 @@ class AsyncQuantumSafeClient:
         if webhook_url:
             data["webhook_url"] = webhook_url
 
-        response = await self._request("POST", "/jobs/submit", data=data)
+        response = await self._request("POST", "/jobs", data=data)
         return Job.from_dict(response)
 
     async def submit_annealing_job(
@@ -295,7 +295,7 @@ class AsyncQuantumSafeClient:
         if webhook_url:
             data["webhook_url"] = webhook_url
 
-        response = await self._request("POST", "/jobs/submit", data=data)
+        response = await self._request("POST", "/jobs", data=data)
         return Job.from_dict(response)
 
     # ==================== Job Management ====================

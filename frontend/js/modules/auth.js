@@ -161,23 +161,36 @@ export function updateAuthUI(isAuthenticated, user) {
  */
 export function openAuthModal(e) {
     e?.preventDefault();
-    document.getElementById('auth-modal')?.classList.add('active');
-    showLoginForm();
-
     // Close user dropdown
     document.getElementById('user-dropdown')?.classList.remove('active');
+
+    // Delegate to AuthModal component if available
+    if (window.authModal) {
+        window.authModal.openLogin();
+        return;
+    }
+
+    // Fallback: static DOM approach
+    document.getElementById('auth-modal')?.classList.add('active');
+    showLoginForm();
 }
 
 /**
  * Close authentication modal
  */
 export function closeAuthModal() {
+    // Delegate to AuthModal component if available
+    if (window.authModal) {
+        window.authModal.close();
+        return;
+    }
+
+    // Fallback: static DOM approach
     document.getElementById('auth-modal')?.classList.remove('active');
-    // Reset forms
     document.getElementById('login-form')?.reset();
     document.getElementById('register-form')?.reset();
-    document.getElementById('login-error').style.display = 'none';
-    document.getElementById('register-error').style.display = 'none';
+    document.getElementById('login-error')?.style && (document.getElementById('login-error').style.display = 'none');
+    document.getElementById('register-error')?.style && (document.getElementById('register-error').style.display = 'none');
 }
 
 /**
@@ -185,9 +198,15 @@ export function closeAuthModal() {
  */
 export function showLoginForm(e) {
     e?.preventDefault();
-    document.getElementById('login-form').style.display = 'block';
-    document.getElementById('register-form').style.display = 'none';
-    document.getElementById('auth-modal-title').innerHTML = '<i class="fas fa-user-lock"></i> Sign In';
+    // Delegate to AuthModal component if available
+    if (window.authModal) {
+        window.authModal.openLogin();
+        return;
+    }
+    document.getElementById('login-form')?.style && (document.getElementById('login-form').style.display = 'block');
+    document.getElementById('register-form')?.style && (document.getElementById('register-form').style.display = 'none');
+    const title = document.getElementById('auth-modal-title');
+    if (title) title.innerHTML = '<i class="fas fa-user-lock"></i> Sign In';
 }
 
 /**
@@ -195,9 +214,15 @@ export function showLoginForm(e) {
  */
 export function showRegisterForm(e) {
     e?.preventDefault();
-    document.getElementById('login-form').style.display = 'none';
-    document.getElementById('register-form').style.display = 'block';
-    document.getElementById('auth-modal-title').innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
+    // Delegate to AuthModal component if available
+    if (window.authModal) {
+        window.authModal.openRegister();
+        return;
+    }
+    document.getElementById('login-form')?.style && (document.getElementById('login-form').style.display = 'none');
+    document.getElementById('register-form')?.style && (document.getElementById('register-form').style.display = 'block');
+    const title = document.getElementById('auth-modal-title');
+    if (title) title.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
 }
 
 /**
@@ -364,3 +389,4 @@ window.closeAuthModal = closeAuthModal;
 window.showLoginForm = showLoginForm;
 window.showRegisterForm = showRegisterForm;
 window.handleLogout = handleLogout;
+window.checkAuthStatus = checkAuthStatus;

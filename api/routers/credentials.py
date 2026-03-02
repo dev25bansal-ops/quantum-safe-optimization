@@ -19,7 +19,7 @@ Usage:
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from api.services.credentials import get_credential_manager
@@ -87,7 +87,8 @@ async def get_current_user_for_credentials(request):
 @router.post("", response_model=CredentialResponse, status_code=201)
 @limiter.limit("5/minute")
 async def store_credential(
-    request: CredentialStoreRequest,
+    request: Request,
+    body: CredentialStoreRequest,
     current_user: dict = Depends(get_current_user_for_credentials),
 ):
     """
@@ -106,14 +107,14 @@ async def store_credential(
     try:
         response = await manager.store_credential(
             user_id=current_user["sub"],
-            provider=request.provider,
-            credential_type=request.credential_type,
-            value=request.value,
-            metadata=request.metadata,
+            provider=body.provider,
+            credential_type=body.credential_type,
+            value=body.value,
+            metadata=body.metadata,
         )
 
         logger.info(
-            f"Credential stored: {request.provider}/{request.credential_type} "
+            f"Credential stored: {body.provider}/{body.credential_type} "
             f"for user {current_user['sub']}"
         )
 
@@ -134,6 +135,7 @@ async def store_credential(
 @router.get("", response_model=list[CredentialResponse])
 @limiter.limit("10/minute")
 async def list_credentials(
+    request: Request,
     current_user: dict = Depends(get_current_user_for_credentials),
 ):
     """
@@ -156,6 +158,7 @@ async def list_credentials(
 @router.get("/{provider}/{credential_type}", response_model=CredentialDetailResponse)
 @limiter.limit("20/minute")
 async def get_credential(
+    request: Request,
     provider: str,
     credential_type: str,
     current_user: dict = Depends(get_current_user_for_credentials),
@@ -185,6 +188,7 @@ async def get_credential(
 @router.delete("/{provider}/{credential_type}")
 @limiter.limit("5/minute")
 async def delete_credential(
+    request: Request,
     provider: str,
     credential_type: str,
     current_user: dict = Depends(get_current_user_for_credentials),

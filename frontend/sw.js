@@ -3,7 +3,7 @@
  * Provides offline support, caching, and performance optimization
  */
 
-const CACHE_VERSION = 'qso-v2.0.0';
+const CACHE_VERSION = 'qso-v2.2.0';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;
@@ -89,6 +89,18 @@ self.addEventListener('fetch', (event) => {
     // API requests - network-first with fallback
     if (API_PATTERNS.some(pattern => url.pathname.startsWith(pattern))) {
         event.respondWith(networkFirst(request, API_CACHE, 5 * 60 * 1000)); // 5 min cache
+        return;
+    }
+
+    // HTML navigation requests - network-first (always get fresh HTML)
+    if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
+        event.respondWith(networkFirst(request, STATIC_CACHE, 60 * 60 * 1000)); // 1 hour cache
+        return;
+    }
+
+    // JS module files - network-first (ensure fresh code)
+    if (url.origin === self.location.origin && url.pathname.endsWith('.js')) {
+        event.respondWith(networkFirst(request, STATIC_CACHE, 60 * 60 * 1000)); // 1 hour cache
         return;
     }
 

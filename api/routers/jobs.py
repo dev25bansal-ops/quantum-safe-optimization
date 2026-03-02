@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -360,7 +360,7 @@ async def send_webhook_notification(
             "event": "job.completed" if status == "completed" else "job.failed",
             "job_id": job_id,
             "status": status,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         if result:
@@ -467,7 +467,7 @@ async def process_optimization_job(job_id: str, job_data: dict[str, Any]):
         await update_job(
             {
                 "status": "running",
-                "started_at": datetime.utcnow().isoformat(),
+                "started_at": datetime.now(timezone.utc).isoformat(),
             }
         )
 
@@ -760,7 +760,7 @@ async def process_optimization_job(job_id: str, job_data: dict[str, Any]):
         await update_job(
             {
                 "status": "completed",
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
                 "result": result if not encrypted_result else None,
                 "encrypted_result": encrypted_result,
             }
@@ -782,7 +782,7 @@ async def process_optimization_job(job_id: str, job_data: dict[str, Any]):
             {
                 "status": "failed",
                 "error": error_msg,
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
             }
         )
 
@@ -860,7 +860,7 @@ async def submit_job(
         "backend": job_request.backend,
         "priority": priority_int,
         "status": "queued",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "started_at": None,
         "completed_at": None,
         "result": None,
@@ -1108,7 +1108,7 @@ async def cancel_job(
 
     # Update job status
     job["status"] = "cancelled"
-    job["completed_at"] = datetime.utcnow().isoformat()
+    job["completed_at"] = datetime.now(timezone.utc).isoformat()
     job["cancellation_reason"] = "User requested cancellation"
 
     # Persist to store
@@ -1231,7 +1231,7 @@ async def retry_job(
         "job_id": new_job_id,
         "id": new_job_id,
         "status": "queued",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "started_at": None,
         "completed_at": None,
         "result": None,

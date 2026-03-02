@@ -271,8 +271,13 @@ export async function submitJob() {
 
             navigateToSection('jobs');
         } else {
-            showToast('error', 'Submission Failed', error.message || 'An error occurred');
-            addNotification('error', 'Submission Failed', error.message || 'An error occurred');
+            // Provide user-friendly guidance for common errors
+            let errorMsg = error.message || 'An error occurred';
+            if (errorMsg.includes('ML-KEM') || errorMsg.includes('public key')) {
+                errorMsg = 'PQC encryption requires a registered key. Uncheck "Encrypt with ML-KEM-768" or register a key first.';
+            }
+            showToast('error', 'Submission Failed', errorMsg);
+            addNotification('error', 'Submission Failed', errorMsg);
         }
     } finally {
         // Restore button state

@@ -23,9 +23,9 @@ export async function loadWebhookStats() {
         try {
             data = await apiGet('/webhooks/stats');
         } catch (error) {
-            // Show demo data for authenticated demo users or on network error
+            // Show demo data for authenticated demo users or on network/404 error
             if (error.message.includes('Session expired') || error.message.includes('401') || 
-                error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+                error.message.includes('404') || error.message.includes('Failed to fetch') || error.name === 'TypeError') {
                 if (STATE.isAuthenticated) {
                     data = getDemoWebhookStats();
                 } else {

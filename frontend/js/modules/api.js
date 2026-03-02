@@ -113,7 +113,7 @@ export async function apiPatch(endpoint, data) {
  */
 export async function checkHealth() {
     try {
-        const response = await fetch(`${CONFIG.apiUrl}/health`, {
+        const response = await fetch(`${CONFIG.apiBase}/health`, {
             method: 'GET',
             headers: { 'Accept': 'application/json' }
         });
@@ -136,7 +136,7 @@ export async function checkHealth() {
  */
 export async function pingApi() {
     try {
-        const response = await fetch(`${CONFIG.apiUrl}/health`, {
+        const response = await fetch(`${CONFIG.apiBase}/health`, {
             method: 'HEAD',
             cache: 'no-store'
         });

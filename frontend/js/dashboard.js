@@ -6,8 +6,8 @@
 
 // Configuration - use current origin to avoid CORS issues
 const CONFIG = {
-    apiUrl: localStorage.getItem('apiUrl') || 'http://localhost:8001/api/v1',
-    apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || 'http://localhost:8001',
+    apiUrl: localStorage.getItem('apiUrl') || `${window.location.origin}/api/v1`,
+    apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || window.location.origin,
     healthCheckInterval: 30000, // 30 seconds for health checks only
     maxRetries: 3
 };
@@ -3924,7 +3924,7 @@ function checkConnection() {
     const statusText = document.getElementById('offline-status');
     if (statusText) statusText.textContent = 'Checking...';
 
-    fetch(CONFIG.apiUrl + '/health', { method: 'HEAD', cache: 'no-store' })
+    fetch(CONFIG.apiBase + '/health', { method: 'HEAD', cache: 'no-store' })
         .then(() => handleOnline())
         .catch(() => {
             if (statusText) statusText.textContent = 'Still offline...';
