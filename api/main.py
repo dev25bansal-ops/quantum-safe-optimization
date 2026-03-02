@@ -27,7 +27,7 @@ from slowapi.errors import RateLimitExceeded
 
 from api.db.cosmos import close_cosmos, init_cosmos
 from api.logging_config import setup_logging
-from api.routers import auth, health, jobs
+from api.routers import auth, auth_demo, health, jobs
 from api.routers.backends import router as backends_router
 from api.routers.costs import router as costs_router
 from api.routers.metrics import MetricsMiddleware
@@ -305,6 +305,7 @@ api_v1_router = APIRouter(prefix=f"/api/{API_VERSION}")
 
 # Include routers under versioned prefix
 api_v1_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+api_v1_router.include_router(auth_demo.router, prefix="/auth", tags=["Authentication-Demo"])
 api_v1_router.include_router(jobs.router, prefix="/jobs", tags=["Optimization Jobs"])
 api_v1_router.include_router(websocket_router, prefix="/ws", tags=["WebSocket"])
 api_v1_router.include_router(costs_router, tags=["Cost Estimation"])

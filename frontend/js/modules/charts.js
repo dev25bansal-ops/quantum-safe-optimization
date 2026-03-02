@@ -12,30 +12,86 @@ let probabilityChart = null;
 let parameterChart = null;
 let statusPieChart = null;
 
-// Chart.js loading promise
+// Chart.js module-level singleton loading promise
+const CHART_JS_VERSION = '4.4.0';
+const CHART_JS_CDN = `https://cdn.jsdelivr.net/npm/chart.js@${CHART_JS_VERSION}/dist/chart.umd.min.js`;
+
 let chartLoadPromise = null;
+let chartJsLoaded = false;
+let chartJsLoading = false;
 
 /**
- * Lazy load Chart.js library
+ * Lazy load Chart.js library with module-level singleton pattern.
+ * This ensures Chart.js is only loaded once per session, even when navigating between pages.
+ *
+ * The singleton pattern prevents:
+ * 1. Redundant network requests for the same CDN resource
+ * 2. Memory leaks from multiple Chart.js instances
+ * 3. Version conflicts from loading different versions
  */
-async function loadChartJS() {
-    if (window.Chart) return;
+export async function loadChartJS() {
+    if (typeof window !== 'undefined' && window.Chart) {
+        chartJsLoaded = true;
+        return;
+    }
 
-    if (chartLoadPromise) return chartLoadPromise;
+    if (chartJsLoaded) {
+        return;
+    }
+
+    if (chartLoadPromise) {
+        return chartLoadPromise;
+    }
+
+    if (chartJsLoading) {
+        return new Promise(resolve => {
+            const checkInterval = setInterval(() => {
+                if (chartJsLoaded) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 50);
+        });
+    }
+
+    chartJsLoading = true;
 
     chartLoadPromise = new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
-        script.onload = resolve;
-        script.onerror = () => reject(new Error('Failed to load Chart.js'));
+        script.src = CHART_JS_CDN;
+        script.crossOrigin = 'anonymous';
+        script.async = true;
+
+        script.onload = () => {
+            chartJsLoaded = true;
+            chartJsLoading = false;
+            console.log('Chart.js loaded successfully');
+            resolve();
+        };
+
+        script.onerror = () => {
+            chartJsLoading = false;
+            chartLoadPromise = null;
+            const error = new Error(`Failed to load Chart.js from ${CHART_JS_CDN}`);
+            console.error(error);
+            reject(error);
+        };
+
         document.head.appendChild(script);
     });
 
     return chartLoadPromise;
 }
 
-// Make loadChartJS globally accessible
-window.loadChartJS = loadChartJS;
+// Make loadChartJS globally accessible for dashboard.js
+if (typeof window !== 'undefined') {
+    window.loadChartJS = loadChartJS;
+    window.chartJsLoaded = () => chartJsLoaded;
+}
+
+export function isChartJsLoaded(): boolean {
+    return typeof window !== 'undefined' && chartJsLoaded && !!window.Chart;
+}
 
 /**
  * Initialize Convergence Chart

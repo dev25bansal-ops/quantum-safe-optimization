@@ -665,7 +665,7 @@ async function handleSignup(event) {
         const username = email.includes('@') ? email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_') : email.toLowerCase();
 
         // Call real backend API
-        const response = await fetch('/auth/register', {
+        const response = await fetch(`${CONFIG.apiUrl}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -695,7 +695,7 @@ async function handleSignup(event) {
 
             // Auto-login with the same credentials
             try {
-                const loginResponse = await fetch('/auth/login', {
+                const loginResponse = await fetch(`${CONFIG.apiUrl}/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -746,15 +746,11 @@ async function handleSignup(event) {
             error.message.includes('JSON');
 
         if (isApiUnavailable) {
-            const demoToken = btoa(JSON.stringify({ email, name, exp: Date.now() + 86400000 }));
-            localStorage.setItem('authToken', demoToken);
-            localStorage.setItem('quantumSafeUser', JSON.stringify({
-                name: name,
-                email: email,
-                createdAt: new Date().toISOString()
-            }));
-            if (modalBody) modalBody.style.display = 'none';
-            if (successMessage) successMessage.classList.add('show');
+            // SECURITY: Demo tokens must be issued by server, not client-side
+            // Client-side token generation via btoa() is a CRITICAL vulnerability
+            showToast('error', 'API Unavailable', 'Server authentication is required. Demo mode disabled for security.');
+            errorDiv.textContent = 'Authentication server required. Please check your connection.';
+            errorDiv.style.display = 'block';
         } else {
             // Provide helpful error message with suggestion to sign in
             if (error.message.toLowerCase().includes('already exists') || error.message.toLowerCase().includes('username') && error.message.toLowerCase().includes('exists')) {
@@ -803,7 +799,7 @@ async function handleSignin(event) {
             : email.toLowerCase();
 
         // Call real backend API
-        const response = await fetch('/auth/login', {
+        const response = await fetch(`${CONFIG.apiUrl}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -844,13 +840,11 @@ async function handleSignin(event) {
             error.message.includes('JSON');
 
         if (isApiUnavailable) {
-            const demoToken = btoa(JSON.stringify({ email, exp: Date.now() + 86400000 }));
-            localStorage.setItem('authToken', demoToken);
-            localStorage.setItem('quantumSafeUser', JSON.stringify({
-                email: email,
-                signedInAt: new Date().toISOString()
-            }));
-            window.location.href = 'dashboard.html';
+            // SECURITY: Demo tokens must be issued by server, not client-side
+            // Client-side token generation via btoa() is a CRITICAL vulnerability
+            showToast('error', 'API Unavailable', 'Server authentication is required. Please check your connection.');
+            errorDiv.textContent = 'Authentication server available. Please check your connection.';
+            errorDiv.style.display = 'block';
         } else {
             // Provide helpful error message with suggestion to sign up
             if (error.message.toLowerCase().includes('invalid credentials')) {
@@ -1437,8 +1431,8 @@ console.log(`
 %c Quantum-Safe Secure Optimization Platform
 
 %c🔐 Post-Quantum Cryptography: ML-KEM-768, ML-DSA-65
-%c📡 API: http://localhost:8000
-%c📖 Docs: http://localhost:8000/docs
+%c📡 API: http://localhost:8001
+%c📖 Docs: http://localhost:8001/docs
 %c⚛️ Backends: IBM Quantum, AWS Braket, Azure Quantum, D-Wave
 
 %c Built with ❤️ for the post-quantum era

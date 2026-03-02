@@ -6,7 +6,6 @@ Includes rate limiting and token revocation for security.
 """
 
 import logging
-import os
 import secrets
 from datetime import datetime, timedelta
 
@@ -372,10 +371,13 @@ def verify_pqc_token(token: str, signing_keypair: SigningKeyPair | None = None) 
         if payload.get("exp", 0) < datetime.utcnow().timestamp():
             return None
 
-        # Enforce active token check unless explicitly bypassed
-        allow_token_db_bypass = os.getenv("ALLOW_TOKEN_DB_BYPASS", "false").lower() == "true"
+        # Enforce active token check - tokens must be in database
         token_record = _tokens_db.get(token)
-        if token_record is None and not allow_token_db_bypass:
+        if token_record is None:
+            logger.warning("Token verification failed: token not in database")
+            return None
+        if token_record.get("revoked", False):
+            logger.warning("Token verification failed: token revoked")
             return None
 
         # Verify signature if we have server signing keypair and stored full signature

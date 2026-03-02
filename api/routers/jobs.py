@@ -296,6 +296,9 @@ class JobListResponse(BaseModel):
     """Response for job listing."""
 
     jobs: list[JobResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 class DecryptResultRequest(BaseModel):
@@ -348,7 +351,6 @@ async def send_webhook_notification(
                 pass
 
         except Exception:  # noqa: BLE001 - Fallback to legacy is non-critical
-        except Exception:
             pass
             # Fall through to legacy implementation
 
@@ -1168,60 +1170,37 @@ async def get_job_result(
     }
 
 
-@router.post("/{job_id}/decrypt")
+@router.post("/{job_id}/decrypt", deprecated=True)
 async def decrypt_job_result(
     job_id: str,
     request: DecryptResultRequest,
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Decrypt an encrypted job result using your ML-KEM secret key.
+    ⚠️ CRITICAL SECURITY: DECRYPT ENDPOINT REMOVED ⚠️
 
-    ⚠️ Security Note: This endpoint accepts your secret key to decrypt the result.
-    For maximum security, prefer client-side decryption where your secret key
-    never leaves your device.
+    This endpoint has been DISABLED for security reasons.
+    Accepting secret keys over HTTP is a CRITICAL security vulnerability.
 
-    The encryption uses ML-KEM-768 (NIST FIPS 203) for key encapsulation
-    combined with AES-256-GCM for symmetric encryption.
+    Client-side decryption is REQUIRED:
+    1. Use quantum_safe_crypto.py_decrypt() offline
+    2. Your secret key never leaves your device
+    3. No network exposure of sensitive cryptographic material
+
+    Client-side decryption example:
+    ```
+    import json
+    from quantum_safe_crypto import EncryptedEnvelope, py_decrypt
+
+    envelope = EncryptedEnvelope.from_json(encrypted_result)
+    result_bytes = py_decrypt(envelope, your_secret_key)
+    result = json.loads(result_bytes.decode('utf-8'))
+    ```
     """
-    job = await get_job_data(job_id, current_user["sub"])
-
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    if job["user_id"] != current_user["sub"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    if job["status"] != "completed":
-        raise HTTPException(
-            status_code=400, detail=f"Job not completed. Current status: {job['status']}"
-        )
-
-    encrypted_result = job.get("encrypted_result")
-    if not encrypted_result:
-        # Result wasn't encrypted, return plaintext
-        return {
-            "job_id": job_id,
-            "decrypted": False,
-            "result": job.get("result"),
-            "message": "Result was not encrypted",
-        }
-
-    # Attempt decryption
-    decrypted = decrypt_result_for_user(encrypted_result, request.secret_key)
-
-    if decrypted is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Decryption failed. Ensure you're using the correct ML-KEM secret key.",
-        )
-
-    return {
-        "job_id": job_id,
-        "decrypted": True,
-        "result": decrypted,
-        "encryption_algorithm": "ML-KEM-768 + AES-256-GCM",
-    }
+    raise HTTPException(
+        status_code=410,
+        detail="Server-side decryption disabled for security. Use client-side decryption with your ML-KEM secret key.",
+    )
 
 
 @router.post("/{job_id}/retry", response_model=JobResponse, status_code=202)

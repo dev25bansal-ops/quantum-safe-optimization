@@ -159,31 +159,71 @@ function resetSettings() {
  * Initialize backend credential handlers
  */
 function initBackendCredentials() {
-    // D-Wave credentials
+    // D-Wave credentials - server-side only (Azure Key Vault)
     const dwaveApiKey = document.getElementById('dwave-api-key');
     if (dwaveApiKey) {
-        dwaveApiKey.value = localStorage.getItem('dwaveApiKey') || '';
-        dwaveApiKey.addEventListener('change', (e) => {
-            localStorage.setItem('dwaveApiKey', e.target.value);
+        dwaveApiKey.value = ''; // Never load from localStorage
+        dwaveApiKey.addEventListener('change', async (e) => {
+            // Send to server for secure storage instead of localStorage
+            await saveCredentialToServer('dwave', 'api_token', e.target.value);
         });
     }
 
-    // IBM Quantum token
+    // IBM Quantum token - server-side only (Azure Key Vault)
     const ibmToken = document.getElementById('ibm-quantum-token');
     if (ibmToken) {
-        ibmToken.value = localStorage.getItem('ibmQuantumToken') || '';
-        ibmToken.addEventListener('change', (e) => {
-            localStorage.setItem('ibmQuantumToken', e.target.value);
+        ibmToken.value = ''; // Never load from localStorage
+        ibmToken.addEventListener('change', async (e) => {
+            // Send to server for secure storage instead of localStorage
+            await saveCredentialToServer('ibm', 'api_token', e.target.value);
         });
     }
 
-    // AWS Braket region
+    // AWS Braket region - server-side only (Azure Key Vault)
     const awsRegion = document.getElementById('aws-braket-region');
     if (awsRegion) {
-        awsRegion.value = localStorage.getItem('awsBraketRegion') || 'us-east-1';
-        awsRegion.addEventListener('change', (e) => {
-            localStorage.setItem('awsBraketRegion', e.target.value);
+        awsRegion.value = 'us-east-1'; // Default, never load from localStorage
+        awsRegion.addEventListener('change', async (e) => {
+            // Send to server for secure storage instead of localStorage
+            await saveCredentialToServer('aws', 'region', e.target.value, { region: e.target.value });
         });
+    }
+}
+
+/**
+ * Save a single credential securely to server (Azure Key Vault)
+ */
+async function saveCredentialToServer(provider, credentialType, value, metadata = null) {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        showToast('error', 'Authentication Required', 'Please sign in to save backend credentials');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/v1/credentials', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                provider: provider,
+                credential_type: credentialType,
+                value: value,
+                metadata: metadata
+            })
+        });
+
+        if (response.ok) {
+            showToast('success', 'Credentials Saved',
+                `${provider} ${credentialType} stored securely in Azure Key Vault`);
+        } else {
+            throw new Error('Failed to save credentials');
+        }
+    } catch (error) {
+        console.error('Failed to save credentials:', error);
+        showToast('error', 'Credentials Error', 'Failed to save credentials securely');
     }
 }
 

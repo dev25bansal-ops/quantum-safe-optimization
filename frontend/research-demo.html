@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QSOP Research Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+        .metric-label {
+            font-size: 0.875em;
+            opacity: 0.9;
+        }
+        .circuit-visualization {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .circuit-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+        .stat-label {
+            color: #64748b;
+            font-weight: 500;
+        }
+        .stat-value {
+            color: #1a1a25;
+            font-weight: bold;
+        }
+        .gate-counts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 16px 0;
+        }
+        .gate-badge {
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            font-size: 0.875em;
+            font-weight: 500;
+        }
+        .chart-container {
+            min-height: 400px;
+            margin: 20px 0;
+        }
+        .bib-entry {
+            background: #f8fafc;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 8px 0;
+            font-family: monospace;
+            font-size: 0.875em;
+            color: #475569;
+        }
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="glass-card p-6 mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">QSOP Research Dashboard</h1>
+            <p class="text-gray-600">Publication-ready analytics for quantum optimization algorithms</p>
+            
+            <!-- Action Buttons -->
+            <div class="flex gap-4 mt-6">
+                <button class="btn btn-primary" onclick="runBenchmarkDemo()">
+                    Run Benchmark Comparison
+                </button>
+                <button class="btn btn-primary" onclick="runAblationDemo()">
+                    Run Ablation Study
+                </button>
+                <button class="btn btn-primary" onclick="exportDemoData()">
+                    Export Demo Data
+                </button>
+            </div>
+        </header>
+
+        <!-- Research Metrics -->
+        <section class="glass-card p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Research Metrics</h2>
+            <div id="research-metrics" class="metrics-grid">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading metrics...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Circuit Visualization -->
+        <section class="glass-card p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Quantum Circuit Visualization</h2>
+            
+            <div class="flex gap-4 mb-4">
+                <select id="algorithm-select" class="px-4 py-2 border rounded-lg" onchange="updateCircuit()">
+                    <option value="qaoa">QAOA</option>
+                    <option value="vqe">VQE</option>
+                </select>
+                <select id="layers-select" class="px-4 py-2 border rounded-lg" onchange="updateCircuit()">
+                    <option value="1">1 Layer</option>
+                    <option value="2" selected>2 Layers</option>
+                    <option value="3">3 Layers</option>
+                    <option value="5">5 Layers</option>
+                </select>
+            </div>
+            
+            <div id="circuit-container">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading circuit...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Benchmark Comparison Charts -->
+        <section class="glass-card p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Benchmark Comparison</h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Convergence Comparison</h3>
+                    <div id="convergence-chart" class="chart-container glass-card p-4"></div>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Solution Quality vs Size</h3>
+                    <div id="performance-chart" class="chart-container glass-card p-4"></div>
+                </div>
+            </div>
+            
+            <div class="mt-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-2">Algorithm Comparison</h3>
+                <div id="comparison-chart" class="chart-container glass-card p-4"></div>
+            </div>
+        </section>
+
+        <!-- Ablation Study -->
+        <section class="glass-card p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Ablation Study</h2>
+            
+            <div class="mb-4">
+                <h3 class="text-lg font-semibold text-gray-700">Hyperparameter Sensitivity Analysis</h3>
+                <p class="text-gray-600 text-sm">p-layers vs optimizer performance heatmap</p>
+            </div>
+            
+            <div id="ablation-chart" class="chart-container glass-card p-4"></div>
+        </section>
+
+        <!-- Bibliography -->
+        <section class="glass-card p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Publication Metadata</h2>
+            <div id="bibliography">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading bibliography...</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Import Research Module -->
+    <script type="module">
+        // Mock API for demo purposes
+        window.apiRequest = async (method: string, endpoint: string, body?: any, headers?: any) => {
+            // Simulate API delay
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            if (endpoint.includes('circuit')) {
+                return {
+                    circuit_svg: '<svg width="600" height="300"><rect width="100%" height="100%" fill="#f0f0f0"/><text x="300" y="150" text-anchor="middle">QAOA Circuit</text></svg>',
+                    depth: 5,
+                    gate_counts: { h: 5, cx: 4, rz: 5, rx: 5, measure: 5 },
+                    qubit_count: 5,
+                    connectivity: [[0, 1], [1, 2], [2, 3], [3, 4]]
+                };
+            }
+            
+            if (endpoint.includes('metrics')) {
+                return {
+                    total_jobs_run: 150,
+                    completed_jobs: 135,
+                    average_convergence_rate: 0.87,
+                    reproducibility: { correlation_coefficient: 0.98 }
+                };
+            }
+            
+            if (endpoint.includes('bibliography')) {
+                return {
+                    bibliography: [
+                        '@article{farhi2014qaoa,',
+                        '  title={A quantum approximate optimization algorithm},',
+                        '  author={Farhi, Edward and Goldstone, Jeffrey and Gutmann, Sam},',
+                        '  journal={arXiv preprint arXiv:1411.4028},',
+                        '  year={2014}',
+                        '}',
+                        '@article{peruzzo2014vqe,',
+                        '  title={A variational eigenvalue solver on a photonic quantum processor},',
+                        '  author={Peruzzo, Alberto and McClean, Jarrod and Shadbolt, Peter and others},',
+                        '  journal={Nature communications},',
+                        '  volume={5},',
+                        '  year={2014},',
+                        '}'
+                    ]
+                };
+            }
+            
+            return {};
+        };
+
+        // Make functions globally available
+        window.runBenchmarkDemo = async () => {
+            const convergenceData = [
+                { algorithm: 'qaoa', iterations: 50, optimal_value: -10.5 },
+                { algorithm: 'qaoa', iterations: 100, optimal_value: -11.2 },
+                { algorithm: 'vqe', iterations: 50, optimal_value: -7.8 },
+                { algorithm: 'vqe', iterations: 100, optimal_value: -8.5 },
+                { algorithm: 'ga', iterations: 50, optimal_value: -9.2 },
+                { algorithm: 'ga', iterations: 100, optimal_value: -10.0 }
+            ];
+            
+            if (window.ResearchModule) {
+                await window.ResearchModule.createConvergenceChart('convergence-chart', convergenceData);
+            }
+        };
+
+        window.runAblationDemo = async () => {
+            const ablationData = [
+                { p_layers: 1, optimizer: 'COBYLA', optimal_value: -9.5, execution_time_ms: 300 },
+                { p_layers: 2, optimizer: 'COBYLA', optimal_value: -10.2, execution_time_ms: 500 },
+                { p_layers: 3, optimizer: 'COBYLA', optimal_value: -10.8, execution_time_ms: 700 },
+                { p_layers: 1, optimizer: 'SPSA', optimal_value: -9.2, execution_time_ms: 400 },
+                { p_layers: 2, optimizer: 'SPSA', optimal_value: -10.0, execution_time_ms: 600 },
+                { p_layers: 3, optimizer: 'SPSA', optimal_value: -10.6, execution_time_ms: 900 }
+            ];
+            
+            if (window.ResearchModule) {
+                await window.ResearchModule.createAblationHeatmap('ablation-chart', ablationData);
+            }
+        };
+
+        window.exportDemoData = () => {
+            alert('Export demo data - In production, this would download CSV/JSON files');
+        };
+
+        window.updateCircuit = async () => {
+            const algorithm = (document.getElementById('algorithm-select') as HTMLSelectElement).value;
+            const pLayers = parseInt((document.getElementById('layers-select') as HTMLSelectElement).value);
+            
+            if (window.ResearchModule) {
+                await window.ResearchModule.displayCircuitVisualization('circuit-container', 'demo-project-id', algorithm, pLayers);
+            }
+        };
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (window.ResearchModule) {
+                await window.ResearchModule.initializeResearchDashboard('demo-tenant');
+                await window.updateCircuit();
+                await window.runBenchmarkDemo();
+                await window.runAblationDemo();
+            }
+        });
+    </script>
+    
+    <!-- Load Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="frontend/js/modules/research.js"></script>
+</body>
+</html>

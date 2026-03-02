@@ -42,6 +42,7 @@ class SimulatedAnnealingConfig:
     reheating_enabled: bool = False
     reheating_threshold: int = 500  # Iterations without improvement
     reheating_factor: float = 2.0
+    random_seed: int | None = None
 
 
 class SimulatedAnnealing(BaseClassicalOptimizer):
@@ -56,7 +57,7 @@ class SimulatedAnnealing(BaseClassicalOptimizer):
 
     def __init__(self, config: SimulatedAnnealingConfig | None = None):
         self.config = config or SimulatedAnnealingConfig()
-        self._rng = np.random.default_rng()
+        self._rng = np.random.default_rng(self.config.random_seed)
 
     def supports(self, problem: OptimizationProblem) -> bool:
         return True
@@ -201,6 +202,7 @@ class AdaptiveSimulatedAnnealingConfig:
     max_iterations: int = 10000
     acceptance_rate_target: float = 0.5
     temperature_adjustment_rate: float = 0.1
+    random_seed: int | None = None
 
 
 class AdaptiveSimulatedAnnealing(BaseClassicalOptimizer):
@@ -215,7 +217,7 @@ class AdaptiveSimulatedAnnealing(BaseClassicalOptimizer):
 
     def __init__(self, config: AdaptiveSimulatedAnnealingConfig | None = None):
         self.config = config or AdaptiveSimulatedAnnealingConfig()
-        self._rng = np.random.default_rng()
+        self._rng = np.random.default_rng(self.config.random_seed)
 
     def supports(self, problem: OptimizationProblem) -> bool:
         return True

@@ -1555,31 +1555,30 @@ result = client.optimize(
         </div>
      </div>
 
-    <!-- Component System -->
-    <script type="module">
-        import Component from './js/components/Component.js';
-        import ToastContainer from './js/components/ToastContainer.js';
-        import Modal from './js/components/Modal.js';
-        import ConfirmModal from './js/components/Modal.js';
-        
-        // Expose to global scope for compatibility
-        window.Component = Component;
-        window.ToastContainer = ToastContainer;
-        window.Modal = Modal;
-        window.ConfirmModal = ConfirmModal;
-        
-        // Initialize global toast container
-        window.toastContainer = new ToastContainer();
-        window.toastContainer.mount(document.body);
-        
-        // Make toast functions available globally
-        window.showSuccess = (title, message, duration) => window.toastContainer.success(title, message, duration);
-        window.showError = (title, message, duration) => window.toastContainer.error(title, message, duration);
-        window.showWarning = (title, message, duration) => window.toastContainer.warning(title, message, duration);
-        window.showInfo = (title, message, duration) => window.toastContainer.info(title, message, duration);
+    <script src="js/config.js"></script>
+    <script src="js/stubs.js"></script>
+    <script src="js/main.js" defer></script>
+    <script>
+        window.addEventListener('load', async function() {
+            console.log('Page loaded successfully');
+            document.body.classList.add('loaded');
+            
+            // Test backend connectivity
+            if (window.testBackendConnection) {
+                const connected = await testBackendConnection();
+                if (!connected) {
+                    console.warn('Backend not accessible');
+                    window.showToast('warning', 'Backend Connection', 'API server not responding. Some features may be unavailable.');
+                }
+            }
+        });
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e);
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('Unhandled promise rejection:', e);
+        });
     </script>
-
-    <script src="js/main.js"></script>
 
     <!-- Service Worker Registration -->
     <script>

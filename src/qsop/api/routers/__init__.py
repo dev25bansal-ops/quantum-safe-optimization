@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from .algorithms import router as algorithms_router
+from .analytics import router as analytics_router
 from .auth_enhanced import router as auth_router
 from .health import router as health_router
 from .jobs_enhanced import router as jobs_router
@@ -17,6 +18,7 @@ def create_api_router() -> APIRouter:
     api_router.include_router(jobs_router, prefix="/jobs", tags=["jobs"])
     api_router.include_router(algorithms_router, tags=["algorithms"])
     api_router.include_router(keys_router, prefix="/keys", tags=["keys"])
+    api_router.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
 
     return api_router
 
@@ -28,4 +30,5 @@ __all__ = [
     "algorithms_router",
     "keys_router",
     "auth_router",
+    "analytics_router",
 ]

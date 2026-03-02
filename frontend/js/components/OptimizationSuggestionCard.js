@@ -466,7 +466,7 @@ class OptimizationSuggestionService {
   calculateMatrixDensity(matrix) {
     if (!matrix || !Array.isArray(matrix) || matrix.length === 0) return null;
     
-    const totalElements = matrix.reduce((sum, row) => sum + (Array.isArray(row) ? row.reduce((s, v) => s + (typeof v === 'number' && v !== 0 ? 1 : 0), 0), 0);
+    const totalElements = matrix.reduce((sum, row) => sum + (Array.isArray(row) ? row.reduce((s, v) => s + (typeof v === 'number' && v !== 0 ? 1 : 0), 0) : 0), 0);
     const totalPossible = matrix.length * matrix[0]?.length || 0;
     
     return totalPossible > 0 ? totalElements / totalPossible : null;
