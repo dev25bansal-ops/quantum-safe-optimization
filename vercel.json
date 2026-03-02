@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "vercel_api/index.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "frontend/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    { "src": "/api/v1/(.*)", "dest": "vercel_api/index.py" },
+    { "src": "/health", "dest": "vercel_api/index.py" },
+    { "src": "/css/(.*)", "dest": "/frontend/css/$1" },
+    { "src": "/js/(.*)", "dest": "/frontend/js/$1" },
+    { "src": "/assets/(.*)", "dest": "/frontend/assets/$1" },
+    { "src": "/favicon\\.ico", "dest": "/frontend/favicon.ico" },
+    { "src": "/sw\\.js", "dest": "/frontend/sw.js" },
+    { "src": "/manifest\\.json", "dest": "/frontend/manifest.json" },
+    { "src": "/robots\\.txt", "dest": "/frontend/robots.txt" },
+    { "src": "/sitemap\\.xml", "dest": "/frontend/sitemap.xml" },
+    { "src": "/dashboard(.*)", "dest": "/frontend/dashboard.html" },
+    { "src": "/research-demo\\.html", "dest": "/frontend/research-demo.html" },
+    { "src": "/simple\\.html", "dest": "/frontend/simple.html" },
+    { "src": "/test\\.html", "dest": "/frontend/test.html" },
+    { "src": "/(.*\\.html)", "dest": "/frontend/$1" },
+    { "src": "/(.*)", "dest": "/frontend/index.html" }
+  ]
+}
