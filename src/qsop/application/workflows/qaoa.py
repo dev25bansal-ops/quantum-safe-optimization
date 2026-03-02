@@ -66,6 +66,7 @@ class QAOAWorkflowConfig:
     enable_readout_mitigation: bool = False
     enable_zne: bool = False
     optimization_level: int = 1
+    random_seed: int | None = None
 
 
 class QAOAWorkflow:
@@ -88,6 +89,17 @@ class QAOAWorkflow:
         self.config = config or QAOAWorkflowConfig()
         self.backend = self._apply_mitigation(backend) if backend else None
         self.transpiler = transpiler
+
+        if self.config.random_seed is not None:
+            import numpy as np
+
+            try:
+                import qiskit
+
+                qiskit.qi.random.seed(self.config.random_seed)
+            except (ImportError, AttributeError):
+                pass
+            np.random.seed(self.config.random_seed)
 
     def _apply_mitigation(self, backend: QuantumBackend) -> QuantumBackend:
         """Apply configured error mitigation to the backend."""
@@ -137,6 +149,7 @@ class QAOAWorkflow:
             initial_params,
             method=self.config.optimizer,
             options={"maxiter": self.config.max_iterations},
+            seed=self.config.random_seed if self.config.random_seed is not None else None,
         )
 
         # Extract best solution
@@ -185,6 +198,37 @@ class QAOAWorkflow:
                 params[2 * p + 1] = np.random.uniform(0, np.pi / 2)
 
         return params
+
+    def _build_qaoa_circuit(
+        self,
+        problem: OptimizationProblem,
+        params: NDArray,
+        n_qubits: int,
+    ) -> Any:
+        """Build QAOA circuit."""
+        try:
+            from qiskit import QuantumCircuit
+        except ImportError as e:
+            raise ImportError("Qiskit required for QAOA circuits") from e
+
+        qc = QuantumCircuit(n_qubits)
+
+        # Initial superposition
+        qc.h(range(n_qubits))
+
+        # QAOA layers
+        for p in range(self.config.p_layers):
+            gamma = params[2 * p]
+            beta = params[2 * p + 1]
+
+            # Cost layer
+            self._apply_cost_layer(qc, problem, gamma)
+
+            # Mixer layer
+            self._apply_mixer_layer(qc, beta, n_qubits)
+
+        qc.measure_all()
+        return qc
 
     def _build_qaoa_circuit(
         self,

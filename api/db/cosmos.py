@@ -300,14 +300,49 @@ class CosmosDBManager:
         raise last_exception
 
     async def _setup_database(self):
-        """Create database and containers if they don't exist."""
+        """Create database and containers with optimized composite indexes."""
         database = await self._client.create_database_if_not_exists(DATABASE_NAME)
 
         # Jobs container - partitioned by user_id for tenant isolation
+        # Composite indexes on (user_id, status) and (user_id, created_at) for efficient queries
+        indexing_policy = {
+            "automatic": True,
+            "indexingMode": "consistent",
+            "includedPaths": [
+                {
+                    "path": "/*",
+                    "indexes": [
+                        {"kind": "Range", "dataType": "number"},
+                        {"kind": "Range", "dataType": "string"},
+                        {"kind": "Spatial", "dataType": "Point"},
+                    ],
+                }
+            ],
+            "excludedPaths": [{"path": '/"_etag"/?'}],
+            "compositeIndexes": [
+                # Composite index for user queries with status filter
+                [
+                    {"path": "/user_id", "order": "ascending"},
+                    {"path": "/status", "order": "ascending"},
+                ],
+                # Composite index for user queries with created_at sort (default ORDER BY)
+                [
+                    {"path": "/user_id", "order": "ascending"},
+                    {"path": "/created_at", "order": "descending"},
+                ],
+                # Composite index for user queries with problem_type filter
+                [
+                    {"path": "/user_id", "order": "ascending"},
+                    {"path": "/problem_type", "order": "ascending"},
+                ],
+            ],
+        }
+
         await database.create_container_if_not_exists(
             id="jobs",
             partition_key=PartitionKey(path="/user_id"),
             offer_throughput=400,  # Adjust based on workload
+            indexing_policy=indexing_policy,
         )
 
         # Users container - partitioned by user_id

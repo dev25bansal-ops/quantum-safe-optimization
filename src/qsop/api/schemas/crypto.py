@@ -20,9 +20,9 @@ class KeyAlgorithm(str, Enum):
     DILITHIUM3 = "dilithium3"
     DILITHIUM5 = "dilithium5"
     SPHINCS_SHA256_128F = "sphincs-sha256-128f"
-    RSA2048 = "rsa2048"  # Legacy support
-    RSA4096 = "rsa4096"  # Legacy support
-    ECDSA_P256 = "ecdsa-p256"  # Legacy support
+    RSA2048 = "rsa2048"
+    RSA4096 = "rsa4096"
+    ECDSA_P256 = "ecdsa-p256"
 
 
 class KeyStatus(str, Enum):
@@ -81,6 +81,7 @@ class KeyCreate(BaseModel):
                 "expires_in_days": 365,
                 "auto_rotate": True,
                 "rotation_period_days": 90,
+                "metadata": {"environment": "production", "purpose": "job-protection"},
             }
         }
     )
@@ -106,6 +107,17 @@ class CryptoSettings(BaseModel):
         description="Whether encryption is enabled for this job",
     )
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "kem_algorithm": "kyber768",
+                "sig_algorithm": "dilithium3",
+                "hybrid_mode": True,
+                "enabled": True,
+            }
+        }
+    )
+
 
 class KeyResponse(BaseModel):
     """Response model for key details."""
@@ -126,7 +138,25 @@ class KeyResponse(BaseModel):
     last_used_at: datetime | None = None
     usage_count: int = Field(default=0, description="Number of times key was used")
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "example": {
+                "id": "770e8400-e29b-41d4-a716-446655440001",
+                "name": "production-encryption-key",
+                "algorithm": "kyber768",
+                "key_size": 768,
+                "public_key": "-----BEGIN PUBLIC KEY-----\nMIIBCgKCAQEA...",
+                "status": "active",
+                "version": 1,
+                "created_at": "2024-01-01T00:00:00Z",
+                "rotated_at": None,
+                "expires_at": "2025-01-01T00:00:00Z",
+                "last_used_at": "2024-01-15T10:30:00Z",
+                "usage_count": 42,
+            }
+        },
+    )
 
 
 class KeyListResponse(BaseModel):
@@ -142,6 +172,29 @@ class KeyListResponse(BaseModel):
         """Check if there are more results available."""
         return self.offset + len(self.keys) < self.total
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "keys": [
+                    {
+                        "id": "770e8400-e29b-41d4-a716-446655440001",
+                        "name": "production-encryption-key",
+                        "algorithm": "kyber768",
+                        "key_size": 768,
+                        "status": "active",
+                        "version": 1,
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "expires_at": "2025-01-01T00:00:00Z",
+                        "usage_count": 42,
+                    }
+                ],
+                "total": 1,
+                "limit": 20,
+                "offset": 0,
+            }
+        }
+    )
+
 
 class KeyRotateResponse(BaseModel):
     """Response after key rotation."""
@@ -156,6 +209,19 @@ class KeyRotateResponse(BaseModel):
     )
     rotated_at: datetime
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "770e8400-e29b-41d4-a716-446655440001",
+                "name": "production-encryption-key",
+                "old_version": 1,
+                "new_version": 2,
+                "public_key": "-----BEGIN PUBLIC KEY-----\nMIIBCgKCAQEA...",
+                "rotated_at": "2024-04-01T00:00:00Z",
+            }
+        }
+    )
+
 
 class KeyUsageStats(BaseModel):
     """Key usage statistics."""
@@ -169,6 +235,24 @@ class KeyUsageStats(BaseModel):
     last_operation: datetime | None
     operations_by_day: dict[str, int] = Field(default_factory=dict)
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "key_id": "770e8400-e29b-41d4-a716-446655440001",
+                "total_operations": 150,
+                "encrypt_count": 85,
+                "decrypt_count": 60,
+                "sign_count": 5,
+                "verify_count": 0,
+                "last_operation": "2024-01-15T10:30:00Z",
+                "operations_by_day": {
+                    "2024-01-14": 45,
+                    "2024-01-15": 105,
+                },
+            }
+        }
+    )
+
 
 class EncryptRequest(BaseModel):
     """Request to encrypt data with a key."""
@@ -176,6 +260,16 @@ class EncryptRequest(BaseModel):
     key_id: UUID
     plaintext: str = Field(..., description="Base64-encoded plaintext")
     associated_data: str | None = Field(None, description="Additional authenticated data")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "key_id": "770e8400-e29b-41d4-a716-446655440001",
+                "plaintext": "SGVsbG8gV29ybGQh",
+                "associated_data": "job-results-v1",
+            }
+        }
+    )
 
 
 class EncryptResponse(BaseModel):
@@ -186,6 +280,18 @@ class EncryptResponse(BaseModel):
     ciphertext: str = Field(..., description="Base64-encoded ciphertext")
     iv: str | None = Field(None, description="Initialization vector if applicable")
     tag: str | None = Field(None, description="Authentication tag")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "key_id": "770e8400-e29b-41d4-a716-446655440001",
+                "key_version": 1,
+                "ciphertext": "ZXhhbXBsZV9lbmNyeXB0ZWRfZGF0YQ==",
+                "iv": "YWJjZGVmZ2hpams=",
+                "tag": "YXV0aF90YWdfc2lnbmF0dXJl",
+            }
+        }
+    )
 
 
 class DecryptRequest(BaseModel):
@@ -198,9 +304,31 @@ class DecryptRequest(BaseModel):
     tag: str | None = None
     associated_data: str | None = None
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "key_id": "770e8400-e29b-41d4-a716-446655440001",
+                "key_version": 1,
+                "ciphertext": "ZXhhbXBsZV9lbmNyeXB0ZWRfZGF0YQ==",
+                "iv": "YWJjZGVmZ2hpams=",
+                "tag": "YXV0aF90YWdfc2lnbmF0dXJl",
+                "associated_data": "job-results-v1",
+            }
+        }
+    )
+
 
 class DecryptResponse(BaseModel):
     """Response with decrypted data."""
 
     key_id: UUID
     plaintext: str = Field(..., description="Base64-encoded plaintext")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "key_id": "770e8400-e29b-41d4-a716-446655440001",
+                "plaintext": "SGVsbG8gV29ybGQh",
+            }
+        }
+    )

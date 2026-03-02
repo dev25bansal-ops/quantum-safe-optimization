@@ -146,11 +146,10 @@ class AuthModal {
                 : email.toLowerCase();
 
             const CONFIG = {
-                apiUrl: localStorage.getItem('apiUrl') || `${window.location.origin}/api/v1`,
-                apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || window.location.origin
+                apiUrl: localStorage.getItem('apiUrl') || 'http://localhost:8001/api/v1'
             };
 
-            const response = await fetch(`${CONFIG.apiBase}/auth/login`, {
+            const response = await fetch(`${CONFIG.apiUrl}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
@@ -183,23 +182,12 @@ class AuthModal {
                 throw new Error(data.detail || data.message || 'Invalid credentials');
             }
         } catch (error) {
-            // Fallback to demo mode if network error
+            // SECURITY: Demo tokens must be issued by server, not client-side
+            // Client-side token generation via btoa() is a CRITICAL vulnerability
             if (error.message.includes('fetch') || error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
-                const demoToken = btoa(JSON.stringify({ email, exp: Date.now() + 86400000 }));
-                localStorage.setItem('authToken', demoToken);
-                localStorage.setItem('quantumSafeUser', JSON.stringify({
-                    email: email,
-                    signedInAt: new Date().toISOString()
-                }));
-
-                this.close();
-                if (this.isLoggedInCallback) {
-                    await this.isLoggedInCallback();
-                }
-
-                if (window.showToast) {
-                    window.showToast('success', 'Welcome!', 'Signed in (demo mode)');
-                }
+                showToast('error', 'API Unavailable', 'Server authentication is required. Please check your connection.');
+                errorDiv.textContent = 'Authentication server available. Please check your connection.';
+                errorDiv.style.display = 'block';
             } else {
                 errorDiv.textContent = error.message;
                 errorDiv.style.display = 'block';
@@ -244,10 +232,10 @@ class AuthModal {
                 : email.toLowerCase();
 
             const CONFIG = {
-                apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || window.location.origin
+                apiUrl: localStorage.getItem('apiUrl') || 'http://localhost:8001/api/v1'
             };
 
-            const response = await fetch(`${CONFIG.apiBase}/auth/register`, {
+            const response = await fetch(`${CONFIG.apiUrl}/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -285,24 +273,12 @@ class AuthModal {
                 throw new Error(data.detail || data.message || 'Registration failed');
             }
         } catch (error) {
-            // Fallback to demo mode
+            // SECURITY: Demo tokens must be issued by server, not client-side
+            // Client-side token generation via btoa() is a CRITICAL vulnerability
             if (error.message.includes('fetch') || error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
-                const demoToken = btoa(JSON.stringify({ email, exp: Date.now() + 86400000 }));
-                localStorage.setItem('authToken', demoToken);
-                localStorage.setItem('quantumSafeUser', JSON.stringify({
-                    email: email,
-                    full_name: name,
-                    signedInAt: new Date().toISOString()
-                }));
-
-                this.close();
-                if (this.isRegisteredCallback) {
-                    await this.isRegisteredCallback();
-                }
-
-                if (window.showToast) {
-                    window.showToast('success', 'Account Created!', 'Account created (demo mode)');
-                }
+                showToast('error', 'API Unavailable', 'Server authentication is required. Please check your connection.');
+                errorDiv.textContent = 'Authentication server available. Please check your connection.';
+                errorDiv.style.display = 'block';
             } else {
                 errorDiv.textContent = error.message;
                 errorDiv.style.display = 'block';

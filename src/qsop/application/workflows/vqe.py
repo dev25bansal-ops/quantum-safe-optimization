@@ -91,6 +91,7 @@ class VQEWorkflowConfig:
     enable_readout_mitigation: bool = False
     enable_zne: bool = False
     optimization_level: int = 1
+    random_seed: int | None = None
 
 
 class VQEWorkflow:
@@ -110,6 +111,17 @@ class VQEWorkflow:
         self.config = config or VQEWorkflowConfig()
         self.backend = self._apply_mitigation(backend) if backend else None
         self.transpiler = transpiler
+
+        if self.config.random_seed is not None:
+            import numpy as np
+
+            try:
+                import qiskit
+
+                qiskit.qi.random.seed(self.config.random_seed)
+            except (ImportError, AttributeError):
+                pass
+            np.random.seed(self.config.random_seed)
 
     def _apply_mitigation(self, backend: QuantumBackend) -> QuantumBackend:
         """Apply configured error mitigation to the backend."""
@@ -141,6 +153,7 @@ class VQEWorkflow:
             initial_params,
             method=self.config.optimizer,
             options={"maxiter": self.config.max_iterations},
+            seed=self.config.random_seed if self.config.random_seed is not None else None,
         )
 
         return OptimizationResult(

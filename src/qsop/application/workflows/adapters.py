@@ -2,9 +2,11 @@
 Workflow Executor Adapters for QSOP.
 
 Adapts algorithm-specific workflows to the WorkflowExecutor protocol.
+Uses thread pool with asyncio.to_thread for CPU-intensive operations to prevent blocking the event loop.
 """
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 from typing import Any
@@ -19,6 +21,18 @@ from .qaoa import QAOAWorkflow
 from .vqe import VQEWorkflow
 
 logger = logging.getLogger(__name__)
+
+_thread_pool: concurrent.futures.ThreadPoolExecutor | None = None
+
+
+def get_thread_pool() -> concurrent.futures.ThreadPoolExecutor:
+    """Get or create the shared thread pool for CPU-intensive operations."""
+    global _thread_pool
+    if _thread_pool is None:
+        _thread_pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=4, thread_name_prefix="optimization_worker"
+        )
+    return _thread_pool
 
 
 class BaseExecutorAdapter(WorkflowExecutor[Any, Any]):
@@ -147,9 +161,9 @@ class VQEExecutorAdapter(BaseExecutorAdapter):
             for term in input_data.get("terms", []):
                 hamiltonian.add_term(term["coefficient"], term["pauli_string"])
 
-        # Run the workflow in a thread pool since it might be CPU intensive/blocking
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, workflow.run, hamiltonian)
+        # Run the workflow in a thread pool since scipy.optimize.minimize is CPU intensive/blocking
+        # Using asyncio.to_thread is the modern Python 3.9+ way to run sync blocking functions
+        result = await asyncio.to_thread(workflow.run, hamiltonian)
 
         # Secure and store result if services are available
         return await self._secure_and_store_result(result, context)
@@ -168,8 +182,17 @@ class QAOAExecutorAdapter(BaseExecutorAdapter):
             # Simplified conversion for this phase
             problem = OptimizationProblem(variables=[], objective=lambda x: 0.0)
 
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, workflow.run, problem)
+        # Run the workflow in a thread pool since scipy.optimize.minimize is CPU intensive/blocking
+        # Using asyncio.to_thread is the modern Python 3.9+ way to run sync blocking functions
+        result = await asyncio.to_thread(workflow.run, problem)
 
         # Secure and store result if services are available
         return await self._secure_and_store_result(result, context)
+
+
+async def shutdown_thread_pool():
+    """Shutdown the thread pool gracefully."""
+    global _thread_pool
+    if _thread_pool is not None:
+        _thread_pool.shutdown(wait=True)
+        _thread_pool = None

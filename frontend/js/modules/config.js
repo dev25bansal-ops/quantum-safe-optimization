@@ -5,8 +5,8 @@
 
 // Configuration - use current origin to avoid CORS issues
 export const CONFIG = {
-    apiUrl: localStorage.getItem('apiUrl') || `${window.location.origin}/api/v1`,
-    apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || window.location.origin,
+    apiUrl: localStorage.getItem('apiUrl') || 'http://localhost:8001/api/v1',
+    apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || 'http://localhost:8001/api/v1',
     healthCheckInterval: 30000, // 30 seconds for health checks only
     maxRetries: 3
 };

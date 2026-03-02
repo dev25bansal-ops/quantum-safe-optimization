@@ -82,6 +82,7 @@ def validate_webhook_url(url: str) -> tuple[bool, str]:
     - HTTPS required by default (unless DEMO_MODE=true)
     - No credentials in URL
     - Block localhost/private IPs (configurable)
+    - Block cloud metadata endpoints
     - Enforce allowlist when configured
     """
     parsed = urlparse(url)
@@ -101,6 +102,17 @@ def validate_webhook_url(url: str) -> tuple[bool, str]:
 
     if _is_blocked_hostname(host):
         return False, "local/internal hostname not allowed"
+
+    # Block cloud metadata endpoints (SSRF protection)
+    blocked_metadata_endpoints = {
+        "169.254.169.254",  # AWS IMDS
+        "metadata.google.internal",  # GCP
+        "169.254.169.253",  # Azure IMDS
+        "100.100.100.200",  # Aliyun
+    }
+
+    if host in blocked_metadata_endpoints:
+        return False, "cloud metadata endpoint not allowed"
 
     if WEBHOOK_BLOCK_PRIVATE and _is_private_ip(host):
         return False, "private IP not allowed"

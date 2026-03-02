@@ -241,19 +241,9 @@ async function handleLogin(e) {
         await checkAuthStatus();
         if (loadJobsCallback) loadJobsCallback();
     } catch (error) {
-        // Fallback to demo mode if network error
+        // SECURITY: No client-side demo token forgery - server authentication only
         if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
-            const demoToken = btoa(JSON.stringify({ email, exp: Date.now() + 86400000 }));
-            const rememberMe = document.getElementById('remember-me')?.checked || false;
-            setAuthToken(demoToken, rememberMe);
-            setStoredUser({
-                email: email,
-                signedInAt: new Date().toISOString()
-            });
-            closeAuthModal();
-            showToast('success', 'Welcome!', 'Signed in (demo mode)');
-            await checkAuthStatus();
-            if (loadJobsCallback) loadJobsCallback();
+            showToast('error', 'Connection Error', 'Server authentication required. Please check your connection.');
         } else {
             errorDiv.textContent = error.message;
             errorDiv.style.display = 'block';

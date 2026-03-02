@@ -6,8 +6,8 @@
 
 // Configuration - use current origin to avoid CORS issues
 const CONFIG = {
-    apiUrl: localStorage.getItem('apiUrl') || `${window.location.origin}/api/v1`,
-    apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || window.location.origin,
+    apiUrl: localStorage.getItem('apiUrl') || 'http://localhost:8001/api/v1',
+    apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || 'http://localhost:8001',
     healthCheckInterval: 30000, // 30 seconds for health checks only
     maxRetries: 3
 };
@@ -1058,7 +1058,7 @@ async function cloneJob(jobId) {
             headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await fetch(`${CONFIG.apiBase}/jobs`, {
+        const response = await fetch(`${CONFIG.apiUrl}/jobs`, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(newJobData)
@@ -1697,37 +1697,96 @@ function initSettings() {
         // Save backend credentials to server if user is authenticated
         if (STATE.isAuthenticated) {
             try {
-                const credentials = {};
-                if (ibmToken) credentials.ibm_token = ibmToken;
-                if (awsRegion) credentials.aws_region = awsRegion;
-                if (dwaveToken) credentials.dwave_token = dwaveToken;
+                let credentialsSaved = 0;
+                let credentialsFailed = 0;
 
-                if (Object.keys(credentials).length > 0) {
-                    const response = await fetch(`${CONFIG.apiUrl}/settings/credentials`, {
-                        method: 'POST',
-                        headers: getAuthHeaders(),
-                        body: JSON.stringify(credentials)
-                    });
-
-                    if (response.ok) {
-                        showToast('success', 'Credentials Saved', 'Backend credentials updated on server');
-                        // Clear password fields after successful save
-                        if (ibmToken) document.getElementById('ibm-token').value = '';
-                        if (dwaveToken) document.getElementById('dwave-token').value = '';
-                    } else {
-                        const errorData = await response.json().catch(() => ({}));
-                        showToast('warning', 'Credentials Error', errorData.detail || 'Could not save credentials to server');
+                // Save IBM Quantum token
+                if (ibmToken) {
+                    try {
+                        const response = await fetch(`${CONFIG.apiUrl}/credentials`, {
+                            method: 'POST',
+                            headers: getAuthHeaders(),
+                            body: JSON.stringify({
+                                provider: 'ibm',
+                                credential_type: 'api_token',
+                                value: ibmToken
+                            })
+                        });
+                        if (response.ok) {
+                            credentialsSaved++;
+                            document.getElementById('ibm-token').value = '';
+                        } else {
+                            credentialsFailed++;
+                        }
+                    } catch (e) {
+                        credentialsFailed++;
                     }
+                }
+
+                // Save AWS Braket region (as metadata for AWS credentials)
+                if (awsRegion && awsRegion !== 'us-east-1') {
+                    try {
+                        // Note: AWS credentials would need access_key and secret_key, region is stored as metadata
+                        const response = await fetch(`${CONFIG.apiUrl}/credentials`, {
+                            method: 'POST',
+                            headers: getAuthHeaders(),
+                            body: JSON.stringify({
+                                provider: 'aws',
+                                credential_type: 'region',
+                                value: awsRegion,
+                                metadata: { region: awsRegion }
+                            })
+                        });
+                        if (response.ok) {
+                            credentialsSaved++;
+                        } else {
+                            credentialsFailed++;
+                        }
+                    } catch (e) {
+                        credentialsFailed++;
+                    }
+                }
+
+                // Save D-Wave token
+                if (dwaveToken) {
+                    try {
+                        const response = await fetch(`${CONFIG.apiUrl}/credentials`, {
+                            method: 'POST',
+                            headers: getAuthHeaders(),
+                            body: JSON.stringify({
+                                provider: 'dwave',
+                                credential_type: 'api_token',
+                                value: dwaveToken
+                            })
+                        });
+                        if (response.ok) {
+                            credentialsSaved++;
+                            document.getElementById('dwave-token').value = '';
+                        } else {
+                            credentialsFailed++;
+                        }
+                    } catch (e) {
+                        credentialsFailed++;
+                    }
+                }
+
+                if (credentialsSaved > 0) {
+                    showToast('success', 'Credentials Saved',
+                        `${credentialsSaved} credential(s) stored securely in Azure Key Vault`);
+                }
+                if (credentialsFailed > 0) {
+                    showToast('warning', 'Credentials Warning',
+                        `${credentialsFailed} credential(s) could not be saved`);
                 }
             } catch (error) {
                 console.error('Failed to save credentials:', error);
-                showToast('warning', 'Credentials Warning', 'Credentials saved locally only');
+                showToast('error', 'Credentials Error', 'Failed to save credentials to server');
             }
         } else {
-            // Store credentials encrypted locally if not authenticated
-            if (ibmToken) localStorage.setItem('ibm_token_encrypted', btoa(ibmToken));
-            if (awsRegion) localStorage.setItem('aws_region', awsRegion);
-            if (dwaveToken) localStorage.setItem('dwave_token_encrypted', btoa(dwaveToken));
+            // SECURITY: Credentials are NOT stored when unauthenticated
+            // User must authenticate to store credentials securely using Azure Key Vault
+            showToast('error', 'Authentication Required', 'Please sign in to save backend credentials securely');
+            return;
         }
 
         showToast('success', 'Settings Saved', 'Your preferences have been updated');
@@ -1942,8 +2001,8 @@ async function checkApiStatus() {
     const statusText = statusEl?.querySelector('.status-text');
 
     try {
-        // Health endpoint is at root level, not versioned
-        const response = await fetch(`${CONFIG.apiBase}/health`);
+        // Use consolidated health endpoint - single request instead of multiple
+        const response = await fetch(`${CONFIG.apiBase}/health?detailed`);
         const data = await response.json();
 
         if (data.status === 'healthy') {
@@ -1960,7 +2019,7 @@ async function checkApiStatus() {
             updateBackendStatus('dwave', data.backends?.dwave || false);
 
             updateConnectivityItem('api', 'healthy', null, 'Online');
-            await refreshConnectivity();
+            await refreshConnectivity(false);
         } else {
             throw new Error('Unhealthy');
         }
@@ -1983,38 +2042,30 @@ function initConnectivity() {
     const refreshBtn = document.getElementById('refresh-connectivity');
     refreshBtn?.addEventListener('click', () => refreshConnectivity(true));
 
-    refreshConnectivity();
-    setInterval(() => refreshConnectivity(), 120000);
+    refreshConnectivity(false);
+    setInterval(() => refreshConnectivity(false), 120000);
 }
 
 async function refreshConnectivity(showToastOnError = false) {
     try {
-        const readinessResponse = await fetch(`${CONFIG.apiBase}/health/ready`);
-        const readinessData = await readinessResponse.json();
+        // Consolidated single request - reduces from 3 to 1 request
+        const response = await fetch(`${CONFIG.apiBase}/health?detailed`);
+        const data = await response.json();
 
-        if (readinessData?.components) {
-            Object.entries(readinessData.components).forEach(([name, info]) => {
+        // Update components from consolidated response
+        if (data.components) {
+            Object.entries(data.components).forEach(([name, info]) => {
                 updateConnectivityItem(name, info.status, info.latency_ms, info.message);
             });
         }
 
-        if (readinessData?.ready === true) {
+        // Set overall status
+        if (data.status === 'healthy' || data.ready === true) {
             setOverallHealthBadge('healthy');
-        } else if (readinessData?.ready === false) {
+        } else if (data.status === 'degraded' || data.ready === false) {
             setOverallHealthBadge('degraded');
-        }
-
-        const detailedResponse = await fetch(`${CONFIG.apiBase}/health/detailed`);
-        if (detailedResponse.ok) {
-            const detailedData = await detailedResponse.json();
-            if (detailedData?.components) {
-                Object.entries(detailedData.components).forEach(([name, info]) => {
-                    updateConnectivityItem(name, info.status, info.latency_ms, info.message);
-                });
-            }
-            if (detailedData?.status) {
-                setOverallHealthBadge(detailedData.status);
-            }
+        } else {
+            setOverallHealthBadge(data.status || 'unhealthy');
         }
 
         updateConnectivityItem('websocket', getWebSocketStatus(), null, getWebSocketLabel());
@@ -2162,11 +2213,12 @@ async function initConvergenceChart(containerId, data) {
     const canvas = document.getElementById(containerId);
     if (!canvas) return;
 
-    // Lazy load Chart.js if not already loaded
+    // Lazy load Chart.js using module-level singleton from charts.js
+    // This prevents redundant CDN requests when navigating between jobs/pages
     if (!window.Chart && window.loadChartJS) {
         try {
             await window.loadChartJS();
-            chartJsLoaded = true;
+            chartJsLoaded = window.chartJsLoaded ? window.chartJsLoaded() : !!window.Chart;
         } catch (error) {
             console.error('Failed to load Chart.js:', error);
             // Show fallback message
@@ -2913,7 +2965,7 @@ async function checkAuthStatus() {
 
     // Validate real JWT token via API
     try {
-        const response = await fetch(`${CONFIG.apiBase}/auth/me`, {
+        const response = await fetch(`${CONFIG.apiUrl}/auth/me`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -3016,47 +3068,8 @@ function closeAuthModal() {
     }
 }
 
-// Login and register handlers now in AuthModal component
-// These functions are kept for backward compatibility
-async function handleLogin(e) {
-    // Defer to AuthModal component
-    e.preventDefault();
-}
-
-async function handleRegister(e) {
-    // Defer to AuthModal component
-    e.preventDefault();
-}
-
-            closeAuthModal();
-            showToast('success', 'Welcome!', 'You have successfully signed in');
-            await checkAuthStatus();
-            loadJobs();
-        } else {
-            throw new Error(data.detail || data.message || 'Invalid credentials');
-        }
-    } catch (error) {
-        // Fallback to demo mode if network error
-        if (error.message.includes('fetch') || error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
-            const demoToken = btoa(JSON.stringify({ email, exp: Date.now() + 86400000 }));
-            localStorage.setItem('authToken', demoToken);
-            localStorage.setItem('quantumSafeUser', JSON.stringify({
-                email: email,
-                signedInAt: new Date().toISOString()
-            }));
-            closeAuthModal();
-            showToast('success', 'Welcome!', 'Signed in (demo mode)');
-            await checkAuthStatus();
-            loadJobs();
-        } else {
-            errorDiv.textContent = error.message;
-            errorDiv.style.display = 'block';
-        }
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
-    }
-}
+// Login and register handlers are now in AuthModal component
+// These functions are no longer used here - see frontend/js/modules/auth.js
 
 async function handleRegister(e) {
     e.preventDefault();
@@ -3084,7 +3097,7 @@ async function handleRegister(e) {
         // Create username from email prefix (same as signin logic for consistency)
         const username = email.includes('@') ? email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_') : email.toLowerCase();
 
-        const response = await fetch(`${CONFIG.apiBase}/auth/register`, {
+        const response = await fetch(`${CONFIG.apiUrl}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, email, password })
@@ -3095,7 +3108,7 @@ async function handleRegister(e) {
         if (response.ok) {
             // Auto-login after successful registration
             try {
-                const loginResponse = await fetch(`${CONFIG.apiBase}/auth/login`, {
+                const loginResponse = await fetch(`${CONFIG.apiUrl}/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
@@ -3154,7 +3167,7 @@ async function handleLogout(e) {
         const token = localStorage.getItem('authToken');
         if (token) {
             // Try to call logout endpoint (optional, may fail if token expired)
-            await fetch(`${CONFIG.apiBase}/auth/logout`, {
+            await fetch(`${CONFIG.apiUrl}/auth/logout`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             }).catch(() => { });
@@ -3196,7 +3209,7 @@ async function generateMLKEMKeys() {
         let data;
 
         try {
-            const response = await fetch(`${CONFIG.apiBase}/auth/keys/generate`, {
+            const response = await fetch(`${CONFIG.apiUrl}/auth/keys/generate`, {
                 method: 'POST',
                 headers: getAuthHeaders()
             });
@@ -3273,7 +3286,7 @@ async function registerPublicKey() {
         let success = false;
 
         try {
-            const response = await fetch(`${CONFIG.apiBase}/auth/keys/register`, {
+            const response = await fetch(`${CONFIG.apiUrl}/auth/keys/register`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ public_key: publicKey })
@@ -3315,7 +3328,7 @@ async function registerPublicKey() {
 
 async function loadRegisteredKeys() {
     try {
-        const response = await fetch(`${CONFIG.apiBase}/auth/keys`, {
+        const response = await fetch(`${CONFIG.apiUrl}/auth/keys`, {
             headers: getAuthHeaders()
         });
 
@@ -4080,7 +4093,7 @@ async function updateStatusPieChart(data) {
         return;
     }
 
-    // Lazy load Chart.js
+    // Lazy load Chart.js using module-level singleton from charts.js
     if (!window.Chart && window.loadChartJS) {
         try {
             await window.loadChartJS();

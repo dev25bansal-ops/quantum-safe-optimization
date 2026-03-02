@@ -2,25 +2,76 @@
 
 from .crypto import (
     CryptoSettings,
+    DecryptRequest,
+    DecryptResponse,
+    EncryptRequest,
+    EncryptResponse,
     KeyCreate,
     KeyListResponse,
     KeyResponse,
     KeyRotateResponse,
+    KeyUsageStats,
 )
-from .job import JobCreate, JobListResponse, JobResponse, JobStatus
-from .results import JobResultsResponse, OptimizationResult, QuantumMetrics
+from .error import (
+    AuthenticationErrorDetail,
+    ConflictErrorDetail,
+    InternalErrorDetail,
+    NotFoundErrorDetail,
+    ProblemDetail,
+    RateLimitErrorDetail,
+    ValidationErrorDetail,
+)
+from .job import (
+    AnnealingQUBOConfig,
+    GenericOptimizationConfig,
+    JobCreate,
+    JobListResponse,
+    JobProgress,
+    JobResponse,
+    JobStatus,
+    ProblemConfig,
+    QAOAMaxCutConfig,
+    VQEMolecularHamiltonianConfig,
+)
+from .results import (
+    CountsResult,
+    IntermediateResult,
+    JobResultsResponse,
+    OptimizationResult,
+    QuantumMetrics,
+)
 
 __all__ = [
     "JobCreate",
     "JobResponse",
     "JobListResponse",
     "JobStatus",
+    "JobProgress",
     "JobResultsResponse",
     "OptimizationResult",
     "QuantumMetrics",
+    "CountsResult",
+    "IntermediateResult",
     "KeyCreate",
     "KeyResponse",
     "KeyListResponse",
     "KeyRotateResponse",
+    "KeyUsageStats",
+    "EncryptRequest",
+    "EncryptResponse",
+    "DecryptRequest",
+    "DecryptResponse",
     "CryptoSettings",
+    "ProblemConfig",
+    "QAOAMaxCutConfig",
+    "VQEMolecularHamiltonianConfig",
+    "AnnealingQUBOConfig",
+    "GenericOptimizationConfig",
+    "ProblemDetail",
+    "ValidationErrorDetail",
+    "AuthenticationErrorDetail",
+    "NotFoundErrorDetail",
+    "ConflictErrorDetail",
+    "RateLimitErrorDetail",
+    "InternalErrorDetail",
 ]

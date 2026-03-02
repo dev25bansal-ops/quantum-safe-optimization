@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel
 
 from qsop.api.deps import Settings, get_db, get_settings
@@ -22,6 +22,8 @@ class HealthStatus(BaseModel):
     version: str = "1.0.0"
     uptime_seconds: float
     checks: dict[str, Any] = {}
+    components: dict[str, Any] = {}
+    ready: bool = True
 
 
 class ReadinessStatus(BaseModel):
@@ -39,12 +41,62 @@ class LivenessStatus(BaseModel):
 
 
 @router.get("/health", response_model=HealthStatus)
-async def health_check() -> HealthStatus:
+async def health_check(
+    detailed: bool = Query(False, description="Include detailed component health information"),
+) -> HealthStatus:
     """
     General health check endpoint.
 
-    Returns basic health information about the service.
+    Consolidates /health, /health/ready, and /health/detailed into a single endpoint
+    to reduce frontend polling overhead.
+
+    Args:
+        detailed: When True, includes detailed component health information
+
+    Returns:
+        Health status including basic information and optionally detailed component checks
     """
+    checks: dict[str, Any] = {}
+    components: dict[str, Any] = {}
+
+    if detailed:
+        start_time = time.time()
+
+        # Check database connectivity
+        try:
+            async for db in get_db():
+                await db.execute("SELECT 1")
+                db_latency_ms = (time.time() - start_time) * 1000
+                components["database"] = {"status": "healthy", "latency_ms": db_latency_ms}
+                checks["database"] = True
+                break
+        except Exception as e:
+            components["database"] = {"status": "unhealthy", "latency_ms": None, "message": str(e)}
+            checks["database"] = False
+
+        # Add more component checks as needed
+        if hasattr(router, "app") and router.app:
+            settings = router.app.state.settings if hasattr(router.app.state, "settings") else None
+            if settings:
+                checks["config"] = bool(settings.jwt_secret)
+                components["config"] = {"status": "healthy" if settings.jwt_secret else "degraded"}
+
+        # Determine overall status based on components
+        all_healthy = not any(c.get("status") == "unhealthy" for c in components.values())
+        status = (
+            "healthy"
+            if all_healthy
+            else "degraded"
+            if any(c.get("status") == "degraded" for c in components.values())
+            else "unhealthy"
+        )
+
+        return HealthStatus(
+            status=status,
+            uptime_seconds=time.time() - _start_time,
+            checks=checks,
+        )
+
     return HealthStatus(
         status="healthy",
         uptime_seconds=time.time() - _start_time,
@@ -61,6 +113,7 @@ async def readiness_check(
 
     Checks if the service is ready to accept traffic.
     Returns 503 if any critical dependency is not ready.
+    NOTE: Consider using /health?detailed=true instead for better performance.
     """
     checks: dict[str, bool] = {}
 
