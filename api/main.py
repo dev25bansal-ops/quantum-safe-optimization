@@ -194,7 +194,7 @@ app = FastAPI(
 )
 
 # Instrument FastAPI with OpenTelemetry
-if os.getenv("OTEL_ENABLED", "true").lower() == "true":
+if os.getenv("OTEL_ENABLED", "false").lower() == "true":
     instrument_fastapi(app)
 
 # Add production security middleware (order matters - outermost first)
@@ -223,7 +223,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS configuration - stricter in production
 cors_origins = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:8000,http://127.0.0.1:8000,http://localhost:3000,http://localhost:8080",
+    "http://localhost:8000,http://127.0.0.1:8000,http://localhost:8001,http://127.0.0.1:8001,http://localhost:3000,http://localhost:8080",
 )
 app.add_middleware(
     CORSMiddleware,

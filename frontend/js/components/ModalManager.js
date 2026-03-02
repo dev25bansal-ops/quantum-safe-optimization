@@ -168,30 +168,32 @@ class ModalManager {
      */
     alert(title, message, options = {}) {
         const id = 'alert-' + Date.now();
-        const modal = this.create(id, {
-            type: 'confirm',
-            title: title,
-            message: message,
-            confirmText: options.confirmText || 'OK',
-            cancelText: '',
-            onConfirm: () => {
-                this.close(id);
-                this.unregister(id);
-                setTimeout(() => wrapper.remove(), 100);
-                options.onConfirm && options.onConfirm();
-            },
-            size: options.size || 'small'
+        return new Promise((resolve) => {
+            const modal = this.create(id, {
+                type: 'confirm',
+                title: title,
+                message: message,
+                confirmText: options.confirmText || 'OK',
+                cancelText: '',
+                onConfirm: () => {
+                    this.close(id);
+                    this.unregister(id);
+                    const wrapper = modal.element;
+                    setTimeout(() => wrapper.remove(), 100);
+                    if (options.onConfirm) options.onConfirm();
+                    resolve(true);
+                },
+                size: options.size || 'small'
+            });
+
+            // Hide cancel button for simple alerts
+            const cancelButton = modal.element.querySelector('[data-modal-cancel]');
+            if (cancelButton) {
+                cancelButton.style.display = 'none';
+            }
+
+            this.open(id);
         });
-
-        // Hide cancel button for simple alerts
-        const cancelButton = modal.element.querySelector('[data-modal-cancel]');
-        if (cancelButton) {
-            cancelButton.style.display = 'none';
-        }
-
-        const wrapper = modal.element;
-        this.open(id);
-        return promise;
     }
 
     /**

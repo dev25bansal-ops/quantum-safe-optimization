@@ -7,7 +7,7 @@ Includes rate limiting and token revocation for security.
 
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -173,7 +173,7 @@ _users_db = {
         "password_hash": "$argon2id$v=19$m=65536,t=3,p=4$RicoB40mT5DxZGqpPral7w$JLxZvZ/PbHdGVitr3eu9RW9danm83u2OADLV5rwNoAw",
         "email": "admin@example.com",
         "roles": ["admin", "user"],
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "kem_public_key": None,  # ML-KEM public key for result encryption
     }
 }
@@ -321,8 +321,8 @@ def create_pqc_token(
         "sub": user_id,
         "username": username,
         "roles": roles,
-        "iat": datetime.utcnow().timestamp(),
-        "exp": (datetime.utcnow() + timedelta(hours=24)).timestamp(),
+        "iat": datetime.now(timezone.utc).timestamp(),
+        "exp": (datetime.now(timezone.utc) + timedelta(hours=24)).timestamp(),
         "jti": secrets.token_hex(16),
     }
 
@@ -368,7 +368,7 @@ def verify_pqc_token(token: str, signing_keypair: SigningKeyPair | None = None) 
         payload = json.loads(base64.urlsafe_b64decode(payload_b64_padded))
 
         # Check expiration
-        if payload.get("exp", 0) < datetime.utcnow().timestamp():
+        if payload.get("exp", 0) < datetime.now(timezone.utc).timestamp():
             return None
 
         # Enforce active token check - tokens must be in database
@@ -469,7 +469,7 @@ async def login(request: Request, credentials: UserCredentials):
     # Store token for revocation checking
     token_data = {
         "user_id": user["user_id"],
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "full_signature": signature,  # Store full signature for verification
     }
     await save_token(token, token_data)
@@ -513,7 +513,7 @@ async def register(request: Request, registration: UserRegistration):
     password_hash = hash_password(registration.password)
 
     # Create user record
-    created_at = datetime.utcnow()
+    created_at = datetime.now(timezone.utc)
     user_data = {
         "user_id": user_id,
         "id": user_id,  # For Cosmos DB
@@ -561,7 +561,7 @@ async def refresh_token(request: Request, current_user: dict = Depends(get_curre
     # Store refreshed token for verification
     token_data = {
         "user_id": current_user["sub"],
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "full_signature": signature,
     }
     await save_token(token, token_data)
@@ -624,14 +624,14 @@ async def generate_encryption_key(request: Request, current_user: dict = Depends
     keypair = KemKeyPair()
 
     key_id = f"key_{secrets.token_hex(8)}"
-    expires_at = datetime.utcnow() + timedelta(days=30)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
 
     # Store public key on server (secret key stays with client)
     key_data = {
         "id": key_id,
         "user_id": current_user["sub"],
         "public_key": keypair.public_key,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "expires_at": expires_at,
         "algorithm": "ML-KEM-768",
     }
@@ -662,7 +662,7 @@ async def register_public_key(
         "user_id": current_user["sub"],
         "public_key": request.public_key,
         "key_type": request.key_type,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "client_generated": True,
     }
     await save_user_keys(current_user["sub"], key_data)

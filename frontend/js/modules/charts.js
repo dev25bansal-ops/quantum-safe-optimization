@@ -89,7 +89,7 @@ if (typeof window !== 'undefined') {
     window.chartJsLoaded = () => chartJsLoaded;
 }
 
-export function isChartJsLoaded(): boolean {
+export function isChartJsLoaded() {
     return typeof window !== 'undefined' && chartJsLoaded && !!window.Chart;
 }
 

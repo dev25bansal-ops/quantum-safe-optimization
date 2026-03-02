@@ -13,7 +13,7 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -47,8 +47,8 @@ class ConnectionInfo:
     websocket: WebSocket
     job_id: str
     user_id: str | None = None
-    connected_at: datetime = field(default_factory=datetime.utcnow)
-    last_activity: datetime = field(default_factory=datetime.utcnow)
+    connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_activity: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     messages_sent: int = 0
     messages_received: int = 0
     state: ConnectionState = ConnectionState.CONNECTED
@@ -65,7 +65,7 @@ class ConnectionInfo:
 
     def update_activity(self):
         """Update last activity timestamp."""
-        self.last_activity = datetime.utcnow()
+        self.last_activity = datetime.now(timezone.utc)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for status reporting."""
@@ -77,7 +77,7 @@ class ConnectionInfo:
             "messages_sent": self.messages_sent,
             "messages_received": self.messages_received,
             "state": self.state.value,
-            "uptime_seconds": (datetime.utcnow() - self.connected_at).total_seconds(),
+            "uptime_seconds": (datetime.now(timezone.utc) - self.connected_at).total_seconds(),
         }
 
 
@@ -142,7 +142,7 @@ class ConnectionManager:
             for conn_info in list(connections):
                 try:
                     await conn_info.websocket.close(code=1001, reason="Server shutdown")
-except Exception:  # noqa: BLE001 - Connection cleanup is non-critical
+                except Exception:  # noqa: BLE001 - Connection cleanup is non-critical
                     pass
 
         self.active_connections.clear()
@@ -289,7 +289,7 @@ except Exception:  # noqa: BLE001 - Connection cleanup is non-critical
 
                     for conn_info in connections:
                         # Check if connection is stale (no activity in 2x heartbeat interval)
-                        idle_time = (datetime.utcnow() - conn_info.last_activity).total_seconds()
+                        idle_time = (datetime.now(timezone.utc) - conn_info.last_activity).total_seconds()
 
                         if idle_time > WS_HEARTBEAT_INTERVAL * 3:
                             stale_connections.append(conn_info)
@@ -301,7 +301,7 @@ except Exception:  # noqa: BLE001 - Connection cleanup is non-critical
                                 await conn_info.websocket.send_json(
                                     {
                                         "type": "ping",
-                                        "timestamp": datetime.utcnow().isoformat(),
+                                        "timestamp": datetime.now(timezone.utc).isoformat(),
                                     }
                                 )
                         except Exception:  # noqa: BLE001 - Non-critical exception
@@ -313,7 +313,7 @@ except Exception:  # noqa: BLE001 - Connection cleanup is non-critical
 
             except asyncio.CancelledError:
                 break
-except Exception:  # noqa: BLE001 - Error sending is non-critical
+            except Exception:  # noqa: BLE001 - Error sending is non-critical
                 pass
 
     async def _listen_for_updates(self):
@@ -336,14 +336,14 @@ except Exception:  # noqa: BLE001 - Error sending is non-critical
                                 {
                                     "type": "progress",
                                     "data": data,
-                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
                                 },
                             )
                         except json.JSONDecodeError:
                             pass
         except asyncio.CancelledError:
             pass
-except Exception:  # noqa: BLE001 - Heartbeat error is non-critical
+        except Exception:  # noqa: BLE001 - Heartbeat error is non-critical
             pass
 
     def get_status(self) -> dict[str, Any]:
@@ -423,7 +423,7 @@ async def job_progress_websocket(
             {
                 "type": "connected",
                 "job_id": job_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "heartbeat_interval": WS_HEARTBEAT_INTERVAL,
             },
         )
@@ -456,7 +456,7 @@ async def job_progress_websocket(
                         conn_info,
                         {
                             "type": "pong",
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         },
                     )
                 elif msg_type == "pong":
@@ -487,7 +487,7 @@ async def job_progress_websocket(
                     conn_info,
                     {
                         "type": "ping",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     },
                 )
                 if not success:
@@ -504,7 +504,7 @@ async def job_progress_websocket(
                     "message": str(e),
                 },
             )
-except Exception:  # noqa: BLE001 - Job lookup error is non-critical
+        except Exception:  # noqa: BLE001 - Job lookup error is non-critical
             pass
     finally:
         manager.disconnect(conn_info)
@@ -538,7 +538,7 @@ async def all_jobs_websocket(
 
     # Subscribe to user's job channel
     channel = f"user:{user_id}:jobs"
-    connected_at = datetime.utcnow()
+    connected_at = datetime.now(timezone.utc)
     messages_sent = 0
     messages_received = 0
 
@@ -583,7 +583,7 @@ async def all_jobs_websocket(
                             await websocket.send_json(
                                 {
                                     "type": "pong",
-                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
                                 }
                             )
                         elif msg_type == "status":
@@ -606,7 +606,7 @@ async def all_jobs_websocket(
                         await websocket.send_json(
                             {
                                 "type": "ping",
-                                "timestamp": datetime.utcnow().isoformat(),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
                             }
                         )
 
@@ -625,7 +625,7 @@ async def all_jobs_websocket(
                                 {
                                     "type": "job_update",
                                     "data": data,
-                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
                                 }
                             )
                             messages_sent += 1
@@ -650,7 +650,7 @@ async def all_jobs_websocket(
                         await websocket.send_json(
                             {
                                 "type": "pong",
-                                "timestamp": datetime.utcnow().isoformat(),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
                             }
                         )
                         messages_sent += 1
@@ -661,7 +661,7 @@ async def all_jobs_websocket(
                     await websocket.send_json(
                         {
                             "type": "ping",
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
                     )
                     messages_sent += 1
@@ -676,7 +676,7 @@ async def all_jobs_websocket(
                     "message": str(e),
                 }
             )
-except Exception:  # noqa: BLE001 - Broadcast error is non-critical
+        except Exception:  # noqa: BLE001 - Broadcast error is non-critical
             pass
     finally:
         # Record disconnection metric

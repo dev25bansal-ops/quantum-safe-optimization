@@ -75,7 +75,9 @@ export class Component {
       throw new Error('Container element is required');
     }
 
-    this.element = container;
+    // Create a wrapper div so render() doesn't overwrite the container's content
+    this.element = document.createElement('div');
+    container.appendChild(this.element);
     this.render();
     this.isMounted = true;
     this.componentDidMount();

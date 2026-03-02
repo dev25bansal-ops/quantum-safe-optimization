@@ -16,7 +16,7 @@ import ipaddress
 import json
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 from urllib.parse import urlparse
@@ -162,7 +162,7 @@ class WebhookPayload:
 
     event: WebhookEvent
     job_id: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     data: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -227,7 +227,10 @@ class WebhookSigner:
         # Check timestamp freshness
         try:
             ts = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            age = (datetime.utcnow() - ts.replace(tzinfo=None)).total_seconds()
+            # Ensure ts is timezone-aware (UTC) for comparison
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - ts).total_seconds()
             if abs(age) > max_age_seconds:
                 return False
         except Exception:
@@ -324,7 +327,7 @@ class WebhookDeliveryService:
                 success=False,
                 error=f"Webhook URL rejected: {error}",
                 attempts=1,
-                delivered_at=datetime.utcnow(),
+                delivered_at=datetime.now(timezone.utc),
             )
 
         self._total_deliveries += 1
@@ -353,7 +356,7 @@ class WebhookDeliveryService:
                             status_code=response.status_code,
                             response_body=response.text[:500],  # Truncate response
                             attempts=attempt,
-                            delivered_at=datetime.utcnow(),
+                            delivered_at=datetime.now(timezone.utc),
                         )
 
                     # 4xx errors (except 429) should not be retried
@@ -383,7 +386,7 @@ class WebhookDeliveryService:
             status_code=last_status,
             error=last_error,
             attempts=max_attempts,
-            retry_after=datetime.utcnow() + timedelta(minutes=5),
+            retry_after=datetime.now(timezone.utc) + timedelta(minutes=5),
         )
 
     async def deliver_batch(

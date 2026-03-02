@@ -14,7 +14,7 @@ import asyncio
 import os
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
@@ -81,7 +81,7 @@ class CircuitBreaker:
             if self._state == CircuitState.OPEN:
                 # Check if timeout has passed
                 if self._last_failure_time:
-                    elapsed = datetime.utcnow() - self._last_failure_time
+                    elapsed = datetime.now(timezone.utc) - self._last_failure_time
                     if elapsed.total_seconds() >= self.config.timeout_seconds:
                         self._state = CircuitState.HALF_OPEN
                         self._half_open_calls = 0
@@ -113,12 +113,12 @@ class CircuitBreaker:
             if self._state == CircuitState.HALF_OPEN:
                 # Immediately open on failure in half-open
                 self._state = CircuitState.OPEN
-                self._last_failure_time = datetime.utcnow()
+                self._last_failure_time = datetime.now(timezone.utc)
             elif self._state == CircuitState.CLOSED:
                 self._failure_count += 1
                 if self._failure_count >= self.config.failure_threshold:
                     self._state = CircuitState.OPEN
-                    self._last_failure_time = datetime.utcnow()
+                    self._last_failure_time = datetime.now(timezone.utc)
 
     def get_status(self) -> dict[str, Any]:
         """Get circuit breaker status."""
@@ -222,7 +222,7 @@ class CosmosDBManager:
         )
 
         # Create timeout configuration
-        ClientTimeout(
+        timeout = ClientTimeout(
             total=None,
             connect=self.pool_config.connection_timeout_seconds,
             sock_read=self.pool_config.read_timeout_seconds,
@@ -393,7 +393,7 @@ class CosmosDBManager:
         Returns:
             HealthStatus with connection details
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Return cached result if fresh
         if (
@@ -404,7 +404,7 @@ class CosmosDBManager:
         ):
             return self._health_status
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             if not self._initialized:
@@ -419,7 +419,7 @@ class CosmosDBManager:
             database = self.get_database()
             await database.read()
 
-            latency_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+            latency_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             self._health_status = HealthStatus(
                 healthy=True,
@@ -436,7 +436,7 @@ class CosmosDBManager:
             return self._health_status
 
         except Exception as e:
-            latency_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+            latency_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             self._health_status = HealthStatus(
                 healthy=False,
@@ -647,7 +647,7 @@ class JobRepository:
         job = await self.get_job(job_id, user_id)
         if job:
             job["deleted"] = True
-            job["deleted_at"] = datetime.utcnow().isoformat()
+            job["deleted_at"] = datetime.now(timezone.utc).isoformat()
             await self.update_job(job)
             return True
         return False

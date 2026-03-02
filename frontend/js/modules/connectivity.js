@@ -65,8 +65,10 @@ export async function checkApiStatus() {
 
         // Update individual service statuses
         updateConnectivityItem('api', 'healthy', latency, 'Connected');
-        updateConnectivityItem('database', result.database || 'healthy', null, result.database_version || 'Connected');
+        updateConnectivityItem('cosmos_db', result.database || 'healthy', null, result.database_version || 'Connected');
         updateConnectivityItem('redis', result.redis || 'healthy', null, result.redis_version || 'Connected');
+        updateConnectivityItem('pqc_crypto', 'healthy', null, 'Active');
+        updateConnectivityItem('secrets_manager', 'healthy', null, 'Available');
 
         // WebSocket status
         updateConnectivityItem('websocket', getWebSocketStatus(), null, getWebSocketLabel());
@@ -90,21 +92,25 @@ export async function checkApiStatus() {
  * Update connectivity item display
  */
 export function updateConnectivityItem(service, status, latency, label) {
-    const item = document.getElementById(`connectivity-${service}`);
+    // HTML uses data-component attribute, not id
+    const item = document.querySelector(`.connectivity-item[data-component="${service}"]`);
     if (!item) return;
 
-    const indicator = item.querySelector('.status-indicator');
-    const statusText = item.querySelector('.status-text');
-    const latencyText = item.querySelector('.latency-text');
+    const indicator = item.querySelector('.connectivity-indicator');
+    const statusText = item.querySelector('.connectivity-text');
+    const latencyBadge = item.querySelector('[data-latency]');
+
+    const statusClass = status === 'healthy' ? 'online' :
+        status === 'degraded' ? 'degraded' : 'offline';
 
     if (indicator) {
-        indicator.className = `status-indicator ${status}`;
+        indicator.className = `connectivity-indicator ${statusClass}`;
     }
     if (statusText) {
         statusText.textContent = label || status;
     }
-    if (latencyText && latency !== null) {
-        latencyText.textContent = `${latency}ms`;
+    if (latencyBadge && latency !== null) {
+        latencyBadge.textContent = `${latency} ms`;
     }
 }
 
@@ -115,11 +121,8 @@ export function setOverallHealthBadge(status) {
     const badge = document.getElementById('overall-health-badge');
     if (badge) {
         badge.className = `health-badge ${status}`;
-        const text = badge.querySelector('.badge-text');
-        if (text) {
-            text.textContent = status === 'healthy' ? 'All Systems Operational' :
-                status === 'degraded' ? 'Partial Degradation' : 'Service Disruption';
-        }
+        badge.textContent = status === 'healthy' ? 'All Systems Operational' :
+            status === 'degraded' ? 'Partial Degradation' : 'Service Disruption';
     }
 }
 

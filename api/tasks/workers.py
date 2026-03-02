@@ -7,7 +7,7 @@ Moves job processing to background workers for scalability.
 import asyncio
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import redis
@@ -105,7 +105,7 @@ def process_qaoa_job(
             job_id,
             {
                 "status": "running",
-                "started_at": datetime.utcnow().isoformat(),
+                "started_at": datetime.now(timezone.utc).isoformat(),
                 "worker": self.request.hostname,
                 "task_id": self.request.id,
             },
@@ -180,7 +180,7 @@ def process_qaoa_job(
             job_id,
             {
                 "status": "completed",
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
                 "result": result_dict,
             },
         )
@@ -207,7 +207,7 @@ def process_qaoa_job(
             {
                 "status": "failed",
                 "error": error_msg,
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
             },
         )
         self.publish_progress(
@@ -227,7 +227,7 @@ def process_qaoa_job(
             {
                 "status": "failed",
                 "error": error_msg,
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
             },
         )
         self.publish_progress(
@@ -257,7 +257,7 @@ def process_vqe_job(
             job_id,
             {
                 "status": "running",
-                "started_at": datetime.utcnow().isoformat(),
+                "started_at": datetime.now(timezone.utc).isoformat(),
                 "worker": self.request.hostname,
             },
         )
@@ -301,7 +301,7 @@ def process_vqe_job(
             job_id,
             {
                 "status": "completed",
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
                 "result": result_dict,
             },
         )
@@ -328,7 +328,7 @@ def process_vqe_job(
             {
                 "status": "failed",
                 "error": error_msg,
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
             },
         )
         self.publish_progress(
@@ -359,7 +359,7 @@ def process_annealing_job(
             job_id,
             {
                 "status": "running",
-                "started_at": datetime.utcnow().isoformat(),
+                "started_at": datetime.now(timezone.utc).isoformat(),
                 "worker": self.request.hostname,
             },
         )
@@ -407,7 +407,7 @@ def process_annealing_job(
             job_id,
             {
                 "status": "completed",
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
                 "result": result_dict,
             },
         )
@@ -434,7 +434,7 @@ def process_annealing_job(
             {
                 "status": "failed",
                 "error": error_msg,
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
             },
         )
         self.publish_progress(

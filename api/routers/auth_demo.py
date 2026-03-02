@@ -9,9 +9,9 @@ This is the SECURE alternative to client-side demo token forgery.
 
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from .auth import create_pqc_token, get_server_signing_keypair
@@ -31,7 +31,7 @@ class DemoModeRequest(BaseModel):
 
 
 @router.post("/demo-mode", status_code=200)
-async def enable_demo_mode(request: DemoModeRequest):
+async def enable_demo_mode(request: Request, body: DemoModeRequest):
     """
     Enable demo mode with server-generated token.
 
@@ -49,14 +49,12 @@ async def enable_demo_mode(request: DemoModeRequest):
             detail="Demo mode is not enabled on this server",
         )
 
-    # Get server signing keypair
-    from fastapi import Request
-
-    signing_keypair = get_server_signing_keypair(Request.scope["app"])
+    # Get server signing keypair from app state
+    signing_keypair = get_server_signing_keypair(request)
 
     # Generate demo user
     demo_user_id = f"demo_{secrets.token_hex(8)}"
-    username = request.email.split("@")[0]
+    username = body.email.split("@")[0]
 
     # Create signed token (same as normal login)
     token, signature = create_pqc_token(
@@ -72,5 +70,5 @@ async def enable_demo_mode(request: DemoModeRequest):
         "expires_in": 86400,  # 24 hours
         "pqc_signature": signature,
         "demo_mode": True,
-        "expires_at": (datetime.utcnow() + timedelta(hours=24)).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
     }

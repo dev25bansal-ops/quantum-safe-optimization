@@ -770,7 +770,7 @@
                                 <h4>🔐 Post-Quantum Security</h4>
                                 <div class="checkbox-group">
                                     <label class="checkbox">
-                                        <input type="checkbox" id="encrypt-data" checked>
+                                        <input type="checkbox" id="encrypt-data">
                                         <span class="checkmark"></span>
                                         <span class="checkbox-label">
                                             <strong>Encrypt with ML-KEM-768</strong>
@@ -778,7 +778,7 @@
                                         </span>
                                     </label>
                                     <label class="checkbox">
-                                        <input type="checkbox" id="sign-request" checked>
+                                        <input type="checkbox" id="sign-request">
                                         <span class="checkmark"></span>
                                         <span class="checkbox-label">
                                             <strong>Sign with ML-DSA-65</strong>
@@ -2498,6 +2498,14 @@ J = {(0,1): -1, (1,2): -1}</code></pre>
         const authModal = new AuthModal();
         window.authModal = authModal;
 
+        // Wire up auth callbacks to refresh UI after login/register
+        authModal.onLogin(async () => {
+            if (window.checkAuthStatus) await window.checkAuthStatus();
+        });
+        authModal.onRegister(async () => {
+            if (window.checkAuthStatus) await window.checkAuthStatus();
+        });
+
         // Expose to global scope for compatibility
         window.Component = Component;
         window.ToastContainer = ToastContainer;
@@ -2573,7 +2581,7 @@ J = {(0,1): -1, (1,2): -1}</code></pre>
                         backend: selectedBackend,
                         parameters: { layers: 2, optimizer: 'COBYLA' }
                     });
-                    suggestionCard.mount();
+                    suggestionCard.mount(suggestionContainer);
                 } else {
                     const parameters = {};
                     if (type === 'QAOA') {

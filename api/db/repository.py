@@ -15,7 +15,7 @@ Usage:
 import logging
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
@@ -167,7 +167,7 @@ class InMemoryUserStore(BaseStore[dict[str, Any]]):
                 "password_hash": "$argon2id$v=19$m=65536,t=3,p=4$RicoB40mT5DxZGqpPral7w$JLxZvZ/PbHdGVitr3eu9RW9danm83u2OADLV5rwNoAw",
                 "email": "admin@example.com",
                 "roles": ["admin", "user"],
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
                 "kem_public_key": None,
             }
         }

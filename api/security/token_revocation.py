@@ -6,7 +6,7 @@ Provides secure token blacklisting for logout and security events.
 
 import os
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import redis.asyncio as redis
@@ -102,14 +102,14 @@ class TokenRevocationService:
         """
         ttl = ttl_seconds or (self.config.default_ttl_hours * 3600)
         revocation_data = {
-            "revoked_at": datetime.utcnow().isoformat(),
+            "revoked_at": datetime.now(timezone.utc).isoformat(),
             "reason": reason,
             "user_id": user_id or "unknown",
         }
 
         if self._use_memory:
             self._memory_blacklist.add(token_jti)
-            self._memory_expiry[token_jti] = datetime.utcnow() + timedelta(seconds=ttl)
+            self._memory_expiry[token_jti] = datetime.now(timezone.utc) + timedelta(seconds=ttl)
             return True
 
         try:
@@ -134,7 +134,7 @@ class TokenRevocationService:
         """
         if self._use_memory:
             # Clean expired entries
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             expired = [jti for jti, exp in self._memory_expiry.items() if exp < now]
             for jti in expired:
                 self._memory_blacklist.discard(jti)
