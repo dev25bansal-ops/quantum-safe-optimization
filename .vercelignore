@@ -1,0 +1,73 @@
+# Build artifacts
+crypto/target/
+__pycache__/
+*.pyc
+*.pyo
+*.pdb
+*.rlib
+*.rmeta
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Large/unnecessary files
+repomix-output.xml
+*.log
+logs/
+data/
+*.db
+*.sqlite
+
+# Test/doc artifacts
+.playwright-mcp/
+tests/
+benchmarks/
+docs/
+examples/
+infrastructure/
+deploy/
+scripts/
+
+# Git
+.git/
+
+# Node
+node_modules/
+
+# Reports
+*.md
+!README.md
+
+# Secrets
+*.pem
+*.key
+secrets/
+.env
+.env.local
+.env.*.local
+
+# Optimization module (not needed for Vercel)
+optimization/
+src/
+quantum_safe_client/
+
+# Misc
+Dockerfile
+docker-compose.yml
+pyproject.toml
+pytest.ini
+*.sh
+*.bat
+*.xml
