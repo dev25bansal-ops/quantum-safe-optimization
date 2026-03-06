@@ -3,10 +3,10 @@
  * Core configuration and application state
  */
 
-// Configuration - use current origin to avoid CORS issues
+// Configuration - defaults to localhost:8001 for development
 export const CONFIG = {
-    apiUrl: localStorage.getItem('apiUrl') || `${window.location.origin}/api/v1`,
-    apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || window.location.origin,
+    apiUrl: localStorage.getItem('apiUrl') || 'http://localhost:8001/api/v1',
+    apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || 'http://localhost:8001',
     healthCheckInterval: 30000, // 30 seconds for health checks only
     maxRetries: 3
 };

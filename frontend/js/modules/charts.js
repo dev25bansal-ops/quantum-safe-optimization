@@ -1,33 +1,29 @@
 /**
  * Charts Module
- * Handles Chart.js visualizations for convergence, energy, probabilities, and status
+ * Enhanced Chart.js visualizations for convergence, energy, probabilities, and status
+ * Features: zoom, pan, better tooltips, histogram, statevector viz
  */
 
 import { STATE } from './config.js';
 
-// Chart instances
 let convergenceChart = null;
 let energyDistChart = null;
 let probabilityChart = null;
 let parameterChart = null;
 let statusPieChart = null;
+let histogramChart = null;
+let statevectorChart = null;
 
-// Chart.js module-level singleton loading promise
 const CHART_JS_VERSION = '4.4.0';
 const CHART_JS_CDN = `https://cdn.jsdelivr.net/npm/chart.js@${CHART_JS_VERSION}/dist/chart.umd.min.js`;
+const ZOOM_PLUGIN_CDN = 'https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js';
 
 let chartLoadPromise = null;
 let chartJsLoaded = false;
 let chartJsLoading = false;
 
 /**
- * Lazy load Chart.js library with module-level singleton pattern.
- * This ensures Chart.js is only loaded once per session, even when navigating between pages.
- *
- * The singleton pattern prevents:
- * 1. Redundant network requests for the same CDN resource
- * 2. Memory leaks from multiple Chart.js instances
- * 3. Version conflicts from loading different versions
+ * Lazy load Chart.js with zoom plugin
  */
 export async function loadChartJS() {
     if (typeof window !== 'undefined' && window.Chart) {
@@ -35,13 +31,9 @@ export async function loadChartJS() {
         return;
     }
 
-    if (chartJsLoaded) {
-        return;
-    }
+    if (chartJsLoaded) return;
 
-    if (chartLoadPromise) {
-        return chartLoadPromise;
-    }
+    if (chartLoadPromise) return chartLoadPromise;
 
     if (chartJsLoading) {
         return new Promise(resolve => {
@@ -63,18 +55,32 @@ export async function loadChartJS() {
         script.async = true;
 
         script.onload = () => {
-            chartJsLoaded = true;
-            chartJsLoading = false;
-            console.log('Chart.js loaded successfully');
-            resolve();
+            const zoomScript = document.createElement('script');
+            zoomScript.src = ZOOM_PLUGIN_CDN;
+            zoomScript.crossOrigin = 'anonymous';
+            zoomScript.async = true;
+
+            zoomScript.onload = () => {
+                chartJsLoaded = true;
+                chartJsLoading = false;
+                console.log('Chart.js with zoom plugin loaded');
+                resolve();
+            };
+
+            zoomScript.onerror = () => {
+                chartJsLoaded = true;
+                chartJsLoading = false;
+                console.warn('Zoom plugin failed, continuing without it');
+                resolve();
+            };
+
+            document.head.appendChild(zoomScript);
         };
 
         script.onerror = () => {
             chartJsLoading = false;
             chartLoadPromise = null;
-            const error = new Error(`Failed to load Chart.js from ${CHART_JS_CDN}`);
-            console.error(error);
-            reject(error);
+            reject(new Error(`Failed to load Chart.js`));
         };
 
         document.head.appendChild(script);
@@ -83,7 +89,6 @@ export async function loadChartJS() {
     return chartLoadPromise;
 }
 
-// Make loadChartJS globally accessible for dashboard.js
 if (typeof window !== 'undefined') {
     window.loadChartJS = loadChartJS;
     window.chartJsLoaded = () => chartJsLoaded;
@@ -94,13 +99,12 @@ export function isChartJsLoaded() {
 }
 
 /**
- * Initialize Convergence Chart
+ * Initialize Enhanced Convergence Chart
  */
 export async function initConvergenceChart(canvasId, data) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
 
-    // Lazy load Chart.js
     try {
         await loadChartJS();
     } catch (error) {
@@ -110,12 +114,26 @@ export async function initConvergenceChart(canvasId, data) {
 
     if (!window.Chart) return;
 
-    // Destroy existing chart
     if (convergenceChart) {
         convergenceChart.destroy();
     }
 
     const ctx = canvas.getContext('2d');
+
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const colors = {
+        grid: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)',
+        text: theme === 'dark' ? '#64748b' : '#64748b',
+        primary: '#6366f1',
+        primaryBg: 'rgba(99, 102, 241, 0.1)',
+        success: '#10b981',
+        tooltip: theme === 'dark' ? '#1a1a25' : '#ffffff',
+        tooltipText: theme === 'dark' ? '#f8fafc' : '#1e293b'
+    };
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, colors.primaryBg);
+    gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
 
     convergenceChart = new Chart(ctx, {
         type: 'line',
@@ -124,13 +142,16 @@ export async function initConvergenceChart(canvasId, data) {
             datasets: [{
                 label: 'Energy',
                 data: data,
-                borderColor: 'rgba(99, 102, 241, 1)',
-                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                borderColor: colors.primary,
+                backgroundColor: gradient,
                 borderWidth: 2,
                 fill: true,
                 tension: 0.3,
-                pointRadius: data.length > 50 ? 0 : 2,
-                pointHoverRadius: 5
+                pointRadius: data.length > 50 ? 0 : 3,
+                pointHoverRadius: 6,
+                pointBackgroundColor: colors.primary,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
             }]
         },
         options: {
@@ -145,23 +166,306 @@ export async function initConvergenceChart(canvasId, data) {
                     display: false
                 },
                 tooltip: {
-                    backgroundColor: '#1a1a25',
-                    titleColor: '#f8fafc',
-                    bodyColor: '#94a3b8',
-                    borderColor: '#2a2a3a',
-                    borderWidth: 1
+                    backgroundColor: colors.tooltip,
+                    titleColor: colors.tooltipText,
+                    bodyColor: colors.tooltipText === '#f8fafc' ? '#94a3b8' : '#64748b',
+                    borderColor: theme === 'dark' ? '#2a2a3a' : '#e2e8f0',
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: false,
+                    callbacks: {
+                        title: (items) => `Iteration ${items[0].label}`,
+                        label: (item) => {
+                            const val = item.raw;
+                            const min = Math.min(...data);
+                            const improvement = data.length > 1
+                                ? (((data[0] - val) / Math.abs(data[0])) * 100).toFixed(2)
+                                : 0;
+                            return [
+                                `Energy: ${val.toFixed(6)}`,
+                                data.length > 1 && item.dataIndex > 0
+                                    ? `Improvement: ${improvement}%`
+                                    : 'Starting point'
+                            ];
+                        }
+                    }
+                },
+                zoom: window.ChartZoom ? {
+                    pan: {
+                        enabled: true,
+                        mode: 'xy'
+                    },
+                    zoom: {
+                        wheel: {
+                            enabled: true
+                        },
+                        pinch: {
+                            enabled: true
+                        },
+                        mode: 'xy'
+                    }
+                } : undefined
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Iteration',
+                        color: colors.text,
+                        font: { weight: '500' }
+                    },
+                    grid: { color: colors.grid },
+                    ticks: { color: colors.text }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Energy',
+                        color: colors.text,
+                        font: { weight: '500' }
+                    },
+                    grid: { color: colors.grid },
+                    ticks: {
+                        color: colors.text,
+                        callback: (val) => val.toFixed(4)
+                    }
+                }
+            },
+            animation: {
+                duration: data.length > 100 ? 0 : 750
+            }
+        }
+    });
+}
+
+/**
+ * Initialize Measurement Histogram
+ */
+export async function initMeasurementHistogram(counts) {
+    const canvas = document.getElementById('histogram-chart');
+    if (!canvas || !counts) return;
+
+    try {
+        await loadChartJS();
+    } catch (error) {
+        return;
+    }
+
+    if (!window.Chart) return;
+
+    if (histogramChart) {
+        histogramChart.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const colors = {
+        grid: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)',
+        text: theme === 'dark' ? '#64748b' : '#64748b',
+        primary: '#6366f1',
+        secondary: '#8b5cf6',
+        accent: '#06b6d4'
+    };
+
+    const entries = Object.entries(counts);
+    const total = entries.reduce((sum, [, count]) => sum + count, 0);
+    const sorted = entries.sort((a, b) => b[1] - a[1]).slice(0, 20);
+    const maxValue = Math.max(...sorted.map(([, c]) => c));
+
+    const barColors = sorted.map(([, count], i) => {
+        if (i === 0) return colors.primary;
+        if (i === 1) return colors.secondary;
+        if (i === 2) return colors.accent;
+        const opacity = 0.8 - (i * 0.03);
+        return `rgba(99, 102, 241, ${Math.max(0.3, opacity)})`;
+    });
+
+    histogramChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sorted.map(([state]) => state),
+            datasets: [{
+                label: 'Count',
+                data: sorted.map(([, count]) => count),
+                backgroundColor: barColors,
+                borderColor: barColors.map(c => c.replace('0.8', '1').replace('0.3', '0.6')),
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    titleColor: theme === 'dark' ? '#f8fafc' : '#1e293b',
+                    bodyColor: theme === 'dark' ? '#94a3b8' : '#64748b',
+                    callbacks: {
+                        title: (items) => `State: |${items[0].label}⟩`,
+                        label: (item) => {
+                            const count = item.raw;
+                            const prob = ((count / total) * 100).toFixed(2);
+                            return [
+                                `Count: ${count}`,
+                                `Probability: ${prob}%`,
+                                count === maxValue ? '🏆 Most probable' : ''
+                            ].filter(Boolean);
+                        }
+                    }
                 }
             },
             scales: {
                 x: {
-                    title: { display: true, text: 'Iteration', color: '#64748b' },
-                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
-                    ticks: { color: '#64748b' }
+                    title: {
+                        display: true,
+                        text: 'Bitstring State',
+                        color: colors.text
+                    },
+                    grid: { display: false },
+                    ticks: {
+                        color: colors.text,
+                        font: { family: 'monospace', size: 10 },
+                        maxRotation: 45
+                    }
                 },
                 y: {
-                    title: { display: true, text: 'Energy', color: '#64748b' },
-                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
-                    ticks: { color: '#64748b' }
+                    title: {
+                        display: true,
+                        text: 'Measurement Count',
+                        color: colors.text
+                    },
+                    grid: { color: colors.grid },
+                    ticks: { color: colors.text },
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Initialize Statevector Visualization for VQE
+ */
+export async function initStatevectorChart(statevector) {
+    const canvas = document.getElementById('statevector-chart');
+    if (!canvas || !statevector) return;
+
+    try {
+        await loadChartJS();
+    } catch (error) {
+        return;
+    }
+
+    if (!window.Chart) return;
+
+    if (statevectorChart) {
+        statevectorChart.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const colors = {
+        grid: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)',
+        text: theme === 'dark' ? '#64748b' : '#64748b',
+        primary: '#6366f1',
+        success: '#10b981',
+        warning: '#f59e0b',
+        error: '#ef4444'
+    };
+
+    const amplitudes = Array.isArray(statevector)
+        ? statevector.map((v, i) => ({
+            state: i.toString(2).padStart(Math.log2(statevector.length), '0'),
+            amplitude: typeof v === 'object' ? v.amplitude : Math.abs(v),
+            phase: typeof v === 'object' ? v.phase : 0,
+            real: typeof v === 'object' ? v.real : v.real || v,
+            imag: typeof v === 'object' ? v.imag : v.imag || 0
+        }))
+        : Object.entries(statevector).map(([state, amp]) => ({
+            state,
+            amplitude: typeof amp === 'object' ? amp.amplitude : Math.abs(amp),
+            phase: typeof amp === 'object' ? amp.phase : 0,
+            real: typeof amp === 'object' ? amp.real : amp.real || amp,
+            imag: typeof amp === 'object' ? amp.imag : amp.imag || 0
+        }));
+
+    const probabilities = amplitudes.map(a => ({
+        state: a.state,
+        prob: a.amplitude ** 2
+    })).filter(a => a.prob > 0.001).sort((a, b) => b.prob - a.prob).slice(0, 20);
+
+    const barColors = probabilities.map((p, i) => {
+        const hue = 250 - (i * 15);
+        return `hsla(${hue}, 70%, 60%, 0.85)`;
+    });
+
+    statevectorChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: probabilities.map(p => p.state),
+            datasets: [{
+                label: 'Probability',
+                data: probabilities.map(p => p.prob),
+                backgroundColor: barColors,
+                borderColor: barColors.map(c => c.replace('0.85', '1')),
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                title: {
+                    display: true,
+                    text: 'Statevector Probability Distribution',
+                    color: colors.text,
+                    font: { size: 14, weight: '600' }
+                },
+                tooltip: {
+                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    callbacks: {
+                        title: (items) => `|${items[0].label}⟩`,
+                        label: (item) => {
+                            const prob = item.raw;
+                            const amp = amplitudes.find(a => a.state === item.label);
+                            return [
+                                `Probability: ${(prob * 100).toFixed(4)}%`,
+                                `Amplitude: ${amp?.amplitude?.toFixed(6) || 'N/A'}`,
+                                prob > 0.5 ? '🎯 Dominant state' : ''
+                            ].filter(Boolean);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Quantum State',
+                        color: colors.text
+                    },
+                    grid: { display: false },
+                    ticks: {
+                        color: colors.text,
+                        font: { family: 'monospace', size: 9 }
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Probability |ψ|²',
+                        color: colors.text
+                    },
+                    grid: { color: colors.grid },
+                    ticks: {
+                        color: colors.text,
+                        callback: (v) => `${(v * 100).toFixed(1)}%`
+                    },
+                    max: 1
                 }
             }
         }
@@ -187,7 +491,6 @@ export async function initEnergyDistributionChart(data) {
         energyDistChart.destroy();
     }
 
-    // Create histogram bins
     const min = Math.min(...data);
     const max = Math.max(...data);
     const binCount = Math.min(20, Math.ceil(Math.sqrt(data.length)));
@@ -204,6 +507,8 @@ export async function initEnergyDistributionChart(data) {
     );
 
     const ctx = canvas.getContext('2d');
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+
     energyDistChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -213,7 +518,8 @@ export async function initEnergyDistributionChart(data) {
                 data: bins,
                 backgroundColor: 'rgba(16, 185, 129, 0.6)',
                 borderColor: 'rgba(16, 185, 129, 1)',
-                borderWidth: 1
+                borderWidth: 1,
+                borderRadius: 4
             }]
         },
         options: {
@@ -222,21 +528,33 @@ export async function initEnergyDistributionChart(data) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: '#1a1a25',
-                    titleColor: '#f8fafc',
-                    bodyColor: '#94a3b8'
+                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    callbacks: {
+                        label: (item) => `Count: ${item.raw} samples`
+                    }
                 }
             },
             scales: {
                 x: {
-                    title: { display: true, text: 'Energy', color: '#64748b' },
+                    title: {
+                        display: true,
+                        text: 'Energy',
+                        color: theme === 'dark' ? '#64748b' : '#64748b'
+                    },
                     grid: { display: false },
-                    ticks: { color: '#64748b', maxRotation: 45 }
+                    ticks: {
+                        color: theme === 'dark' ? '#64748b' : '#64748b',
+                        maxRotation: 45
+                    }
                 },
                 y: {
-                    title: { display: true, text: 'Count', color: '#64748b' },
-                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
-                    ticks: { color: '#64748b' }
+                    title: {
+                        display: true,
+                        text: 'Count',
+                        color: theme === 'dark' ? '#64748b' : '#64748b'
+                    },
+                    grid: { color: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
+                    ticks: { color: theme === 'dark' ? '#64748b' : '#64748b' }
                 }
             }
         }
@@ -262,7 +580,6 @@ export async function initProbabilityChart(probabilities) {
         probabilityChart.destroy();
     }
 
-    // Convert object to sorted array if needed
     let sortedData;
     if (Array.isArray(probabilities)) {
         sortedData = probabilities.map((p, i) => ({ state: i.toString(), prob: p }))
@@ -273,11 +590,12 @@ export async function initProbabilityChart(probabilities) {
             .filter(d => d.prob > 0.001);
     }
 
-    // Sort by probability descending and take top 20
     sortedData.sort((a, b) => b.prob - a.prob);
     sortedData = sortedData.slice(0, 20);
 
     const ctx = canvas.getContext('2d');
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+
     probabilityChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -289,7 +607,8 @@ export async function initProbabilityChart(probabilities) {
                     i === 0 ? 'rgba(99, 102, 241, 0.8)' : 'rgba(99, 102, 241, 0.4)'
                 ),
                 borderColor: 'rgba(99, 102, 241, 1)',
-                borderWidth: 1
+                borderWidth: 1,
+                borderRadius: 4
             }]
         },
         options: {
@@ -299,9 +618,9 @@ export async function initProbabilityChart(probabilities) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: '#1a1a25',
-                    titleColor: '#f8fafc',
-                    bodyColor: '#94a3b8',
+                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    titleColor: theme === 'dark' ? '#f8fafc' : '#1e293b',
+                    bodyColor: theme === 'dark' ? '#94a3b8' : '#64748b',
                     callbacks: {
                         label: ctx => `Probability: ${(ctx.raw * 100).toFixed(2)}%`
                     }
@@ -309,17 +628,24 @@ export async function initProbabilityChart(probabilities) {
             },
             scales: {
                 x: {
-                    title: { display: true, text: 'Probability', color: '#64748b' },
-                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
+                    title: {
+                        display: true,
+                        text: 'Probability',
+                        color: theme === 'dark' ? '#64748b' : '#64748b'
+                    },
+                    grid: { color: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
                     ticks: {
-                        color: '#64748b',
+                        color: theme === 'dark' ? '#64748b' : '#64748b',
                         callback: v => (v * 100).toFixed(0) + '%'
                     },
                     max: 1
                 },
                 y: {
                     grid: { display: false },
-                    ticks: { color: '#64748b', font: { family: 'monospace', size: 10 } }
+                    ticks: {
+                        color: theme === 'dark' ? '#64748b' : '#64748b',
+                        font: { family: 'monospace', size: 10 }
+                    }
                 }
             }
         }
@@ -343,11 +669,12 @@ export async function initParameterChart(params) {
 
     if (parameterChart) parameterChart.destroy();
 
-    // Extract gamma and beta parameters if available
     const gamma = params.gamma || params.gammas || [];
     const beta = params.beta || params.betas || [];
 
     const ctx = canvas.getContext('2d');
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+
     parameterChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -360,7 +687,9 @@ export async function initParameterChart(params) {
                     backgroundColor: 'rgba(99, 102, 241, 0.1)',
                     borderWidth: 2,
                     fill: false,
-                    tension: 0.3
+                    tension: 0.3,
+                    pointRadius: 5,
+                    pointHoverRadius: 8
                 },
                 {
                     label: 'β (beta)',
@@ -369,7 +698,9 @@ export async function initParameterChart(params) {
                     backgroundColor: 'rgba(16, 185, 129, 0.1)',
                     borderWidth: 2,
                     fill: false,
-                    tension: 0.3
+                    tension: 0.3,
+                    pointRadius: 5,
+                    pointHoverRadius: 8
                 }
             ]
         },
@@ -380,23 +711,34 @@ export async function initParameterChart(params) {
                 legend: {
                     display: true,
                     position: 'top',
-                    labels: { color: '#94a3b8', boxWidth: 12 }
+                    labels: {
+                        color: theme === 'dark' ? '#94a3b8' : '#64748b',
+                        boxWidth: 12,
+                        usePointStyle: true
+                    }
                 },
                 tooltip: {
-                    backgroundColor: '#1a1a25',
-                    titleColor: '#f8fafc',
-                    bodyColor: '#94a3b8'
+                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    titleColor: theme === 'dark' ? '#f8fafc' : '#1e293b',
+                    bodyColor: theme === 'dark' ? '#94a3b8' : '#64748b',
+                    callbacks: {
+                        label: (item) => `${item.dataset.label}: ${item.raw.toFixed(4)}`
+                    }
                 }
             },
             scales: {
                 x: {
-                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
-                    ticks: { color: '#64748b' }
+                    grid: { color: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
+                    ticks: { color: theme === 'dark' ? '#64748b' : '#64748b' }
                 },
                 y: {
-                    title: { display: true, text: 'Parameter Value', color: '#64748b' },
-                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
-                    ticks: { color: '#64748b' }
+                    title: {
+                        display: true,
+                        text: 'Parameter Value',
+                        color: theme === 'dark' ? '#64748b' : '#64748b'
+                    },
+                    grid: { color: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
+                    ticks: { color: theme === 'dark' ? '#64748b' : '#64748b' }
                 }
             }
         }
@@ -425,7 +767,6 @@ export async function updateStatusPieChart(data) {
         return;
     }
 
-    // Lazy load Chart.js
     try {
         await loadChartJS();
     } catch (error) {
@@ -435,12 +776,12 @@ export async function updateStatusPieChart(data) {
 
     if (!window.Chart) return;
 
-    // Destroy existing chart
     if (statusPieChart) {
         statusPieChart.destroy();
     }
 
     const ctx = canvas.getContext('2d');
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
 
     statusPieChart = new Chart(ctx, {
         type: 'doughnut',
@@ -449,10 +790,10 @@ export async function updateStatusPieChart(data) {
             datasets: [{
                 data: [data.completed, data.running, data.pending, data.failed],
                 backgroundColor: [
-                    'rgba(16, 185, 129, 0.8)',  // green - completed
-                    'rgba(59, 130, 246, 0.8)',  // blue - running
-                    'rgba(245, 158, 11, 0.8)',  // yellow - pending
-                    'rgba(239, 68, 68, 0.8)'    // red - failed
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(59, 130, 246, 0.8)',
+                    'rgba(245, 158, 11, 0.8)',
+                    'rgba(239, 68, 68, 0.8)'
                 ],
                 borderColor: [
                     'rgb(16, 185, 129)',
@@ -460,7 +801,8 @@ export async function updateStatusPieChart(data) {
                     'rgb(245, 158, 11)',
                     'rgb(239, 68, 68)'
                 ],
-                borderWidth: 2
+                borderWidth: 2,
+                hoverOffset: 10
             }]
         },
         options: {
@@ -468,14 +810,12 @@ export async function updateStatusPieChart(data) {
             maintainAspectRatio: false,
             cutout: '60%',
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
-                    backgroundColor: '#1a1a25',
-                    titleColor: '#f8fafc',
-                    bodyColor: '#94a3b8',
-                    borderColor: '#2a2a3a',
+                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    titleColor: theme === 'dark' ? '#f8fafc' : '#1e293b',
+                    bodyColor: theme === 'dark' ? '#94a3b8' : '#64748b',
+                    borderColor: theme === 'dark' ? '#2a2a3a' : '#e2e8f0',
                     borderWidth: 1,
                     callbacks: {
                         label: function (context) {
@@ -489,7 +829,6 @@ export async function updateStatusPieChart(data) {
         }
     });
 
-    // Update custom legend
     if (legend) {
         legend.innerHTML = `
             <div class="legend-item"><span class="legend-color" style="background: rgb(16, 185, 129);"></span> Completed: ${data.completed}</div>
@@ -523,5 +862,13 @@ export function destroyAllCharts() {
     if (statusPieChart) {
         statusPieChart.destroy();
         statusPieChart = null;
+    }
+    if (histogramChart) {
+        histogramChart.destroy();
+        histogramChart = null;
+    }
+    if (statevectorChart) {
+        statevectorChart.destroy();
+        statevectorChart = null;
     }
 }

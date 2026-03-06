@@ -92,15 +92,15 @@
                 <span class="logo-icon" aria-hidden="true">⚛</span>
                 <span class="logo-text">QuantumSafe<span class="accent">Optimize</span></span>
             </a>
-            <ul class="nav-links">
-                <li><a href="#features">Features</a></li>
-                <li><a href="#algorithms">Algorithms</a></li>
-                <li><a href="#demo">Demo</a></li>
-                <li><a href="#security">Security</a></li>
-                <li><a href="#backends">Backends</a></li>
-                <li><a href="#pricing">Pricing</a></li>
-                <li><a href="#docs">Docs</a></li>
-            </ul>
+<ul class="nav-links">
+<li><a href="#features">Features</a></li>
+<li><a href="#algorithms">Algorithms</a></li>
+<li><a href="#demo">Demo</a></li>
+<li><a href="#security">Security</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#publications">Research</a></li>
+<li><a href="#pricing">Pricing</a></li>
+</ul>
             <div class="nav-actions">
                 <button class="btn btn-ghost" onclick="openAuthModal('signin')">Sign In</button>
                 <button class="btn btn-primary" onclick="openAuthModal('signup')">
@@ -713,17 +713,20 @@ result = client.optimize(
         </div>
     </section>
 
-    <!-- Interactive Demo Section -->
-    <section class="demo-section" id="demo">
-        <div class="container">
-            <div class="section-header">
-                <span class="section-tag">Try It Live</span>
-                <h2 class="section-title">Interactive <span class="gradient-text">API Playground</span></h2>
-                <p class="section-description">
-                    Experience the power of quantum optimization. Run a real optimization 
-                    job right in your browser—no signup required.
-                </p>
-            </div>
+<!-- Interactive Demo Section -->
+<section class="demo-section" id="demo">
+<div class="container">
+<div class="section-header">
+<span class="section-tag">Try It Live</span>
+<h2 class="section-title">Interactive <span class="gradient-text">API Playground</span></h2>
+<p class="section-description">
+Experience the power of quantum optimization. Run a real optimization
+job right in your browser—no signup required.
+</p>
+</div>
+
+<!-- Quantum Circuit Visualization -->
+<div id="quantum-circuit-demo"></div>
             <div class="demo-container">
                 <div class="demo-sidebar">
                     <h4>Configure Your Job</h4>
@@ -940,22 +943,37 @@ result = client.optimize(
                             <span>Kubernetes</span>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </section>
+</div>
+</div>
+</div>
+</div>
+</section>
 
-    <!-- Performance Metrics Section -->
-    <section class="performance-section">
-        <div class="container">
-            <div class="performance-grid">
-                <div class="performance-content">
-                    <span class="section-tag">Performance</span>
-                    <h2 class="section-title">Built for <span class="gradient-text">Scale</span></h2>
-                    <p class="section-description">
-                        Enterprise-ready performance with battle-tested reliability. 
-                        Handle thousands of concurrent optimization jobs without breaking a sweat.
-                    </p>
+<!-- Architecture Diagram Section -->
+<section class="architecture" id="architecture">
+<div class="container">
+<div class="section-header">
+<span class="section-tag">Architecture</span>
+<h2 class="section-title">Enterprise-Grade <span class="gradient-text">System Design</span></h2>
+<p class="section-description">
+A layered architecture designed for security, scalability, and seamless integration with quantum backends.
+</p>
+</div>
+<div id="architecture-diagram"></div>
+</div>
+</section>
+
+<!-- Performance Metrics Section -->
+<section class="performance-section">
+<div class="container">
+<div class="performance-grid">
+<div class="performance-content">
+<span class="section-tag">Performance</span>
+<h2 class="section-title">Built for <span class="gradient-text">Scale</span></h2>
+<p class="section-description">
+Enterprise-ready performance with battle-tested reliability.
+Handle thousands of concurrent optimization jobs without breaking a sweat.
+</p>
                     <div class="performance-stats">
                         <div class="perf-stat">
                             <div class="perf-bar">
@@ -1290,35 +1308,114 @@ result = client.optimize(
         </div>
     </section>
 
-    <!-- CTA Section -->
-    <section class="cta">
-        <div class="container">
-            <div class="cta-content">
-                <div class="cta-badge">
-                    <span>🚀</span>
-                    <span>Start in minutes, not weeks</span>
-                </div>
-                <h2>Ready to Optimize with <span class="gradient-text">Quantum-Safe</span> Security?</h2>
-                <p>Join 500+ research teams already running quantum optimization jobs with built-in post-quantum cryptography.</p>
-                <div class="cta-actions">
-                    <button onclick="openAuthModal('signup')" class="btn btn-primary btn-lg btn-glow">
-                        <span>Start Free Trial</span>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7"/>
-                        </svg>
-                    </button>
-                    <a href="#docs" class="btn btn-outline btn-lg">Read Documentation</a>
-                </div>
-                <p class="cta-note">No credit card required • 14-day free trial • Cancel anytime</p>
-            </div>
-        </div>
-    </section>
+<!-- CTA Section -->
+<section class="cta">
+<div class="container">
+<div class="cta-content">
+<div class="cta-badge">
+<span>🚀</span>
+<span>Start in minutes, not weeks</span>
+</div>
+<h2>Ready to Optimize with <span class="gradient-text">Quantum-Safe</span> Security?</h2>
+<p>Join 500+ research teams already running quantum optimization jobs with built-in post-quantum cryptography.</p>
+<div class="cta-actions">
+<button onclick="openAuthModal('signup')" class="btn btn-primary btn-lg btn-glow">
+<span>Start Free Trial</span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+<path d="M5 12h14M12 5l7 7-7 7"/>
+</svg>
+</button>
+<a href="#docs" class="btn btn-outline btn-lg">Read Documentation</a>
+</div>
+<p class="cta-note">No credit card required • 14-day free trial • Cancel anytime</p>
+</div>
+</div>
+</section>
 
-    <!-- Newsletter Section -->
-    <section class="newsletter">
-        <div class="container">
-            <div class="newsletter-content">
-                <div class="newsletter-text">
+<!-- Publications Section -->
+<section class="publications" id="publications">
+<div class="container">
+<div class="section-header">
+<span class="section-tag">Research</span>
+<h2 class="section-title">Publication-Ready <span class="gradient-text">Results</span></h2>
+<p class="section-description">
+Generate reproducible results and visualizations for your quantum optimization research papers.
+</p>
+</div>
+<div class="publications-grid">
+<div class="pub-card">
+<div class="pub-icon">📊</div>
+<h3>Reproducible Experiments</h3>
+<p>Export experiment configurations, random seeds, and all parameters for full reproducibility.</p>
+<ul class="pub-features">
+<li>JSON experiment configs</li>
+<li>Seed-controlled randomness</li>
+<li>Version-controlled backends</li>
+</ul>
+</div>
+<div class="pub-card">
+<div class="pub-icon">📈</div>
+<h3>Publication Figures</h3>
+<p>Generate SVG/PNG charts meeting journal requirements (IEEE, Nature, ACM formats).</p>
+<ul class="pub-features">
+<li>300+ DPI exports</li>
+<li>Vector graphics (SVG)</li>
+<li>LaTeX-compatible labels</li>
+</ul>
+</div>
+<div class="pub-card">
+<div class="pub-icon">📝</div>
+<h3>Auto-Citation</h3>
+<p>Generate BibTeX citations for all algorithms, backends, and PQC standards used.</p>
+<ul class="pub-features">
+<li>BibTeX export</li>
+<li>DOI integration</li>
+<li>Software citation</li>
+</ul>
+</div>
+<div class="pub-card">
+<div class="pub-icon">🔬</div>
+<h3>Benchmark Suite</h3>
+<p>Standard benchmark problems (Max-Cut, TSP, Portfolio) for algorithm comparison.</p>
+<ul class="pub-features">
+<li>QASLIB problems</li>
+<li>Custom instances</li>
+<li>Statistical analysis</li>
+</ul>
+</div>
+</div>
+<div class="citation-generator">
+<h4>Generate Citation</h4>
+<div class="citation-form">
+<select id="citation-format">
+<option value="bibtex">BibTeX</option>
+<option value="apa">APA</option>
+<option value="ieee">IEEE</option>
+<option value="mla">MLA</option>
+</select>
+<button class="btn btn-primary" onclick="LandingEnhancements.generateCitation()">
+Generate Citation
+</button>
+</div>
+<pre class="citation-output" id="citation-output">@software{quantumsafe2024,
+  author = {QuantumSafe Optimize Team},
+  title = {QuantumSafe Optimize: A Post-Quantum Secure Optimization Platform},
+  year = {2024},
+  publisher = {GitHub},
+  url = {https://github.com/quantumsafe-optimize},
+  note = {NIST FIPS 203/204 compliant PQC with QAOA/VQE/Annealing support}
+}</pre>
+</div>
+<div id="research-showcase"></div>
+<div id="benchmark-comparison"></div>
+</div>
+</section>
+
+<!-- Newsletter Section -->
+<section class="newsletter">
+<div class="container">
+<div class="newsletter-content">
+<div class="newsletter-text">
                     <h3>Stay Updated</h3>
                     <p>Get the latest news on quantum computing, PQC updates, and platform features.</p>
                 </div>
@@ -1345,26 +1442,26 @@ result = client.optimize(
                         <span class="footer-badge">🛡️ SOC 2 Type II</span>
                     </div>
                 </div>
-                <div class="footer-links">
-                    <h4>Platform</h4>
-                    <ul>
-                        <li><a href="#features">Features</a></li>
-                        <li><a href="#algorithms">Algorithms</a></li>
-                        <li><a href="#security">Security</a></li>
-                        <li><a href="#backends">Backends</a></li>
-                        <li><a href="#pricing">Pricing</a></li>
-                    </ul>
-                </div>
-                <div class="footer-links">
-                    <h4>Resources</h4>
-                    <ul>
-                        <li><a href="#docs">Documentation</a></li>
-                        <li><a href="#">API Reference</a></li>
-                        <li><a href="#">Examples</a></li>
-                        <li><a href="#">Blog</a></li>
-                        <li><a href="#">Status</a></li>
-                    </ul>
-                </div>
+<div class="footer-links">
+<h4>Platform</h4>
+<ul>
+<li><a href="#features">Features</a></li>
+<li><a href="#algorithms">Algorithms</a></li>
+<li><a href="#security">Security</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#pricing">Pricing</a></li>
+</ul>
+</div>
+<div class="footer-links">
+<h4>Resources</h4>
+<ul>
+<li><a href="#publications">Research</a></li>
+<li><a href="#docs">Documentation</a></li>
+<li><a href="#">API Reference</a></li>
+<li><a href="#">Examples</a></li>
+<li><a href="#">Blog</a></li>
+</ul>
+</div>
                 <div class="footer-links">
                     <h4>Company</h4>
                     <ul>

@@ -1,51 +1,67 @@
 /**
- * QuantumSafe Optimize - Landing Page JavaScript
- * Handles navigation, animations, auth modal, and interactive elements
- */
+* QuantumSafe Optimize - Landing Page JavaScript
+* Handles navigation, animations, auth modal, and interactive elements
+*/
 
 // Performance: Throttle utility for scroll/resize handlers
 function throttle(fn, delay) {
-    let last = 0;
-    let timer = null;
-    return function(...args) {
-        const now = Date.now();
-        if (now - last >= delay) {
-            last = now;
-            fn.apply(this, args);
-        } else {
-            clearTimeout(timer);
-            timer = setTimeout(() => {
-                last = Date.now();
-                fn.apply(this, args);
-            }, delay - (now - last));
-        }
-    };
+let last = 0;
+let timer = null;
+return function(...args) {
+const now = Date.now();
+if (now - last >= delay) {
+last = now;
+fn.apply(this, args);
+} else {
+clearTimeout(timer);
+timer = setTimeout(() => {
+last = Date.now();
+fn.apply(this, args);
+}, delay - (now - last));
+}
+};
 }
 
 // Performance: Check for reduced motion preference
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-document.addEventListener('DOMContentLoaded', () => {
-    initNavigation();
-    initAlgorithmTabs();
-    initScrollAnimations();
-    initEnhancedScrollReveal();
-    if (!prefersReducedMotion) {
-        initParticles();
-        initMagneticButtons();
-        initParallaxEffects();
-    }
-    initCopyButtons();
-    initCounters();
-    initNewsletter();
-    initFAQ();
+// Import Dashboard Integration Modules (lazy loaded)
+let dashboardIntegration = null;
+let userProfileModule = null;
+let performanceModule = null;
 
-    // Defer non-critical work
-    if ('requestIdleCallback' in window) {
-        requestIdleCallback(() => {
-            initWebVitals();
-        });
-    }
+async function loadDashboardModules() {
+if (dashboardIntegration) return;
+try {
+const { initDashboardEnhancements } = await import('./modules/dashboard-integration.js');
+dashboardIntegration = { initDashboardEnhancements };
+dashboardIntegration.initDashboardEnhancements();
+} catch (e) {
+console.log('[Main] Dashboard integration module not loaded on landing page');
+}
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+initNavigation();
+initAlgorithmTabs();
+initScrollAnimations();
+initEnhancedScrollReveal();
+if (!prefersReducedMotion) {
+initParticles();
+initMagneticButtons();
+initParallaxEffects();
+}
+initCopyButtons();
+initCounters();
+initNewsletter();
+initFAQ();
+
+// Defer non-critical work
+if ('requestIdleCallback' in window) {
+requestIdleCallback(() => {
+initWebVitals();
+});
+}
 });
 
 /**
@@ -735,32 +751,51 @@ async function handleSignup(event) {
         } else {
             throw new Error(data.detail || 'Registration failed');
         }
-    } catch (error) {
-        // Fallback to demo mode if API unavailable (network errors, JSON parse errors, etc.)
-        const isApiUnavailable =
-            error.message.includes('fetch') ||
-            error.message.includes('NetworkError') ||
-            error.message.includes('Failed to fetch') ||
-            error.message.includes('API unavailable') ||
-            error.message.includes('Unexpected token') ||
-            error.message.includes('JSON');
+} catch (error) {
+// Fallback to demo mode if API unavailable (network errors, JSON parse errors, etc.)
+const isApiUnavailable =
+error.message.includes('fetch') ||
+error.message.includes('NetworkError') ||
+error.message.includes('Failed to fetch') ||
+error.message.includes('API unavailable') ||
+error.message.includes('Unexpected token') ||
+error.message.includes('JSON');
 
-        if (isApiUnavailable) {
-            // SECURITY: Demo tokens must be issued by server, not client-side
-            // Client-side token generation via btoa() is a CRITICAL vulnerability
-            showToast('error', 'API Unavailable', 'Server authentication is required. Demo mode disabled for security.');
-            errorDiv.textContent = 'Authentication server required. Please check your connection.';
-            errorDiv.style.display = 'block';
-        } else {
-            // Provide helpful error message with suggestion to sign in
-            if (error.message.toLowerCase().includes('already exists') || error.message.toLowerCase().includes('username') && error.message.toLowerCase().includes('exists')) {
-                errorDiv.innerHTML = `Account already exists! <a href="#" onclick="switchAuthTab('signin'); return false;" style="color: #8b5cf6; text-decoration: underline;">Sign in instead</a>`;
-            } else {
-                errorDiv.textContent = error.message;
-            }
-            errorDiv.style.display = 'block';
-        }
-    } finally {
+if (isApiUnavailable) {
+// Allow demo mode for demonstration purposes
+// Generate a demo user session
+const demoUser = {
+user_id: 'demo_' + Date.now(),
+username: email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+name: name || email.split('@')[0],
+email: email,
+created_at: new Date().toISOString()
+};
+
+// Store demo user data
+localStorage.setItem('quantumSafeUser', JSON.stringify(demoUser));
+localStorage.setItem('authToken', 'demo_token_' + btoa(JSON.stringify(demoUser)));
+localStorage.setItem('isDemoMode', 'true');
+
+// Show success message
+if (modalBody) modalBody.style.display = 'none';
+if (successMessage) successMessage.classList.add('show');
+successMessage.querySelector('p').textContent = 'Demo mode activated. Some features may be limited.';
+
+// Redirect to dashboard
+setTimeout(() => {
+window.location.href = 'dashboard.html';
+}, 1500);
+} else {
+// Provide helpful error message with suggestion to sign in
+if (error.message.toLowerCase().includes('already exists') || error.message.toLowerCase().includes('username') && error.message.toLowerCase().includes('exists')) {
+errorDiv.innerHTML = `Account already exists! <a href="#" onclick="switchAuthTab('signin'); return false;" style="color: #8b5cf6; text-decoration: underline;">Sign in instead</a>`;
+} else {
+errorDiv.textContent = error.message;
+}
+errorDiv.style.display = 'block';
+}
+} finally {
         submitBtn.classList.remove('loading');
         submitBtn.disabled = false;
     }
@@ -829,32 +864,42 @@ async function handleSignin(event) {
         } else {
             throw new Error(data.detail || 'Invalid credentials');
         }
-    } catch (error) {
-        // Fallback to demo mode if API unavailable (network errors, JSON parse errors, etc.)
-        const isApiUnavailable =
-            error.message.includes('fetch') ||
-            error.message.includes('NetworkError') ||
-            error.message.includes('Failed to fetch') ||
-            error.message.includes('API unavailable') ||
-            error.message.includes('Unexpected token') ||
-            error.message.includes('JSON');
+} catch (error) {
+// Fallback to demo mode if API unavailable (network errors, JSON parse errors, etc.)
+const isApiUnavailable =
+error.message.includes('fetch') ||
+error.message.includes('NetworkError') ||
+error.message.includes('Failed to fetch') ||
+error.message.includes('API unavailable') ||
+error.message.includes('Unexpected token') ||
+error.message.includes('JSON');
 
-        if (isApiUnavailable) {
-            // SECURITY: Demo tokens must be issued by server, not client-side
-            // Client-side token generation via btoa() is a CRITICAL vulnerability
-            showToast('error', 'API Unavailable', 'Server authentication is required. Please check your connection.');
-            errorDiv.textContent = 'Authentication server available. Please check your connection.';
-            errorDiv.style.display = 'block';
-        } else {
-            // Provide helpful error message with suggestion to sign up
-            if (error.message.toLowerCase().includes('invalid credentials')) {
-                errorDiv.innerHTML = `Invalid credentials. Don't have an account? <a href="#" onclick="switchAuthTab('signup'); return false;" style="color: #8b5cf6; text-decoration: underline;">Sign up</a>`;
-            } else {
-                errorDiv.textContent = error.message;
-            }
-            errorDiv.style.display = 'block';
-        }
-    } finally {
+if (isApiUnavailable) {
+// Allow demo mode for demonstration purposes
+const demoUser = {
+user_id: 'demo_' + Date.now(),
+username: email.includes('@') ? email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_') : email,
+email: email,
+signedInAt: new Date().toISOString()
+};
+
+// Store demo user data
+localStorage.setItem('quantumSafeUser', JSON.stringify(demoUser));
+localStorage.setItem('authToken', 'demo_token_' + btoa(JSON.stringify(demoUser)));
+localStorage.setItem('isDemoMode', 'true');
+
+// Redirect to dashboard
+window.location.href = 'dashboard.html';
+} else {
+// Provide helpful error message with suggestion to sign up
+if (error.message.toLowerCase().includes('invalid credentials')) {
+errorDiv.innerHTML = `Invalid credentials. Don't have an account? <a href="#" onclick="switchAuthTab('signup'); return false;" style="color: #8b5cf6; text-decoration: underline;">Sign up</a>`;
+} else {
+errorDiv.textContent = error.message;
+}
+errorDiv.style.display = 'block';
+}
+} finally {
         submitBtn.classList.remove('loading');
         submitBtn.disabled = false;
     }
@@ -1420,14 +1465,25 @@ function drawMetricsChart() {
 
 // Initialize demo on load
 document.addEventListener('DOMContentLoaded', () => {
-    initInteractiveDemo();
+initInteractiveDemo();
+initLandingEnhancements();
 });
 
+async function initLandingEnhancements() {
+try {
+const { LandingEnhancements: LE } = await import('./modules/landing-enhancements.js');
+window.LandingEnhancements = LE;
+LE.init();
+} catch (e) {
+console.log('[Main] Landing enhancements module not loaded:', e.message);
+}
+}
+
 /**
- * Console Easter Egg
- */
+* Console Easter Egg
+*/
 console.log(`
-%c QuantumSafe Optimize 
+%c QuantumSafe Optimize
 %c Quantum-Safe Secure Optimization Platform
 
 %c🔐 Post-Quantum Cryptography: ML-KEM-768, ML-DSA-65
