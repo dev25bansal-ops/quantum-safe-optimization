@@ -1,96 +1,170 @@
 /**
- * QuantumSafe Optimize - Dashboard JavaScript
- * Professional Quantum Optimization Platform
- * Handles navigation, job management, and API interactions
- */
+* QuantumSafe Optimize - Dashboard JavaScript
+* Professional Quantum Optimization Platform
+* Handles navigation, job management, and API interactions
+*/
 
 // Configuration - use current origin to avoid CORS issues
 const CONFIG = {
-    apiUrl: localStorage.getItem('apiUrl') || `${window.location.origin}/api/v1`,
-    apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || window.location.origin,
-    healthCheckInterval: 30000, // 30 seconds for health checks only
-    maxRetries: 3
+apiUrl: localStorage.getItem('apiUrl') || `${window.location.origin}/api/v1`,
+apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || window.location.origin,
+healthCheckInterval: 30000, // 30 seconds for health checks only
+maxRetries: 3
 };
 
 // Ansatz mapping for VQE (UI display -> backend value)
 const ANSATZ_MAPPING = {
-    'hardware_efficient': 'hardware_efficient',
-    'ry': 'hardware_efficient',
-    'ryrz': 'hardware_efficient',
-    'su2': 'su2',
-    'uccsd': 'uccsd'
+'hardware_efficient': 'hardware_efficient',
+'ry': 'hardware_efficient',
+'ryrz': 'hardware_efficient',
+'su2': 'su2',
+'uccsd': 'uccsd'
 };
 
 /**
- * XSS Protection - Sanitize user input before rendering
- */
+* XSS Protection - Sanitize user input before rendering
+*/
 function escapeHtml(unsafe) {
-    if (unsafe == null) return '';
-    return String(unsafe)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+if (unsafe == null) return '';
+return String(unsafe)
+.replace(/&/g, '&amp;')
+.replace(/</g, '&lt;')
+.replace(/>/g, '&gt;')
+.replace(/"/g, '&quot;')
+.replace(/'/g, '&#039;');
 }
 
 // State
 const STATE = {
-    jobs: [],
-    currentSection: 'overview',
-    selectedJobId: null,
-    pollTimer: null,
-    healthCheckTimer: null,
-    isOnline: true,
-    searchQuery: '',
-    filterStatus: 'all',
-    filterType: 'all',
-    theme: localStorage.getItem('theme') || 'dark',
-    // Pagination
-    currentPage: 1,
-    pageSize: 10,
-    totalJobs: 0,
-    // Loading states
-    isLoading: false,
-    // Authentication
-    isAuthenticated: false,
-    user: null,
-    // System data
-    workers: [],
-    webhookStats: null,
-    // Notifications
-    notifications: [],
-    // Job comparison
-    selectedForCompare: [],
-    // Offline tracking
-    wasOffline: false
+jobs: [],
+currentSection: 'overview',
+selectedJobId: null,
+pollTimer: null,
+healthCheckTimer: null,
+isOnline: true,
+searchQuery: '',
+filterStatus: 'all',
+filterType: 'all',
+theme: localStorage.getItem('theme') || 'dark',
+// Pagination
+currentPage: 1,
+pageSize: 10,
+totalJobs: 0,
+// Loading states
+isLoading: false,
+// Authentication
+isAuthenticated: false,
+user: null,
+// System data
+workers: [],
+webhookStats: null,
+// Notifications
+notifications: [],
+// Job comparison
+selectedForCompare: [],
+// Offline tracking
+wasOffline: false,
+// Activity feed
+activity: [],
+// Usage stats
+usageStats: null
 };
 
-// Initialize on DOM load
-document.addEventListener('DOMContentLoaded', () => {
-    initTheme();
-    initNavigation();
-    initJobForm();
-    initModal();
-    initSettings();
-    initSecurityTests();
-    initSearch();
-    initMobileSearch();
-    initAuth();
-    initUserMenu();
-    initNotifications();
-    initKeyboardShortcuts();
-    initOfflineDetection();
-    initJobComparison();
-    initConnectivity();
-    initPqcStatus();
-    checkAuthStatus();
-    checkApiStatus();
-    loadJobs();
+// Dynamic imports for new modules
+let DashboardIntegration = null;
+let UserProfileModule = null;
+let PerformanceModule = null;
 
-    // Only health check polling - job updates via WebSocket
-    STATE.healthCheckTimer = setInterval(checkApiStatus, CONFIG.healthCheckInterval);
+async function loadNewModules() {
+try {
+// Load dashboard integration
+const dashInt = await import('./modules/dashboard-integration.js');
+DashboardIntegration = dashInt;
+if (dashInt.initDashboardEnhancements) {
+dashInt.initDashboardEnhancements();
+}
+} catch (e) {
+console.log('[Dashboard] Dashboard integration module not loaded:', e.message);
+}
+
+try {
+// Load performance optimizations
+const perf = await import('./modules/performance.js');
+PerformanceModule = perf;
+if (perf.initPerformanceOptimizations) {
+perf.initPerformanceOptimizations();
+}
+} catch (e) {
+console.log('[Dashboard] Performance module not loaded:', e.message);
+}
+}
+
+// Initialize on DOM load
+document.addEventListener('DOMContentLoaded', async () => {
+initTheme();
+initNavigation();
+initJobForm();
+initModal();
+initSettings();
+initSecurityTests();
+initSearch();
+initMobileSearch();
+initAuth();
+initUserMenu();
+initNotifications();
+initKeyboardShortcuts();
+initOfflineDetection();
+initJobComparison();
+initConnectivity();
+initPqcStatus();
+checkAuthStatus();
+checkApiStatus();
+loadJobs();
+
+// Load new modules
+await loadNewModules();
+
+// Initialize section-specific modules
+initSectionModules('overview');
+
+// Only health check polling - job updates via WebSocket
+STATE.healthCheckTimer = setInterval(checkApiStatus, CONFIG.healthCheckInterval);
 });
+
+/**
+* Initialize modules for specific sections
+*/
+function initSectionModules(section) {
+switch (section) {
+case 'profile':
+import('./modules/user-profile.js')
+.then(module => {
+if (module.initUserProfile) {
+module.initUserProfile();
+}
+})
+.catch(e => console.log('[Dashboard] Profile module not loaded:', e.message));
+break;
+case 'webhooks':
+import('./modules/webhooks.js')
+.then(module => {
+if (module.initWebhookManagement) {
+module.initWebhookManagement();
+}
+})
+.catch(e => console.log('[Dashboard] Webhooks module not loaded:', e.message));
+break;
+case 'settings':
+import('./modules/key-management.js')
+.then(module => {
+if (module.initKeyManagement) {
+module.initKeyManagement();
+}
+})
+.catch(e => console.log('[Dashboard] Key management module not loaded:', e.message));
+break;
+}
+}
 
 /**
  * Theme Management
@@ -1289,13 +1363,16 @@ function viewJobDetails(jobId) {
             additionalStats.style.display = 'none';
         }
 
-        // Show convergence chart if data available
-        if (job.result.convergence_history && job.result.convergence_history.length > 0 && chartSection) {
-            chartSection.style.display = 'block';
-            initConvergenceChart('convergence-chart', job.result.convergence_history);
-        } else if (chartSection) {
-            chartSection.style.display = 'none';
-        }
+// Show convergence chart if data available
+if (job.result.convergence_history && job.result.convergence_history.length > 0 && chartSection) {
+chartSection.style.display = 'block';
+// Load Chart.js before initializing
+loadChartJSSafely().then(() => {
+initConvergenceChart('convergence-chart', job.result.convergence_history);
+}).catch(e => console.warn('Chart.js not loaded:', e));
+} else if (chartSection) {
+chartSection.style.display = 'none';
+}
     } else {
         resultsSection.style.display = 'none';
         if (chartSection) chartSection.style.display = 'none';
@@ -2204,41 +2281,59 @@ function updateBackendStatus(backendId, isOnline) {
 }
 
 /**
- * Convergence Chart - Lazy loaded
- */
+* Convergence Chart - Lazy loaded
+*/
 let convergenceChart = null;
 let chartJsLoaded = false;
 
+/**
+* Safely load Chart.js before rendering charts
+*/
+async function loadChartJSSafely() {
+if (window.Chart) {
+chartJsLoaded = true;
+return true;
+}
+if (window.loadChartJS) {
+try {
+await window.loadChartJS();
+chartJsLoaded = window.chartJsLoaded ? window.chartJsLoaded() : !!window.Chart;
+return chartJsLoaded;
+} catch (error) {
+console.error('Failed to load Chart.js:', error);
+return false;
+}
+}
+return false;
+}
+
 async function initConvergenceChart(containerId, data) {
-    const canvas = document.getElementById(containerId);
-    if (!canvas) return;
+const canvas = document.getElementById(containerId);
+if (!canvas) return;
 
-    // Lazy load Chart.js using module-level singleton from charts.js
-    // This prevents redundant CDN requests when navigating between jobs/pages
-    if (!window.Chart && window.loadChartJS) {
-        try {
-            await window.loadChartJS();
-            chartJsLoaded = window.chartJsLoaded ? window.chartJsLoaded() : !!window.Chart;
-        } catch (error) {
-            console.error('Failed to load Chart.js:', error);
-            // Show fallback message
-            const chartSection = document.getElementById('chart-section');
-            if (chartSection) {
-                chartSection.innerHTML = `
-                    <div class="chart-fallback">
-                        <i class="fas fa-chart-line"></i>
-                        <p>Unable to load chart. <button class="btn btn-sm btn-outline" onclick="initConvergenceChart('${containerId}', ${JSON.stringify(data)})">Retry</button></p>
-                    </div>
-                `;
-            }
-            return;
-        }
-    }
+// Lazy load Chart.js using module-level singleton from charts.js
+// This prevents redundant CDN requests when navigating between jobs/pages
+if (!window.Chart) {
+const loaded = await loadChartJSSafely();
+if (!loaded) {
+// Show fallback message
+const chartSection = document.getElementById('chart-section');
+if (chartSection) {
+chartSection.innerHTML = `
+<div class="chart-fallback">
+<i class="fas fa-chart-line"></i>
+<p>Unable to load chart. <button class="btn btn-sm btn-outline" onclick="initConvergenceChart('${containerId}', ${JSON.stringify(data)})">Retry</button></p>
+</div>
+`;
+}
+return;
+}
+}
 
-    // Destroy existing chart
-    if (convergenceChart) {
-        convergenceChart.destroy();
-    }
+// Destroy existing chart
+if (convergenceChart) {
+convergenceChart.destroy();
+}
 
     const ctx = canvas.getContext('2d');
 
@@ -2339,121 +2434,133 @@ function renderBitstringViz(bitstring) {
 }
 
 /**
- * Initialize Energy Distribution Chart
- */
+* Initialize Energy Distribution Chart
+*/
 async function initEnergyDistributionChart(data) {
-    const canvas = document.getElementById('energy-distribution-chart');
-    if (!canvas || !window.Chart) return;
+const canvas = document.getElementById('energy-distribution-chart');
+if (!canvas) return;
 
-    if (energyDistChart) energyDistChart.destroy();
+// Ensure Chart.js is loaded
+if (!window.Chart) {
+const loaded = await loadChartJSSafely();
+if (!loaded) return;
+}
 
-    // Create histogram bins
-    const min = Math.min(...data);
-    const max = Math.max(...data);
-    const binCount = Math.min(20, Math.ceil(Math.sqrt(data.length)));
-    const binWidth = (max - min) / binCount;
-    const bins = new Array(binCount).fill(0);
+if (energyDistChart) energyDistChart.destroy();
 
-    data.forEach(value => {
-        const binIndex = Math.min(Math.floor((value - min) / binWidth), binCount - 1);
-        bins[binIndex]++;
-    });
+// Create histogram bins
+const min = Math.min(...data);
+const max = Math.max(...data);
+const binCount = Math.min(20, Math.ceil(Math.sqrt(data.length)));
+const binWidth = (max - min) / binCount;
+const bins = new Array(binCount).fill(0);
 
-    const labels = bins.map((_, i) => (min + (i + 0.5) * binWidth).toFixed(2));
+data.forEach(value => {
+const binIndex = Math.min(Math.floor((value - min) / binWidth), binCount - 1);
+bins[binIndex]++;
+});
 
-    const ctx = canvas.getContext('2d');
-    energyDistChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Frequency',
-                data: bins,
-                backgroundColor: 'rgba(99, 102, 241, 0.6)',
-                borderColor: '#6366f1',
-                borderWidth: 1,
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: '#1a1a25',
-                    titleColor: '#f8fafc',
-                    bodyColor: '#94a3b8'
-                }
-            },
-            scales: {
-                x: {
-                    title: { display: true, text: 'Energy', color: '#64748b' },
-                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
-                    ticks: { color: '#64748b', maxRotation: 45 }
-                },
-                y: {
-                    title: { display: true, text: 'Count', color: '#64748b' },
-                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
-                    ticks: { color: '#64748b' }
-                }
-            }
-        }
-    });
+const labels = bins.map((_, i) => (min + (i + 0.5) * binWidth).toFixed(2));
+
+const ctx = canvas.getContext('2d');
+energyDistChart = new Chart(ctx, {
+type: 'bar',
+data: {
+labels: labels,
+datasets: [{
+label: 'Frequency',
+data: bins,
+backgroundColor: 'rgba(99, 102, 241, 0.6)',
+borderColor: '#6366f1',
+borderWidth: 1,
+borderRadius: 4
+}]
+},
+options: {
+responsive: true,
+maintainAspectRatio: false,
+plugins: {
+legend: { display: false },
+tooltip: {
+backgroundColor: '#1a1a25',
+titleColor: '#f8fafc',
+bodyColor: '#94a3b8'
+}
+},
+scales: {
+x: {
+title: { display: true, text: 'Energy', color: '#64748b' },
+grid: { color: 'rgba(42, 42, 58, 0.5)' },
+ticks: { color: '#64748b', maxRotation: 45 }
+},
+y: {
+title: { display: true, text: 'Count', color: '#64748b' },
+grid: { color: 'rgba(42, 42, 58, 0.5)' },
+ticks: { color: '#64748b' }
+}
+}
+}
+});
 }
 
 /**
- * Initialize Probability Distribution Chart
- */
+* Initialize Probability Distribution Chart
+*/
 async function initProbabilityChart(probabilities) {
-    const canvas = document.getElementById('probability-chart');
-    if (!canvas || !window.Chart) return;
+const canvas = document.getElementById('probability-chart');
+if (!canvas) return;
 
-    if (probabilityChart) probabilityChart.destroy();
+// Ensure Chart.js is loaded
+if (!window.Chart) {
+const loaded = await loadChartJSSafely();
+if (!loaded) return;
+}
 
-    // Take top 10 states by probability
-    const sortedProbs = Object.entries(probabilities)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10);
+if (probabilityChart) probabilityChart.destroy();
 
-    const ctx = canvas.getContext('2d');
-    probabilityChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: sortedProbs.map(([state]) => state.length > 8 ? state.substring(0, 8) + '...' : state),
-            datasets: [{
-                label: 'Probability',
-                data: sortedProbs.map(([, prob]) => prob),
-                backgroundColor: sortedProbs.map((_, i) =>
-                    i === 0 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(99, 102, 241, 0.6)'
-                ),
-                borderColor: sortedProbs.map((_, i) =>
-                    i === 0 ? '#10b981' : '#6366f1'
-                ),
-                borderWidth: 1,
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            indexAxis: 'y',
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: '#1a1a25',
-                    callbacks: {
-                        label: (ctx) => `Probability: ${(ctx.raw * 100).toFixed(2)}%`
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    title: { display: true, text: 'Probability', color: '#64748b' },
-                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
-                    ticks: {
-                        color: '#64748b',
-                        callback: v => (v * 100).toFixed(0) + '%'
+// Take top 10 states by probability
+const sortedProbs = Object.entries(probabilities)
+.sort((a, b) => b[1] - a[1])
+.slice(0, 10);
+
+const ctx = canvas.getContext('2d');
+probabilityChart = new Chart(ctx, {
+type: 'bar',
+data: {
+labels: sortedProbs.map(([state]) => state.length > 8 ? state.substring(0, 8) + '...' : state),
+datasets: [{
+label: 'Probability',
+data: sortedProbs.map(([, prob]) => prob),
+backgroundColor: sortedProbs.map((_, i) =>
+i === 0 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(99, 102, 241, 0.6)'
+),
+borderColor: sortedProbs.map((_, i) =>
+i === 0 ? '#10b981' : '#6366f1'
+),
+borderWidth: 1,
+borderRadius: 4
+}]
+},
+options: {
+responsive: true,
+maintainAspectRatio: false,
+indexAxis: 'y',
+plugins: {
+legend: { display: false },
+tooltip: {
+backgroundColor: '#1a1a25',
+callbacks: {
+label: (ctx) => `Probability: ${(ctx.raw * 100).toFixed(2)}%`
+}
+}
+},
+scales: {
+x: {
+title: { display: true, text: 'Probability', color: '#64748b' },
+grid: { color: 'rgba(42, 42, 58, 0.5)' },
+ticks: {
+color: '#64748b',
+callback: v => (v * 100).toFixed(0) + '%'
                     },
                     max: 1
                 },
@@ -2467,49 +2574,55 @@ async function initProbabilityChart(probabilities) {
 }
 
 /**
- * Initialize Parameter Space Chart
- */
+* Initialize Parameter Space Chart
+*/
 async function initParameterChart(params) {
-    const canvas = document.getElementById('parameter-chart');
-    if (!canvas || !window.Chart) return;
+const canvas = document.getElementById('parameter-chart');
+if (!canvas) return;
 
-    if (parameterChart) parameterChart.destroy();
+// Ensure Chart.js is loaded
+if (!window.Chart) {
+const loaded = await loadChartJSSafely();
+if (!loaded) return;
+}
 
-    // Extract gamma and beta parameters if available
-    const gamma = params.gamma || params.gammas || [];
-    const beta = params.beta || params.betas || [];
+if (parameterChart) parameterChart.destroy();
 
-    const ctx = canvas.getContext('2d');
-    parameterChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: gamma.map((_, i) => `Layer ${i + 1}`),
-            datasets: [
-                {
-                    label: 'γ (gamma)',
-                    data: gamma,
-                    borderColor: '#6366f1',
-                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.3
-                },
-                {
-                    label: 'β (beta)',
-                    data: beta,
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.3
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
+// Extract gamma and beta parameters if available
+const gamma = params.gamma || params.gammas || [];
+const beta = params.beta || params.betas || [];
+
+const ctx = canvas.getContext('2d');
+parameterChart = new Chart(ctx, {
+type: 'line',
+data: {
+labels: gamma.map((_, i) => `Layer ${i + 1}`),
+datasets: [
+{
+label: 'γ (gamma)',
+data: gamma,
+borderColor: '#6366f1',
+backgroundColor: 'rgba(99, 102, 241, 0.1)',
+borderWidth: 2,
+fill: false,
+tension: 0.3
+},
+{
+label: 'β (beta)',
+data: beta,
+borderColor: '#10b981',
+backgroundColor: 'rgba(16, 185, 129, 0.1)',
+borderWidth: 2,
+fill: false,
+tension: 0.3
+}
+]
+},
+options: {
+responsive: true,
+maintainAspectRatio: false,
+plugins: {
+legend: {
                     display: true,
                     position: 'top',
                     labels: { color: '#94a3b8', boxWidth: 12 }
@@ -2698,32 +2811,33 @@ async function updateJobVisualizations(job) {
     const hasProbabilities = job.result.probabilities || job.result.state_probabilities;
     const hasParams = job.result.optimal_params;
 
-    if (hasConvergence || hasProbabilities || hasParams) {
-        vizGridSection.style.display = 'grid';
+if (hasConvergence || hasProbabilities || hasParams) {
+vizGridSection.style.display = 'grid';
 
-        // Convergence chart
-        if (hasConvergence) {
-            await initConvergenceChart('convergence-chart', job.result.convergence_history);
-        }
+// Convergence chart
+if (hasConvergence) {
+await loadChartJSSafely();
+await initConvergenceChart('convergence-chart', job.result.convergence_history);
+}
 
-        // Energy distribution (use convergence history as sample)
-        if (hasConvergence && job.result.convergence_history.length > 5) {
-            await initEnergyDistributionChart(job.result.convergence_history);
-        }
+// Energy distribution (use convergence history as sample)
+if (hasConvergence && job.result.convergence_history.length > 5) {
+await initEnergyDistributionChart(job.result.convergence_history);
+}
 
-        // Probability distribution
-        if (hasProbabilities) {
-            const probs = job.result.probabilities || job.result.state_probabilities;
-            await initProbabilityChart(probs);
-        }
+// Probability distribution
+if (hasProbabilities) {
+const probs = job.result.probabilities || job.result.state_probabilities;
+await initProbabilityChart(probs);
+}
 
-        // Parameter chart
-        if (hasParams) {
-            await initParameterChart(job.result.optimal_params);
-        }
-    } else {
-        vizGridSection.style.display = 'none';
-    }
+// Parameter chart
+if (hasParams) {
+await initParameterChart(job.result.optimal_params);
+}
+} else {
+vizGridSection.style.display = 'none';
+}
 
     // Graph visualization for MaxCut/QAOA with graph config
     if (job.problem_config?.graph && solution) {

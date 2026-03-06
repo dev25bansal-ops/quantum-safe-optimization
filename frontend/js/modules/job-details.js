@@ -115,10 +115,13 @@ export function viewJobDetails(jobId) {
     // Update timeline based on job status
     updateJobTimeline(job);
 
-    // Show results if completed
+// Show results if completed
     const resultsSection = document.getElementById('results-section');
     const chartSection = document.getElementById('chart-section');
     const additionalStats = document.getElementById('additional-stats');
+    const histogramSection = document.getElementById('histogram-section');
+    const statevectorSection = document.getElementById('statevector-section');
+    const vqeEnergySection = document.getElementById('vqe-energy-section');
 
     if (job.status === 'completed' && job.result) {
         resultsSection.style.display = 'block';
@@ -176,10 +179,52 @@ export function viewJobDetails(jobId) {
         } else if (chartSection) {
             chartSection.style.display = 'none';
         }
+
+        // Show measurement histogram if counts available
+        if (histogramSection) {
+            if (job.result.counts || job.result.measurement_counts) {
+                histogramSection.style.display = 'block';
+            } else {
+                histogramSection.style.display = 'none';
+            }
+        }
+
+        // Show statevector visualization for VQE jobs
+        if (statevectorSection) {
+            if (job.problem_type === 'VQE' && job.result.statevector) {
+                statevectorSection.style.display = 'block';
+            } else {
+                statevectorSection.style.display = 'none';
+            }
+        }
+
+        // Show VQE energy landscape if available
+        if (vqeEnergySection) {
+            if (job.problem_type === 'VQE' && (job.result.bond_lengths || job.result.energies)) {
+                vqeEnergySection.style.display = 'block';
+                if (job.result.equilibrium_distance) {
+                    document.getElementById('vqe-equilibrium-distance').textContent = 
+                        `${job.result.equilibrium_distance.toFixed(3)} Å`;
+                }
+                if (job.result.min_energy) {
+                    document.getElementById('vqe-min-energy').textContent = 
+                        `${job.result.min_energy.toFixed(6)} Ha`;
+                }
+                if (job.result.binding_energy) {
+                    document.getElementById('vqe-binding-energy').textContent = 
+                        `${job.result.binding_energy.toFixed(4)} eV`;
+                }
+            } else {
+                vqeEnergySection.style.display = 'none';
+            }
+        }
     } else {
         resultsSection.style.display = 'none';
         if (chartSection) chartSection.style.display = 'none';
         if (additionalStats) additionalStats.style.display = 'none';
+        if (histogramSection) histogramSection.style.display = 'none';
+        if (statevectorSection) statevectorSection.style.display = 'none';
+        if (vqeEnergySection) vqeEnergySection.style.display = 'none';
     }
 
     // Show progress bar for running jobs
