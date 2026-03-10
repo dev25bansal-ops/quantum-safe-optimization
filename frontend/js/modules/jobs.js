@@ -37,12 +37,11 @@ export async function loadJobs(showLoading = false) {
     }
     STATE.lastLoadAttempt = now;
 
-    // If user is not authenticated, just show empty state - no error
+    // If user is not authenticated, show existing jobs (demo jobs) without API call
     // Check both storage types for backwards compatibility
     const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
     if (!token) {
-        STATE.jobs = [];
-        STATE.totalJobs = 0;
+        STATE.totalJobs = STATE.jobs.length;
         updateJobsUI();
         updateStats();
         updatePaginationUI();

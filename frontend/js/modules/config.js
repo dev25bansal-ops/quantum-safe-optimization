@@ -5,8 +5,8 @@
 
 // Configuration - defaults to localhost:8001 for development
 export const CONFIG = {
-    apiUrl: localStorage.getItem('apiUrl') || 'http://localhost:8001/api/v1',
-    apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || 'http://localhost:8001',
+    apiUrl: localStorage.getItem('apiUrl') || 'http://localhost:8000/api/v1',
+    apiBase: localStorage.getItem('apiUrl')?.replace(/\/api\/v1\/?$/, '') || 'http://localhost:8000',
     healthCheckInterval: 30000, // 30 seconds for health checks only
     maxRetries: 3
 };

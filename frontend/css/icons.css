@@ -120,9 +120,10 @@
 .fa-microchip::before { content: "\f2db"; }
 .fa-exclamation-triangle::before { content: "\f071"; }
 .fa-paper-plane::before { content: "\f1d8"; }
-.fa-redo::before { content: "\f01e"; }.fa-columns::before { content: "\\f0db"; }
-.fa-wifi::before { content: "\\f1eb"; }
-.fa-envelope::before { content: "\\f0e0"; }
+.fa-redo::before { content: "\f01e"; }
+.fa-columns::before { content: "\f0db"; }
+.fa-wifi::before { content: "\f1eb"; }
+.fa-envelope::before { content: "\f0e0"; }
 /* Brand icons */
 .fa-aws::before { content: "\f375"; }
 .fa-microsoft::before { content: "\f3ca"; }

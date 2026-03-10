@@ -3,7 +3,7 @@
  * Provides offline support, caching, and performance optimization
  */
 
-const CACHE_VERSION = 'qso-v2.2.0';
+const CACHE_VERSION = 'qso-v2.3.0';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;

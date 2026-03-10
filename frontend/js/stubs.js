@@ -71,7 +71,14 @@ window.showToast = function(type, title, message, duration) {
         animation: slideIn 0.3s ease-out;
         max-width: 400px;
     `;
-    toast.innerHTML = `<strong>${title}</strong><br/>${message}`;
+    const strong = document.createElement('strong');
+    strong.textContent = title;
+    const br = document.createElement('br');
+    const span = document.createElement('span');
+    span.textContent = message;
+    toast.appendChild(strong);
+    toast.appendChild(br);
+    toast.appendChild(span);
     document.body.appendChild(toast);
 
     setTimeout(() => {

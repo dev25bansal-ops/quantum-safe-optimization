@@ -3,15 +3,23 @@ Minimal QSOP backend for development.
 """
 
 import logging
+import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.responses import JSONResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# In-memory job store for demo
+JOBS_STORE: dict = {}
 
 
 @asynccontextmanager
@@ -38,9 +46,11 @@ app.add_middleware(
 )
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def root() -> dict:
-    """Root endpoint."""
+    """Root endpoint - serves frontend if available, otherwise API info."""
+    if FRONTEND_DIR.exists():
+        return FileResponse(FRONTEND_DIR / "index.html")
     return {
         "message": "Quantum-Safe Optimization Platform API",
         "version": "0.1.0",
@@ -91,23 +101,77 @@ async def api_info() -> dict:
     }
 
 
-# Stub endpoints for job management
+# Job management endpoints with in-memory store
 @app.get("/api/v1/jobs")
-async def list_jobs() -> dict:
-    """List jobs."""
-    return {"jobs": [], "total": 0, "limit": 10, "offset": 0}
+async def list_jobs(limit: int = 10, offset: int = 0, status: str = None, type: str = None) -> dict:
+    """List jobs with optional filtering."""
+    jobs = list(JOBS_STORE.values())
+    if status and status != "all":
+        jobs = [j for j in jobs if j["status"] == status]
+    if type and type != "all":
+        jobs = [j for j in jobs if j.get("problem_type", "").lower() == type.lower()]
+    jobs.sort(key=lambda j: j.get("created_at", ""), reverse=True)
+    total = len(jobs)
+    return {"jobs": jobs[offset:offset + limit], "total": total, "limit": limit, "offset": offset}
 
 
 @app.post("/api/v1/jobs")
-async def create_job() -> dict:
-    """Create a job."""
-    return {"id": "job_001", "status": "pending", "message": "Job created successfully"}
+async def create_job(request: Request) -> dict:
+    """Create a new optimization job."""
+    body = await request.json()
+    job_id = f"job_{uuid.uuid4().hex[:8]}"
+    now = datetime.now(timezone.utc).isoformat()
+    job = {
+        "id": job_id,
+        "status": "completed",
+        "problem_type": body.get("problem_type", "QAOA"),
+        "backend": body.get("backend", "local_simulator"),
+        "config": body.get("config", {}),
+        "encrypted": body.get("encrypted", False),
+        "signed": body.get("signed", False),
+        "created_at": now,
+        "updated_at": now,
+        "result": {
+            "optimal_value": -3.42,
+            "optimal_params": [0.35, 1.21, 0.78, 2.05],
+            "convergence_history": [-1.2, -2.1, -2.8, -3.1, -3.3, -3.42],
+            "num_iterations": 6,
+            "execution_time_ms": 1234,
+        },
+    }
+    JOBS_STORE[job_id] = job
+    return job
 
 
 @app.get("/api/v1/jobs/{job_id}")
 async def get_job(job_id: str) -> dict:
     """Get job details."""
-    return {"id": job_id, "status": "completed", "result": "Sample result"}
+    if job_id in JOBS_STORE:
+        return JOBS_STORE[job_id]
+    return {
+        "id": job_id,
+        "status": "completed",
+        "problem_type": "QAOA",
+        "backend": "local_simulator",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "result": {"optimal_value": -3.42, "optimal_params": [0.35, 1.21]},
+    }
+
+
+@app.delete("/api/v1/jobs/{job_id}")
+async def delete_job(job_id: str) -> dict:
+    """Delete a job."""
+    JOBS_STORE.pop(job_id, None)
+    return {"message": f"Job {job_id} deleted"}
+
+
+@app.post("/api/v1/jobs/{job_id}/retry")
+async def retry_job(job_id: str) -> dict:
+    """Retry a failed job."""
+    if job_id in JOBS_STORE:
+        JOBS_STORE[job_id]["status"] = "pending"
+        return JOBS_STORE[job_id]
+    return {"id": job_id, "status": "pending", "message": "Job resubmitted"}
 
 
 # Stub authentication endpoints
@@ -299,6 +363,234 @@ async def connectivity_check() -> dict:
         "secrets_manager": {"status": "healthy", "latency_ms": 1, "demo_mode": True},
         "websocket": {"status": "available", "connections": 0},
     }
+
+
+# PQC Security status
+@app.get("/api/v1/security/pqc/status")
+async def pqc_status() -> dict:
+    """Get PQC algorithm status."""
+    return {
+        "kem": {"algorithm": "ML-KEM-768", "enabled": True, "nist_level": 3},
+        "dsa": {"algorithm": "ML-DSA-65", "enabled": True, "nist_level": 3},
+        "cipher": {"algorithm": "AES-256-GCM", "enabled": True},
+    }
+
+
+# AI suggestions
+@app.post("/api/v1/ai/suggestions")
+async def ai_suggestions(request: Request) -> dict:
+    """Get AI-powered optimization suggestions."""
+    body = await request.json()
+    problem_type = body.get("problem_type", "QAOA")
+    return {
+        "suggestions": [
+            {
+                "title": f"Optimized {problem_type} Parameters",
+                "description": f"Based on problem analysis, consider increasing circuit depth for better convergence.",
+                "confidence": 0.85,
+                "impact": "high",
+            },
+            {
+                "title": "Backend Recommendation",
+                "description": "Local simulator is optimal for this problem size.",
+                "confidence": 0.92,
+                "impact": "medium",
+            },
+        ]
+    }
+
+
+# Cost estimation
+@app.post("/api/v1/costs/estimate")
+async def cost_estimate(request: Request) -> dict:
+    """Estimate job execution cost."""
+    body = await request.json()
+    backend = body.get("backend", "local_simulator")
+    is_free = backend in ("local_simulator", "advanced_simulator")
+    return {
+        "credits": 0 if is_free else 10,
+        "estimated_time_seconds": 5 if is_free else 120,
+        "backend": backend,
+        "breakdown": {
+            "computation": "Free (simulator)" if is_free else "10 credits",
+            "storage": "Free",
+            "crypto": "Free",
+        },
+    }
+
+
+# Activity feed
+@app.get("/api/v1/activity/recent")
+async def recent_activity() -> dict:
+    """Get recent activity."""
+    return {
+        "activities": [
+            {"type": "job_completed", "message": "QAOA job completed successfully", "timestamp": datetime.now(timezone.utc).isoformat()},
+            {"type": "system", "message": "PQC crypto provider initialized", "timestamp": datetime.now(timezone.utc).isoformat()},
+        ]
+    }
+
+
+# Webhooks management
+@app.get("/api/v1/webhooks")
+async def list_webhooks() -> dict:
+    """List webhooks."""
+    return {"webhooks": [], "total": 0}
+
+
+@app.post("/api/v1/webhooks")
+async def create_webhook(request: Request) -> dict:
+    """Create a webhook."""
+    body = await request.json()
+    return {"id": f"wh_{uuid.uuid4().hex[:8]}", "url": body.get("url", ""), "events": body.get("events", []), "active": True}
+
+
+# Keys management
+@app.get("/api/v1/keys")
+async def list_keys() -> dict:
+    """List cryptographic keys."""
+    return {
+        "keys": [
+            {"id": "kem_key_001", "type": "ML-KEM-768", "algorithm": "Kyber768", "created_at": "2024-01-01T00:00:00Z", "status": "active"},
+            {"id": "sig_key_001", "type": "ML-DSA-65", "algorithm": "Dilithium3", "created_at": "2024-01-01T00:00:00Z", "status": "active"},
+        ],
+        "total": 2,
+    }
+
+
+@app.post("/api/v1/keys/generate")
+async def generate_keys(request: Request) -> dict:
+    """Generate new cryptographic keys."""
+    return {
+        "key_id": f"key_{uuid.uuid4().hex[:8]}",
+        "public_key": "base64_encoded_public_key_demo",
+        "private_key": "base64_encoded_private_key_demo",
+        "algorithm": "ML-KEM-768",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.post("/api/v1/keys/{key_id}/rotate")
+async def rotate_key(key_id: str) -> dict:
+    """Rotate a cryptographic key."""
+    return {"message": f"Key {key_id} rotated successfully", "new_key_id": f"key_{uuid.uuid4().hex[:8]}"}
+
+
+@app.delete("/api/v1/keys/{key_id}")
+async def delete_key(key_id: str) -> dict:
+    """Delete a cryptographic key."""
+    return {"message": f"Key {key_id} deleted"}
+
+
+@app.get("/api/v1/auth/tokens")
+async def list_tokens() -> list:
+    """List API tokens."""
+    return [
+        {"id": "tok_001", "name": "Default Token", "prefix": "qso_", "last4": "a1b2",
+         "created_at": "2024-01-01T00:00:00Z",
+         "expires_at": None, "last_used": "2024-01-15T12:00:00Z", "permissions": ["read", "write"]},
+    ]
+
+
+@app.post("/api/v1/auth/tokens")
+async def create_token(body: dict) -> dict:
+    """Create a new API token."""
+    return {
+        "id": f"tok_{uuid.uuid4().hex[:8]}",
+        "name": body.get("name", "New Token"),
+        "token": f"qsop_{uuid.uuid4().hex}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": None,
+        "permissions": body.get("permissions", ["read"]),
+    }
+
+
+@app.post("/api/v1/webhooks/config")
+async def save_webhook_config(body: dict) -> dict:
+    """Save webhook configuration."""
+    return {"message": "Webhook configuration saved", "config": body}
+
+
+@app.post("/api/v1/webhooks/test")
+async def test_webhook(body: dict) -> dict:
+    """Send a test webhook event."""
+    return {"message": "Test webhook sent successfully", "status": "delivered"}
+
+
+@app.get("/api/v1/webhooks/export")
+async def export_webhooks(format: str = "json") -> dict:
+    """Export webhook configuration."""
+    return {"webhooks": [], "format": format, "exported_at": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/api/v1/webhooks/history")
+async def webhook_history(status: str = "all", event: str = "all", range_period: str = Query("7d", alias="range")) -> list:
+    """Get webhook delivery history."""
+    return []
+
+
+@app.post("/api/v1/users/settings")
+async def save_user_settings(body: dict) -> dict:
+    """Save user settings/preferences."""
+    return {"message": "Settings saved", "settings": body}
+
+
+@app.get("/api/v1/users/usage")
+async def get_user_usage(period: str = "30d") -> dict:
+    """Get user usage statistics."""
+    return {
+        "jobs_submitted": 47,
+        "jobs_completed": 42,
+        "compute_time_hours": 2.3,
+        "qubits_used": 1280,
+        "api_requests": 3420,
+        "quota": {"jobs_limit": 100, "hours_limit": 10, "requests_limit": 10000},
+        "daily": [
+            {"date": datetime.now(timezone.utc).isoformat(), "jobs": 3},
+        ],
+    }
+
+
+# Serve frontend static files
+FRONTEND_DIR = Path(__file__).parent / "frontend"
+if FRONTEND_DIR.exists():
+    # Mount static assets
+    app.mount("/css", StaticFiles(directory=FRONTEND_DIR / "css"), name="css")
+    app.mount("/js", StaticFiles(directory=FRONTEND_DIR / "js"), name="js")
+    if (FRONTEND_DIR / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
+
+    @app.get("/manifest.json")
+    async def serve_manifest():
+        return FileResponse(FRONTEND_DIR / "manifest.json", media_type="application/manifest+json")
+
+    @app.get("/sw.js")
+    async def serve_service_worker():
+        response = FileResponse(FRONTEND_DIR / "sw.js", media_type="application/javascript")
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Service-Worker-Allowed"] = "/"
+        return response
+
+    @app.get("/dashboard")
+    async def serve_dashboard():
+        return FileResponse(FRONTEND_DIR / "dashboard.html")
+
+    @app.get("/dashboard.html")
+    async def serve_dashboard_html():
+        return FileResponse(FRONTEND_DIR / "dashboard.html")
+
+    @app.get("/index.html")
+    async def serve_index_html():
+        return FileResponse(FRONTEND_DIR / "index.html")
+
+    @app.get("/research-demo.html")
+    async def serve_research_demo():
+        return FileResponse(FRONTEND_DIR / "research-demo.html")
+
+    # Override root to serve the landing page
+    @app.get("/", include_in_schema=False)
+    async def serve_frontend():
+        return FileResponse(FRONTEND_DIR / "index.html")
 
 
 if __name__ == "__main__":

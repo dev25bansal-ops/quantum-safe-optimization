@@ -11,7 +11,7 @@ import { CONFIG, STATE } from './modules/config.js';
 import { showToast } from './modules/toast.js';
 import { initTheme, toggleTheme } from './modules/theme.js';
 import { initNavigation, navigateToSection } from './modules/navigation.js';
-import { initSearch, initMobileSearch, setLoadJobsCallback } from './modules/search.js';
+import { initSearch, initMobileSearch, setLoadJobsCallback, clearFilters } from './modules/search.js';
 
 // Auth and notifications
 import {
@@ -19,11 +19,15 @@ import {
     initUserMenu,
     checkAuthStatus,
     updateAuthUI,
-    setAuthCallbacks
+    setAuthCallbacks,
+    openAuthModal,
+    handleLogout
 } from './modules/auth.js';
 import {
     initNotifications,
     addNotification,
+    toggleNotifications,
+    clearAllNotifications,
     setViewJobDetailsCallback as setNotificationJobCallback
 } from './modules/notifications.js';
 
@@ -35,18 +39,22 @@ import {
     updateStats,
     exportJob,
     exportAllJobs,
-    setJobsCallbacks
-} from './modules/jobs.js';
+    setJobsCallbacks,
+    cloneJob,
+    copySolution,
+    exportChartAsPNG
+} from './modules/jobs.js?v=2.4.0';
 import {
     initJobForm,
     loadTemplate,
     submitJob,
     setJobFormCallbacks
-} from './modules/job-form.js';
+} from './modules/job-form.js?v=2.4.0';
 import {
     viewJobDetails,
     initJobDetailActions,
-    setJobDetailsCallbacks
+    setJobDetailsCallbacks,
+    toggleConfigPanel
 } from './modules/job-details.js';
 
 // WebSocket and connectivity
@@ -72,13 +80,19 @@ import {
 import { updateJobVisualizations } from './modules/visualizations.js';
 
 // Features
-import { initSecurityTests } from './modules/security.js';
+import { initSecurityTests, generateMLKEMKeys, registerPublicKey, copyToClipboard } from './modules/security.js';
 import { initSettings, applyDefaultSettings } from './modules/settings.js';
 import { loadWorkerStatus } from './modules/workers.js';
 import { loadWebhookStats } from './modules/webhooks.js';
-import { initJobComparison } from './modules/comparison.js';
-import { initKeyboardShortcuts, setKeyboardCallbacks } from './modules/keyboard.js';
+import { initJobComparison, openCompareModal, closeCompareModal, exportComparison } from './modules/comparison.js';
+import {
+    initKeyboardShortcuts, setKeyboardCallbacks,
+    toggleAlgorithmCategory, toggleProblemDetails, toggleMoleculeDetails
+} from './modules/keyboard.js';
 import { initModal, setSubmitJobCallback } from './modules/modal.js';
+import { analyzeProblem } from './modules/ai-suggestions.js';
+import { checkConnection } from './modules/connectivity.js';
+import { toggleGraphLabels, resetGraphView } from './modules/visualizations.js';
 
 // Error handling and validation
 import { initErrorBoundary } from './modules/error-boundary.js';
@@ -207,6 +221,57 @@ window.exportAllJobs = exportAllJobs;
 window.loadTemplate = loadTemplate;
 window.checkApiStatus = checkApiStatus;
 window.addNotification = addNotification;
+
+// Auth and notifications
+window.openAuthModal = openAuthModal;
+window.handleLogout = handleLogout;
+window.toggleNotifications = toggleNotifications;
+window.clearAllNotifications = clearAllNotifications;
+
+// Job management
+window.cloneJob = cloneJob;
+window.copySolution = copySolution;
+window.exportChartAsPNG = exportChartAsPNG;
+window.toggleConfigPanel = toggleConfigPanel;
+window.clearFilters = clearFilters;
+
+// Comparison
+window.openCompareModal = openCompareModal;
+window.closeCompareModal = closeCompareModal;
+window.exportComparison = exportComparison;
+
+// Security and crypto
+window.generateMLKEMKeys = generateMLKEMKeys;
+window.registerPublicKey = registerPublicKey;
+window.copyToClipboard = copyToClipboard;
+
+// Connectivity
+window.checkConnection = checkConnection;
+
+// Workers and webhooks
+window.loadWorkerStatus = loadWorkerStatus;
+window.loadWebhookStats = loadWebhookStats;
+
+// Visualization
+window.toggleGraphLabels = toggleGraphLabels;
+window.resetGraphView = resetGraphView;
+
+// Algorithm info toggles
+window.toggleAlgorithmCategory = toggleAlgorithmCategory;
+window.toggleProblemDetails = toggleProblemDetails;
+window.toggleMoleculeDetails = toggleMoleculeDetails;
+
+// AI suggestions
+window.analyzeProblem = analyzeProblem;
+
+// Testing stubs (no separate module - define inline)
+window.runTests = function() {
+    showToast('info', 'Tests', 'Running security tests...');
+    if (typeof initSecurityTests === 'function') initSecurityTests();
+};
+window.runBenchmarks = function() {
+    showToast('info', 'Benchmarks', 'Benchmarking feature coming soon');
+};
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
