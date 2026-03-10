@@ -33,7 +33,7 @@
 
     <!-- Stylesheets -->
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/dashboard.css?v=6">
     <link rel="stylesheet" href="css/components.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -867,22 +867,6 @@ d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.
                     </div>
                 </div>
 
-                <!-- JSON Preview Modal -->
-                <div class="modal" id="preview-modal">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h3>Job Request Preview</h3>
-                            <button class="modal-close">&times;</button>
-                        </div>
-                        <div class="modal-body">
-                            <pre><code id="preview-json"></code></pre>
-                        </div>
-                        <div class="modal-footer">
-                            <button class="btn btn-outline copy-json">Copy JSON</button>
-                            <button class="btn btn-primary submit-from-preview">Submit Job</button>
-                        </div>
-                    </div>
-                </div>
             </section>
 
             <!-- Jobs List Section -->
@@ -1999,6 +1983,7 @@ d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.
 </div>
 </div>
 </div>
+</section>
 
 <!-- User Profile Section -->
 <section class="dashboard-section" id="section-profile">
@@ -2726,9 +2711,9 @@ J = {(0,1): -1, (1,2): -1}</code></pre>
     </script>
 
     <!-- Dashboard JavaScript - ES6 Modules -->
-    <script type="module" src="js/dashboard-modular.js"></script>
+    <script type="module" src="js/dashboard-modular.js?v=2.4.0"></script>
 
-    <script nomodule src="js/dashboard.js"></script>
+    <script nomodule src="js/dashboard.js?v=2.4.0"></script>
 
     <!-- Component System Scripts -->
     <script type="module">
@@ -2827,7 +2812,25 @@ J = {(0,1): -1, (1,2): -1}</code></pre>
         });
     </script>
 
-    <!-- Service Worker Registration -->
+    <!-- JSON Preview Modal (outside sections to avoid CSS containment issues) -->
+    <div class="modal" id="preview-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Job Request Preview</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre><code id="preview-json"></code></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline copy-json">Copy JSON</button>
+                <button class="btn btn-primary submit-from-preview">Submit Job</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Service Worker Registration (disabled for dev) -->
+    <!--
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -2837,6 +2840,7 @@ J = {(0,1): -1, (1,2): -1}</code></pre>
             });
         }
     </script>
+    -->
 </body>
 
 </html>

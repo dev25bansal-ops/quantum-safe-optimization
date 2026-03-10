@@ -170,10 +170,10 @@ export const LandingEnhancements = {
                     <svg viewBox="0 0 600 200" class="circuit-svg">
                         <!-- Qubit lines -->
                         <g class="qubit-lines">
-                            <line x1="40" y1="40" x2="560" y2="40" stroke="#3a3a4a" stroke-width="2"/>
-                            <line x1="40" y1="80" x2="560" y2="80" stroke="#3a3a4a" stroke-width="2"/>
-                            <line x1="40" y1="120" x2="560" y2="120" stroke="#3a3a4a" stroke-width="2"/>
-                            <line x1="40" y1="160" x2="560" y2="160" stroke="#3a3a4a" stroke-width="2"/>
+                            <line x1="40" y1="40" x2="560" y2="40" stroke="#3d444d" stroke-width="2"/>
+                            <line x1="40" y1="80" x2="560" y2="80" stroke="#3d444d" stroke-width="2"/>
+                            <line x1="40" y1="120" x2="560" y2="120" stroke="#3d444d" stroke-width="2"/>
+                            <line x1="40" y1="160" x2="560" y2="160" stroke="#3d444d" stroke-width="2"/>
                         </g>
                         <!-- Qubit labels -->
                         <g class="qubit-labels" font-family="JetBrains Mono" font-size="14" fill="#94a3b8">
@@ -423,7 +423,7 @@ export const LandingEnhancements = {
                         <!-- Background grid -->
                         <defs>
                             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1a1a25" stroke-width="1"/>
+                                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#161b22" stroke-width="1"/>
                             </pattern>
                             <linearGradient id="layerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                                 <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
@@ -434,7 +434,7 @@ export const LandingEnhancements = {
                         
                         <!-- Client Layer -->
                         <g class="layer client-layer" transform="translate(50, 30)">
-                            <rect x="0" y="0" width="700" height="70" rx="8" fill="#1a1a25" stroke="#6366f1" stroke-width="2"/>
+                            <rect x="0" y="0" width="700" height="70" rx="8" fill="#161b22" stroke="#6366f1" stroke-width="2"/>
                             <text x="20" y="25" fill="#6366f1" font-weight="600" font-size="14">Client Layer</text>
                             <g transform="translate(20, 35)">
                                 <rect x="0" y="0" width="100" height="25" rx="4" fill="#6366f1"/>
@@ -460,7 +460,7 @@ export const LandingEnhancements = {
 
                         <!-- API Gateway -->
                         <g class="layer api-layer" transform="translate(50, 120)">
-                            <rect x="0" y="0" width="700" height="60" rx="8" fill="#1a1a25" stroke="#06b6d4" stroke-width="2"/>
+                            <rect x="0" y="0" width="700" height="60" rx="8" fill="#161b22" stroke="#06b6d4" stroke-width="2"/>
                             <text x="20" y="25" fill="#06b6d4" font-weight="600" font-size="14">API Gateway (FastAPI)</text>
                             <g transform="translate(20, 32)">
                                 <rect x="0" y="0" width="80" height="20" rx="3" fill="#06b6d4" opacity="0.8"/>
@@ -486,7 +486,7 @@ export const LandingEnhancements = {
 
                         <!-- Compute Layer -->
                         <g class="layer compute-layer" transform="translate(50, 200)">
-                            <rect x="0" y="0" width="700" height="120" rx="8" fill="#1a1a25" stroke="#8b5cf6" stroke-width="2"/>
+                            <rect x="0" y="0" width="700" height="120" rx="8" fill="#161b22" stroke="#8b5cf6" stroke-width="2"/>
                             <text x="20" y="25" fill="#8b5cf6" font-weight="600" font-size="14">Quantum Compute Layer</text>
                             
                             <!-- QAOA -->
@@ -532,7 +532,7 @@ export const LandingEnhancements = {
 
                         <!-- Backend Layer -->
                         <g class="layer backend-layer" transform="translate(50, 340)">
-                            <rect x="0" y="0" width="700" height="70" rx="8" fill="#1a1a25" stroke="#10b981" stroke-width="2"/>
+                            <rect x="0" y="0" width="700" height="70" rx="8" fill="#161b22" stroke="#10b981" stroke-width="2"/>
                             <text x="20" y="25" fill="#10b981" font-weight="600" font-size="14">Quantum Backends</text>
                             <g transform="translate(20, 35)">
                                 <rect x="0" y="0" width="100" height="25" rx="4" fill="#4f46e5"/>
@@ -587,7 +587,7 @@ export const LandingEnhancements = {
                     <div class="showcase-card">
                         <div class="showcase-image">
                             <svg viewBox="0 0 200 120">
-                                <rect width="200" height="120" fill="#1a1a25"/>
+                                <rect width="200" height="120" fill="#161b22"/>
                                 <circle cx="40" cy="40" r="15" fill="#6366f1" opacity="0.5"/>
                                 <circle cx="80" cy="40" r="15" fill="#10b981" opacity="0.5"/>
                                 <circle cx="40" cy="80" r="15" fill="#10b981" opacity="0.5"/>
@@ -606,7 +606,7 @@ export const LandingEnhancements = {
                     <div class="showcase-card">
                         <div class="showcase-image">
                             <svg viewBox="0 0 200 120">
-                                <rect width="200" height="120" fill="#1a1a25"/>
+                                <rect width="200" height="120" fill="#161b22"/>
                                 <circle cx="30" cy="60" r="10" fill="#6366f1"/>
                                 <circle cx="70" cy="30" r="10" fill="#8b5cf6"/>
                                 <circle cx="110" cy="60" r="10" fill="#06b6d4"/>
@@ -625,7 +625,7 @@ export const LandingEnhancements = {
                     <div class="showcase-card">
                         <div class="showcase-image">
                             <svg viewBox="0 0 200 120">
-                                <rect width="200" height="120" fill="#1a1a25"/>
+                                <rect width="200" height="120" fill="#161b22"/>
                                 <ellipse cx="100" cy="60" rx="30" ry="20" fill="none" stroke="#6366f1" stroke-width="2"/>
                                 <circle cx="70" cy="60" r="5" fill="#10b981"/>
                                 <circle cx="130" cy="60" r="5" fill="#f59e0b"/>

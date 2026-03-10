@@ -183,19 +183,17 @@ export async function submitJob() {
     // Check if user is authenticated before submitting
     // Check both storage types for backwards compatibility
     const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
-    if (!token) {
-        showToast('warning', 'Authentication Required', 'Please sign in to submit jobs');
-        // Open the sign-in modal if available
-        const signInBtn = document.querySelector('[data-auth-action="signin"]');
-        if (signInBtn) signInBtn.click();
-        return;
-    }
 
     try {
         // Show loading state on button
         if (submitBtn) {
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+        }
+
+        // If no auth token, skip the API call and go straight to demo mode
+        if (!token) {
+            throw new TypeError('No auth token - using demo mode');
         }
 
         showToast('info', 'Submitting Job', 'Sending to quantum backend...');

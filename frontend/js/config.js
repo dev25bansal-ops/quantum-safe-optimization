@@ -1,7 +1,7 @@
 const CONFIG = {
-    apiUrl: 'http://localhost:8001/api/v1',
-    apiBase: 'http://localhost:8001/api/v1',
-    healthUrl: 'http://localhost:8001',
+    apiUrl: 'http://localhost:8000/api/v1',
+    apiBase: 'http://localhost:8000/api/v1',
+    healthUrl: 'http://localhost:8000',
     debug: true
 };
 

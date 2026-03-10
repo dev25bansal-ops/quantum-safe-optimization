@@ -122,12 +122,12 @@ export async function initConvergenceChart(canvasId, data) {
 
     const theme = document.documentElement.getAttribute('data-theme') || 'dark';
     const colors = {
-        grid: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)',
+        grid: theme === 'dark' ? 'rgba(48, 54, 61, 0.5)' : 'rgba(203, 213, 225, 0.5)',
         text: theme === 'dark' ? '#64748b' : '#64748b',
         primary: '#6366f1',
         primaryBg: 'rgba(99, 102, 241, 0.1)',
         success: '#10b981',
-        tooltip: theme === 'dark' ? '#1a1a25' : '#ffffff',
+        tooltip: theme === 'dark' ? '#161b22' : '#ffffff',
         tooltipText: theme === 'dark' ? '#f8fafc' : '#1e293b'
     };
 
@@ -169,7 +169,7 @@ export async function initConvergenceChart(canvasId, data) {
                     backgroundColor: colors.tooltip,
                     titleColor: colors.tooltipText,
                     bodyColor: colors.tooltipText === '#f8fafc' ? '#94a3b8' : '#64748b',
-                    borderColor: theme === 'dark' ? '#2a2a3a' : '#e2e8f0',
+                    borderColor: theme === 'dark' ? '#30363d' : '#e2e8f0',
                     borderWidth: 1,
                     padding: 12,
                     displayColors: false,
@@ -260,7 +260,7 @@ export async function initMeasurementHistogram(counts) {
     const ctx = canvas.getContext('2d');
     const theme = document.documentElement.getAttribute('data-theme') || 'dark';
     const colors = {
-        grid: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)',
+        grid: theme === 'dark' ? 'rgba(48, 54, 61, 0.5)' : 'rgba(203, 213, 225, 0.5)',
         text: theme === 'dark' ? '#64748b' : '#64748b',
         primary: '#6366f1',
         secondary: '#8b5cf6',
@@ -299,7 +299,7 @@ export async function initMeasurementHistogram(counts) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    backgroundColor: theme === 'dark' ? '#161b22' : '#ffffff',
                     titleColor: theme === 'dark' ? '#f8fafc' : '#1e293b',
                     bodyColor: theme === 'dark' ? '#94a3b8' : '#64748b',
                     callbacks: {
@@ -367,7 +367,7 @@ export async function initStatevectorChart(statevector) {
     const ctx = canvas.getContext('2d');
     const theme = document.documentElement.getAttribute('data-theme') || 'dark';
     const colors = {
-        grid: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)',
+        grid: theme === 'dark' ? 'rgba(48, 54, 61, 0.5)' : 'rgba(203, 213, 225, 0.5)',
         text: theme === 'dark' ? '#64748b' : '#64748b',
         primary: '#6366f1',
         success: '#10b981',
@@ -426,7 +426,7 @@ export async function initStatevectorChart(statevector) {
                     font: { size: 14, weight: '600' }
                 },
                 tooltip: {
-                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    backgroundColor: theme === 'dark' ? '#161b22' : '#ffffff',
                     callbacks: {
                         title: (items) => `|${items[0].label}⟩`,
                         label: (item) => {
@@ -528,7 +528,7 @@ export async function initEnergyDistributionChart(data) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    backgroundColor: theme === 'dark' ? '#161b22' : '#ffffff',
                     callbacks: {
                         label: (item) => `Count: ${item.raw} samples`
                     }
@@ -553,7 +553,7 @@ export async function initEnergyDistributionChart(data) {
                         text: 'Count',
                         color: theme === 'dark' ? '#64748b' : '#64748b'
                     },
-                    grid: { color: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
+                    grid: { color: theme === 'dark' ? 'rgba(48, 54, 61, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
                     ticks: { color: theme === 'dark' ? '#64748b' : '#64748b' }
                 }
             }
@@ -618,7 +618,7 @@ export async function initProbabilityChart(probabilities) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    backgroundColor: theme === 'dark' ? '#161b22' : '#ffffff',
                     titleColor: theme === 'dark' ? '#f8fafc' : '#1e293b',
                     bodyColor: theme === 'dark' ? '#94a3b8' : '#64748b',
                     callbacks: {
@@ -633,7 +633,7 @@ export async function initProbabilityChart(probabilities) {
                         text: 'Probability',
                         color: theme === 'dark' ? '#64748b' : '#64748b'
                     },
-                    grid: { color: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
+                    grid: { color: theme === 'dark' ? 'rgba(48, 54, 61, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
                     ticks: {
                         color: theme === 'dark' ? '#64748b' : '#64748b',
                         callback: v => (v * 100).toFixed(0) + '%'
@@ -718,7 +718,7 @@ export async function initParameterChart(params) {
                     }
                 },
                 tooltip: {
-                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    backgroundColor: theme === 'dark' ? '#161b22' : '#ffffff',
                     titleColor: theme === 'dark' ? '#f8fafc' : '#1e293b',
                     bodyColor: theme === 'dark' ? '#94a3b8' : '#64748b',
                     callbacks: {
@@ -728,7 +728,7 @@ export async function initParameterChart(params) {
             },
             scales: {
                 x: {
-                    grid: { color: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
+                    grid: { color: theme === 'dark' ? 'rgba(48, 54, 61, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
                     ticks: { color: theme === 'dark' ? '#64748b' : '#64748b' }
                 },
                 y: {
@@ -737,7 +737,7 @@ export async function initParameterChart(params) {
                         text: 'Parameter Value',
                         color: theme === 'dark' ? '#64748b' : '#64748b'
                     },
-                    grid: { color: theme === 'dark' ? 'rgba(42, 42, 58, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
+                    grid: { color: theme === 'dark' ? 'rgba(48, 54, 61, 0.5)' : 'rgba(203, 213, 225, 0.5)' },
                     ticks: { color: theme === 'dark' ? '#64748b' : '#64748b' }
                 }
             }
@@ -812,10 +812,10 @@ export async function updateStatusPieChart(data) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: theme === 'dark' ? '#1a1a25' : '#ffffff',
+                    backgroundColor: theme === 'dark' ? '#161b22' : '#ffffff',
                     titleColor: theme === 'dark' ? '#f8fafc' : '#1e293b',
                     bodyColor: theme === 'dark' ? '#94a3b8' : '#64748b',
-                    borderColor: theme === 'dark' ? '#2a2a3a' : '#e2e8f0',
+                    borderColor: theme === 'dark' ? '#30363d' : '#e2e8f0',
                     borderWidth: 1,
                     callbacks: {
                         label: function (context) {

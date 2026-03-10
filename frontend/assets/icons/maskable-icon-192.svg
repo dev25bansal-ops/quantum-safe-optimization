@@ -6,7 +6,7 @@
     </linearGradient>
   </defs>
 
-  <rect width="192" height="192" fill="#0a0a0f" rx="24"/>
+  <rect width="192" height="192" fill="#0d1117" rx="24"/>
 
   <ellipse cx="96" cy="96" rx="70" ry="30" fill="none" stroke="url(#qg)" stroke-width="3" transform="rotate(-30, 96, 96)"/>
   <ellipse cx="96" cy="96" rx="70" ry="30" fill="none" stroke="url(#qg)" stroke-width="3" transform="rotate(30, 96, 96)"/>
@@ -18,5 +18,5 @@
   <circle cx="62" cy="117" r="8" fill="#a78bfa"/>
   <circle cx="96" cy="141" r="8" fill="#a78bfa"/>
 
-  <text x="96" y="103" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#0a0a0f">⚛</text>
+  <text x="96" y="103" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#0d1117">⚛</text>
 </svg>

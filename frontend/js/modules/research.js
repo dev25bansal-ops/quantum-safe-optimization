@@ -219,26 +219,26 @@ export async function createConvergenceChart(
     const layout = {
         title: {
             text: 'Convergence Comparison',
-            font: { size: 18, color: '#1a1a25' }
+            font: { size: 18, color: '#161b22' }
         },
         xaxis: {
             title: ' iterations',
             titlefont: { size: 14, color: '#64748b' },
             tickfont: { size: 12, color: '#64748b' },
-            gridcolor: 'rgba(42, 42, 58, 0.5)',
-            zerolinecolor: 'rgba(42, 42, 58, 0.8)'
+            gridcolor: 'rgba(48, 54, 61, 0.5)',
+            zerolinecolor: 'rgba(48, 54, 61, 0.8)'
         },
         yaxis: {
             title: 'Optimal Value',
             titlefont: { size: 14, color: '#64748b' },
             tickfont: { size: 12, color: '#64748b' },
-            gridcolor: 'rgba(42, 42, 58, 0.5)',
-            zerolinecolor: 'rgba(42, 42, 58, 0.8)'
+            gridcolor: 'rgba(48, 54, 61, 0.5)',
+            zerolinecolor: 'rgba(48, 54, 61, 0.8)'
         },
         legend: {
             font: { size: 12, color: '#64748b' },
             bgcolor: 'rgba(248, 250, 252, 0.8)',
-            bordercolor: '#2a2a3a',
+            bordercolor: '#30363d',
             borderwidth: 1
         },
         plot_bgcolor: 'rgba(248, 250, 252, 0.5)',
@@ -291,26 +291,26 @@ export async function createPerformanceChart(
     const layout = {
         title: {
             text: 'Solution Quality vs Problem Size',
-            font: { size: 18, color: '#1a1a25' }
+            font: { size: 18, color: '#161b22' }
         },
         xaxis: {
             title: 'p layers',
             titlefont: { size: 14, color: '#64748b' },
             tickfont: { size: 12, color: '#64748b' },
-            gridcolor: 'rgba(42, 42, 58, 0.5)',
+            gridcolor: 'rgba(48, 54, 61, 0.5)',
             type: 'category'
         },
         yaxis: {
             title: 'Objective Value (maximized)',
             titlefont: { size: 14, color: '#64748b' },
             tickfont: { size: 12, color: '#64748b' },
-            gridcolor: 'rgba(42, 42, 58, 0.5)'
+            gridcolor: 'rgba(48, 54, 61, 0.5)'
         },
         barmode: 'group',
         legend: {
             font: { size: 12, color: '#64748b' },
             bgcolor: 'rgba(248, 250, 252, 0.8)',
-            bordercolor: '#2a2a3a',
+            bordercolor: '#30363d',
             borderwidth: 1
         },
         plot_bgcolor: 'rgba(248, 250, 252, 0.5)',
@@ -375,7 +375,7 @@ export async function createAblationHeatmap(
     const layout = {
         title: {
             text: 'Ablation Study: p-layers vs Optimizer',
-            font: { size: 18, color: '#1a1a25' }
+            font: { size: 18, color: '#161b22' }
         },
         xaxis: {
             title: 'p layers',
@@ -446,7 +446,7 @@ export async function createSideBySideComparison(
     const layout = {
         title: {
             text: 'Algorithm Comparison',
-            font: { size: 18, color: '#1a1a25' },
+            font: { size: 18, color: '#161b22' },
             x: 0.5
         },
         grid: {

@@ -735,11 +735,10 @@ async function submitJob() {
 async function loadJobs(showLoading = false) {
     if (STATE.isLoading) return;
 
-    // If user is not authenticated, just show empty state - no error
+    // If user is not authenticated, show existing jobs (demo jobs) without API call
     const token = localStorage.getItem('authToken');
     if (!token) {
-        STATE.jobs = [];
-        STATE.totalJobs = 0;
+        STATE.totalJobs = STATE.jobs.length;
         updateJobsUI();
         updateStats();
         updatePaginationUI();
@@ -2363,10 +2362,10 @@ convergenceChart.destroy();
                 tooltip: {
                     mode: 'index',
                     intersect: false,
-                    backgroundColor: '#1a1a25',
+                    backgroundColor: '#161b22',
                     titleColor: '#f8fafc',
                     bodyColor: '#94a3b8',
-                    borderColor: '#2a2a3a',
+                    borderColor: '#30363d',
                     borderWidth: 1
                 }
             },
@@ -2379,7 +2378,7 @@ convergenceChart.destroy();
                         color: '#64748b'
                     },
                     grid: {
-                        color: 'rgba(42, 42, 58, 0.5)'
+                        color: 'rgba(48, 54, 61, 0.5)'
                     },
                     ticks: {
                         color: '#64748b'
@@ -2393,7 +2392,7 @@ convergenceChart.destroy();
                         color: '#64748b'
                     },
                     grid: {
-                        color: 'rgba(42, 42, 58, 0.5)'
+                        color: 'rgba(48, 54, 61, 0.5)'
                     },
                     ticks: {
                         color: '#64748b'
@@ -2482,7 +2481,7 @@ maintainAspectRatio: false,
 plugins: {
 legend: { display: false },
 tooltip: {
-backgroundColor: '#1a1a25',
+backgroundColor: '#161b22',
 titleColor: '#f8fafc',
 bodyColor: '#94a3b8'
 }
@@ -2490,12 +2489,12 @@ bodyColor: '#94a3b8'
 scales: {
 x: {
 title: { display: true, text: 'Energy', color: '#64748b' },
-grid: { color: 'rgba(42, 42, 58, 0.5)' },
+grid: { color: 'rgba(48, 54, 61, 0.5)' },
 ticks: { color: '#64748b', maxRotation: 45 }
 },
 y: {
 title: { display: true, text: 'Count', color: '#64748b' },
-grid: { color: 'rgba(42, 42, 58, 0.5)' },
+grid: { color: 'rgba(48, 54, 61, 0.5)' },
 ticks: { color: '#64748b' }
 }
 }
@@ -2548,7 +2547,7 @@ indexAxis: 'y',
 plugins: {
 legend: { display: false },
 tooltip: {
-backgroundColor: '#1a1a25',
+backgroundColor: '#161b22',
 callbacks: {
 label: (ctx) => `Probability: ${(ctx.raw * 100).toFixed(2)}%`
 }
@@ -2557,7 +2556,7 @@ label: (ctx) => `Probability: ${(ctx.raw * 100).toFixed(2)}%`
 scales: {
 x: {
 title: { display: true, text: 'Probability', color: '#64748b' },
-grid: { color: 'rgba(42, 42, 58, 0.5)' },
+grid: { color: 'rgba(48, 54, 61, 0.5)' },
 ticks: {
 color: '#64748b',
 callback: v => (v * 100).toFixed(0) + '%'
@@ -2628,19 +2627,19 @@ legend: {
                     labels: { color: '#94a3b8', boxWidth: 12 }
                 },
                 tooltip: {
-                    backgroundColor: '#1a1a25',
+                    backgroundColor: '#161b22',
                     titleColor: '#f8fafc',
                     bodyColor: '#94a3b8'
                 }
             },
             scales: {
                 x: {
-                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
+                    grid: { color: 'rgba(48, 54, 61, 0.5)' },
                     ticks: { color: '#64748b' }
                 },
                 y: {
                     title: { display: true, text: 'Parameter Value', color: '#64748b' },
-                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
+                    grid: { color: 'rgba(48, 54, 61, 0.5)' },
                     ticks: { color: '#64748b' }
                 }
             }
@@ -4256,10 +4255,10 @@ async function updateStatusPieChart(data) {
                     display: false
                 },
                 tooltip: {
-                    backgroundColor: '#1a1a25',
+                    backgroundColor: '#161b22',
                     titleColor: '#f8fafc',
                     bodyColor: '#94a3b8',
-                    borderColor: '#2a2a3a',
+                    borderColor: '#30363d',
                     borderWidth: 1,
                     callbacks: {
                         label: function (context) {
