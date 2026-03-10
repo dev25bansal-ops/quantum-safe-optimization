@@ -1,5 +1,4 @@
-"""
-Fallback provider for post-quantum cryptography.
+"""Fallback provider for post-quantum cryptography.
 
 SECURITY WARNING: This provider uses mock implementations and is NOT secure.
 It exists ONLY for testing when liboqs is unavailable.
@@ -33,8 +32,7 @@ _FALLBACK_WARNING = (
 
 
 class FallbackKEMProvider:
-    """
-    Fallback KEM provider with mock implementations.
+    """Fallback KEM provider with mock implementations.
 
     SECURITY WARNING: NOT SECURE - FOR TESTING ONLY.
     """
@@ -49,15 +47,8 @@ class FallbackKEMProvider:
         from qsop.crypto.pqc import KEMKeyPair
 
         params = get_kem_parameters(algorithm)
-
-        # Generate random bytes for keys
-        # The "secret key" embeds the seed to allow deterministic decapsulation
         seed = os.urandom(32)
-
-        # Public key: random bytes of correct size
         public_key = self._derive_bytes(seed, b"public_key", params.public_key_size)
-
-        # Secret key: seed + public key hash (for validation during decap)
         pk_hash = hashlib.sha256(public_key).digest()
         secret_key = seed + pk_hash + os.urandom(params.secret_key_size - 32 - 32)
 
@@ -68,11 +59,7 @@ class FallbackKEMProvider:
         )
 
     def encapsulate(self, public_key: bytes, algorithm: KEMAlgorithm) -> tuple[bytes, bytes]:
-        """
-        Mock encapsulation.
-
-        Creates a random shared secret and "encrypts" it by hashing with the public key.
-        """
+        """Mock encapsulation."""
         params = get_kem_parameters(algorithm)
 
         if not isinstance(public_key, bytes):
@@ -82,22 +69,15 @@ class FallbackKEMProvider:
                 f"Invalid public key size: expected {params.public_key_size}, got {len(public_key)}"
             )
 
-        # Generate random shared secret
         shared_secret = os.urandom(params.shared_secret_size)
-
-        # "Ciphertext" = hash(public_key || shared_secret) || padding
         ct_seed = hashlib.sha256(public_key + shared_secret).digest()
         ciphertext = self._derive_bytes(ct_seed, b"ciphertext", params.ciphertext_size - 32)
-        ciphertext = shared_secret + ciphertext  # Embed shared secret for mock decap
+        ciphertext = shared_secret + ciphertext
 
         return ciphertext[: params.ciphertext_size], shared_secret
 
     def decapsulate(self, secret_key: bytes, ciphertext: bytes, algorithm: KEMAlgorithm) -> bytes:
-        """
-        Mock decapsulation.
-
-        Extracts the embedded shared secret from the ciphertext.
-        """
+        """Mock decapsulation."""
         params = get_kem_parameters(algorithm)
 
         if not isinstance(secret_key, bytes):
@@ -113,9 +93,7 @@ class FallbackKEMProvider:
                 f"Invalid ciphertext size: expected {params.ciphertext_size}, got {len(ciphertext)}"
             )
 
-        # Extract embedded shared secret (first 32 bytes of ciphertext)
         shared_secret = ciphertext[: params.shared_secret_size]
-
         return shared_secret
 
     def _derive_bytes(self, seed: bytes, context: bytes, length: int) -> bytes:
@@ -135,11 +113,9 @@ class FallbackKEMProvider:
 
 
 class FallbackSignatureProvider:
-    """
-    Fallback signature provider with mock implementations.
+    """Fallback signature provider with mock implementations.
 
     SECURITY WARNING: NOT SECURE - FOR TESTING ONLY.
-    Uses HMAC as a mock "signature" - this provides NO actual security.
     """
 
     def __init__(self):
@@ -152,14 +128,8 @@ class FallbackSignatureProvider:
         from qsop.crypto.pqc import SignatureKeyPair
 
         params = get_signature_parameters(algorithm)
-
-        # Generate a random seed as the "secret key"
         seed = os.urandom(32)
-
-        # Derive public key from seed
         public_key = self._derive_bytes(seed, b"public_key", params.public_key_size)
-
-        # Secret key embeds the seed
         secret_key = seed + self._derive_bytes(seed, b"secret_key", params.secret_key_size - 32)
 
         return SignatureKeyPair(
@@ -169,11 +139,7 @@ class FallbackSignatureProvider:
         )
 
     def sign(self, secret_key: bytes, message: bytes, algorithm: SignatureAlgorithm) -> bytes:
-        """
-        Mock signing using HMAC.
-
-        NOT SECURE - this is just for API testing.
-        """
+        """Mock signing. Embeds message and public key hashes for verification."""
         params = get_signature_parameters(algorithm)
 
         if not isinstance(secret_key, bytes):
@@ -187,36 +153,28 @@ class FallbackSignatureProvider:
         if len(message) == 0:
             raise ValueError("Message cannot be empty")
 
-        # Extract seed from secret key
         seed = secret_key[:32]
+        public_key = self._derive_bytes(seed, b"public_key", params.public_key_size)
+        msg_hash = hashlib.sha256(message).digest()
+        pk_hash = hashlib.sha256(public_key).digest()
 
-        # For SPHINCS+, we need to handle very large signatures differently
-        # For mock purposes, just create a signature of correct size
         if algorithm.oqs_name.startswith("SPHINCS"):
-            signature = os.urandom(params.signature_size)
-            # Structure: first 32 bytes hash-based, rest random
-            sig_base = hmac.new(seed, message, hashlib.sha256).digest()
-            signature = sig_base + os.urandom(params.signature_size - 32)
+            sig_core = hmac.new(seed, message, hashlib.sha256).digest()
+            signature = msg_hash + pk_hash + sig_core + os.urandom(params.signature_size - 96)
         else:
-            # Create HMAC-based "signature"
-            sig_base = hmac.new(seed, message, hashlib.sha256).digest()
-            signature = self._derive_bytes(sig_base, b"signature", params.signature_size)
+            sig_core = hmac.new(seed, message, hashlib.sha256).digest()
+            signature = (
+                msg_hash
+                + pk_hash
+                + self._derive_bytes(sig_core, b"signature", params.signature_size - 64)
+            )
 
         return signature
 
     def verify(
-        self,
-        public_key: bytes,
-        message: bytes,
-        signature: bytes,
-        algorithm: SignatureAlgorithm,
+        self, public_key: bytes, message: bytes, signature: bytes, algorithm: SignatureAlgorithm
     ) -> bool:
-        """
-        Mock verification.
-
-        NOT SECURE - reconstructs the expected signature and compares.
-        This only works because we embed the seed derivation in both keys.
-        """
+        """Mock verification. Checks embedded message and public key hashes."""
         params = get_signature_parameters(algorithm)
 
         if not isinstance(public_key, bytes):
@@ -234,21 +192,15 @@ class FallbackSignatureProvider:
         if len(signature) == 0:
             raise ValueError("Signature cannot be empty")
 
-        # For mock verification, we check signature structure
-        # Real verification would use the public key
-
-        # Since we can't actually verify without the secret key in a proper
-        # signature scheme, this mock just checks signature length and format
         if len(signature) != params.signature_size:
             return False
 
-        # For SPHINCS+, we'll accept any signature of correct size as valid (for testing)
-        if algorithm.oqs_name.startswith("SPHINCS"):
-            return True
+        expected_msg_hash = hashlib.sha256(message).digest()
+        expected_pk_hash = hashlib.sha256(public_key).digest()
+        sig_msg_hash = signature[:32]
+        sig_pk_hash = signature[32:64]
 
-        # Check that signature looks derived (has expected hash-like properties)
-        # This is a very weak check, intentionally so for testing
-        return True
+        return expected_msg_hash == sig_msg_hash and expected_pk_hash == sig_pk_hash
 
     def _derive_bytes(self, seed: bytes, context: bytes, length: int) -> bytes:
         """Derive deterministic bytes from seed."""
