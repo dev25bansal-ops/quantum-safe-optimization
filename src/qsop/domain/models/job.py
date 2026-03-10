@@ -176,3 +176,27 @@ class JobResult:
     def has_signature(self) -> bool:
         """Check if the result has a digital signature."""
         return self.signature is not None
+
+
+@dataclass
+class Job:
+    """
+    Optimization job with status tracking.
+
+    Combines JobSpec and JobResult into a single entity for convenience.
+    """
+
+    spec: JobSpec
+    result: JobResult | None = None
+    status: JobStatus = JobStatus.PENDING
+    id: UUID = field(default_factory=uuid4)
+
+    @property
+    def is_complete(self) -> bool:
+        """Check if job is in a terminal state."""
+        return self.status.is_terminal()
+
+    @property
+    def is_active(self) -> bool:
+        """Check if job is actively running."""
+        return self.status.is_active()

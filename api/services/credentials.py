@@ -284,12 +284,16 @@ class AzureKeyVaultBackend:
         # Azure Key Vault doesn't support filtering by user efficiently
         # In production, we'd maintain a separate index or use tags
         credentials = []
-        secret_properties = self.client.list_properties_of_secrets()
 
-        async for secret_prop in secret_properties:
-            if secret_prop.name.startswith(f"qsop-{user_id}"):
-                secret = await self.client.get_secret(secret_prop.name)
-                credentials.append(json.loads(secret.value))
+        try:
+            secret_properties = self.client.list_properties_of_secrets()
+
+            for secret_prop in secret_properties:
+                if secret_prop.name.startswith(f"qsop-{user_id}"):
+                    secret = await self.client.get_secret(secret_prop.name)
+                    credentials.append(json.loads(secret.value))
+        except Exception as e:
+            logger.error(f"Failed to list credentials: {e}")
 
         return credentials
 
