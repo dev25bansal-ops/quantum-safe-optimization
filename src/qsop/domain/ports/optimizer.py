@@ -85,3 +85,18 @@ class Optimizer(Protocol):
             List of validation error messages (empty if valid).
         """
         ...
+
+    def cancel(self, job_id: str) -> bool:
+        """
+        Cancel a long-running optimization job.
+
+        Args:
+            job_id: The job identifier to cancel.
+
+        Returns:
+            True if cancellation was successful, False otherwise.
+
+        Raises:
+            OptimizationError: If cancellation fails.
+        """
+        ...

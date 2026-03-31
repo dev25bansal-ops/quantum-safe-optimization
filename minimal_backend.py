@@ -1,7 +1,11 @@
 """
 Minimal QSOP backend for development.
+
+SECURITY WARNING: This backend is for DEVELOPMENT ONLY.
+For production, use the full api/main.py with proper security.
 """
 
+import os
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -18,31 +22,45 @@ from starlette.responses import JSONResponse
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# In-memory job store for demo
+APP_ENV = os.environ.get("APP_ENV", "development")
+
 JOBS_STORE: dict = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan manager."""
     logger.info("starting_application")
+    if APP_ENV == "production":
+        logger.warning("SECURITY: minimal_backend.py is NOT for production use!")
     yield
     logger.info("shutting_down_application")
 
 
 app = FastAPI(
-    title="Quantum-Safe Optimization Platform",
+    title="Quantum-Safe Optimization Platform (Development)",
     version="0.1.0",
-    description="Minimal development backend",
+    description="Minimal development backend - DO NOT USE IN PRODUCTION",
     lifespan=lifespan,
 )
 
+CORS_ORIGINS = os.environ.get(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://localhost:8080,http://localhost:8000,http://127.0.0.1:3000",
+)
+
+if APP_ENV == "production":
+    cors_origins_list = [origin.strip() for origin in CORS_ORIGINS.split(",")]
+    logger.info(f"Production CORS origins: {cors_origins_list}")
+else:
+    cors_origins_list = ["*"]
+    logger.warning("DEVELOPMENT MODE: CORS allows all origins - NOT FOR PRODUCTION")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=cors_origins_list,
+    allow_credentials=True if APP_ENV != "production" else False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
 )
 
 
@@ -112,7 +130,7 @@ async def list_jobs(limit: int = 10, offset: int = 0, status: str = None, type: 
         jobs = [j for j in jobs if j.get("problem_type", "").lower() == type.lower()]
     jobs.sort(key=lambda j: j.get("created_at", ""), reverse=True)
     total = len(jobs)
-    return {"jobs": jobs[offset:offset + limit], "total": total, "limit": limit, "offset": offset}
+    return {"jobs": jobs[offset : offset + limit], "total": total, "limit": limit, "offset": offset}
 
 
 @app.post("/api/v1/jobs")
@@ -425,8 +443,16 @@ async def recent_activity() -> dict:
     """Get recent activity."""
     return {
         "activities": [
-            {"type": "job_completed", "message": "QAOA job completed successfully", "timestamp": datetime.now(timezone.utc).isoformat()},
-            {"type": "system", "message": "PQC crypto provider initialized", "timestamp": datetime.now(timezone.utc).isoformat()},
+            {
+                "type": "job_completed",
+                "message": "QAOA job completed successfully",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            {
+                "type": "system",
+                "message": "PQC crypto provider initialized",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
         ]
     }
 
@@ -442,7 +468,12 @@ async def list_webhooks() -> dict:
 async def create_webhook(request: Request) -> dict:
     """Create a webhook."""
     body = await request.json()
-    return {"id": f"wh_{uuid.uuid4().hex[:8]}", "url": body.get("url", ""), "events": body.get("events", []), "active": True}
+    return {
+        "id": f"wh_{uuid.uuid4().hex[:8]}",
+        "url": body.get("url", ""),
+        "events": body.get("events", []),
+        "active": True,
+    }
 
 
 # Keys management
@@ -451,8 +482,20 @@ async def list_keys() -> dict:
     """List cryptographic keys."""
     return {
         "keys": [
-            {"id": "kem_key_001", "type": "ML-KEM-768", "algorithm": "Kyber768", "created_at": "2024-01-01T00:00:00Z", "status": "active"},
-            {"id": "sig_key_001", "type": "ML-DSA-65", "algorithm": "Dilithium3", "created_at": "2024-01-01T00:00:00Z", "status": "active"},
+            {
+                "id": "kem_key_001",
+                "type": "ML-KEM-768",
+                "algorithm": "Kyber768",
+                "created_at": "2024-01-01T00:00:00Z",
+                "status": "active",
+            },
+            {
+                "id": "sig_key_001",
+                "type": "ML-DSA-65",
+                "algorithm": "Dilithium3",
+                "created_at": "2024-01-01T00:00:00Z",
+                "status": "active",
+            },
         ],
         "total": 2,
     }
@@ -473,7 +516,10 @@ async def generate_keys(request: Request) -> dict:
 @app.post("/api/v1/keys/{key_id}/rotate")
 async def rotate_key(key_id: str) -> dict:
     """Rotate a cryptographic key."""
-    return {"message": f"Key {key_id} rotated successfully", "new_key_id": f"key_{uuid.uuid4().hex[:8]}"}
+    return {
+        "message": f"Key {key_id} rotated successfully",
+        "new_key_id": f"key_{uuid.uuid4().hex[:8]}",
+    }
 
 
 @app.delete("/api/v1/keys/{key_id}")
@@ -486,9 +532,16 @@ async def delete_key(key_id: str) -> dict:
 async def list_tokens() -> list:
     """List API tokens."""
     return [
-        {"id": "tok_001", "name": "Default Token", "prefix": "qso_", "last4": "a1b2",
-         "created_at": "2024-01-01T00:00:00Z",
-         "expires_at": None, "last_used": "2024-01-15T12:00:00Z", "permissions": ["read", "write"]},
+        {
+            "id": "tok_001",
+            "name": "Default Token",
+            "prefix": "qso_",
+            "last4": "a1b2",
+            "created_at": "2024-01-01T00:00:00Z",
+            "expires_at": None,
+            "last_used": "2024-01-15T12:00:00Z",
+            "permissions": ["read", "write"],
+        },
     ]
 
 
@@ -524,7 +577,9 @@ async def export_webhooks(format: str = "json") -> dict:
 
 
 @app.get("/api/v1/webhooks/history")
-async def webhook_history(status: str = "all", event: str = "all", range_period: str = Query("7d", alias="range")) -> list:
+async def webhook_history(
+    status: str = "all", event: str = "all", range_period: str = Query("7d", alias="range")
+) -> list:
     """Get webhook delivery history."""
     return []
 

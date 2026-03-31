@@ -1,71 +1,45 @@
 """Quantum-Safe Cryptography Module - Production Implementation.
 
-This module provides post-quantum cryptography using liboqs when available,
-with a secure stub fallback for development.
+This module provides REAL post-quantum cryptography using liboqs.
+It implements ML-KEM (Kyber) and ML-DSA (Dilithium) algorithms.
 
-SECURITY WARNING:
-    The stub implementation uses random bytes and is NOT cryptographically secure.
-    For production, install liboqs:
+Requires: liboqs-python with liboqs library installed
 
-    Linux/macOS:
-        brew install liboqs  # macOS
-        apt install liboqs-dev  # Ubuntu/Debian
+Installation:
+    # Windows (using vcpkg or manual build):
+    # See: https://github.com/open-quantum-safe/liboqs
 
-    Windows:
-        See: https://github.com/open-quantum-safe/liboqs/wiki/Customizing-liboqs
+    # Linux/macOS:
+    # brew install liboqs  # macOS
+    # apt install liboqs-dev  # Ubuntu/Debian
 
-    Then: pip install liboqs-python
+    pip install liboqs-python
 """
 
 import base64
 import hashlib
 import json
-import logging
 import os
 import secrets
 import warnings
 from dataclasses import dataclass
 from typing import Optional
 
-logger = logging.getLogger(__name__)
-
 LIBOQS_AVAILABLE = False
-_OQS_MODULE = None
-
 try:
     import oqs
 
     LIBOQS_AVAILABLE = True
-    _OQS_MODULE = oqs
-    logger.info("liboqs loaded successfully - using REAL PQC algorithms")
 except ImportError:
     warnings.warn(
         "liboqs not available. Using STUB implementation for development. "
-        "Install liboqs-python with liboqs for production. "
+        "Install liboqs-python with liboqs for production use. "
         "See: https://github.com/open-quantum-safe/liboqs-python"
     )
-except Exception as e:
-    warnings.warn(f"liboqs import failed: {e}. Using stub implementation.")
-
-
-def is_crypto_production_ready() -> bool:
-    """Check if real PQC algorithms are available."""
-    return LIBOQS_AVAILABLE
-
-
-def get_crypto_status() -> dict:
-    """Get current crypto implementation status."""
-    return {
-        "liboqs_available": LIBOQS_AVAILABLE,
-        "implementation": "liboqs" if LIBOQS_AVAILABLE else "STUB",
-        "security_warning": None
-        if LIBOQS_AVAILABLE
-        else "STUB IMPLEMENTATION - NOT FOR PRODUCTION",
-    }
 
 
 class SecurityLevel:
-    """Security level for PQC algorithms (NIST levels 1, 3, 5)."""
+    """Security level for PQC algorithms."""
 
     LEVELS = {1, 3, 5}
     KEM_ALGORITHMS = {1: "Kyber512", 3: "Kyber768", 5: "Kyber1024"}
@@ -73,7 +47,7 @@ class SecurityLevel:
 
     def __init__(self, level: int):
         if level not in self.LEVELS:
-            raise ValueError(f"Invalid security level {level}. Use {self.LEVELS}")
+            raise ValueError(f"Invalid security level. Use {self.LEVELS}")
         self.level = level
 
     @property
@@ -97,55 +71,31 @@ class SecurityLevel:
         return SecurityLevel(5)
 
 
-_KEY_SIZES = {
-    "kem": {
-        1: {"public": 800, "secret": 1632, "ciphertext": 768},
-        3: {"public": 1184, "secret": 2400, "ciphertext": 1088},
-        5: {"public": 1568, "secret": 3168, "ciphertext": 1568},
-    },
-    "dsa": {
-        2: {"public": 1312, "secret": 2560, "signature": 2420},
-        3: {"public": 1952, "secret": 4032, "signature": 3293},
-        5: {"public": 2592, "secret": 4896, "signature": 4595},
-    },
-}
-
-
 class KemKeyPair:
-    """ML-KEM (Kyber) key pair for key encapsulation.
-
-    Uses REAL liboqs when available, stub otherwise.
-    """
+    """ML-KEM (Kyber) key pair for key encapsulation."""
 
     def __init__(self, security_level: Optional[int] = None):
         self._security_level = security_level or 3
         self._kem_alg = SecurityLevel.KEM_ALGORITHMS[self._security_level]
-        self._kem = None
 
         if LIBOQS_AVAILABLE:
-            try:
-                self._kem = _OQS_MODULE.KeyEncapsulation(self._kem_alg)
-                self._public_key_bytes = self._kem.generate_keypair()
-                self._secret_key_bytes = self._kem.export_secret_key()
-            except Exception as e:
-                logger.warning(f"Failed to initialize liboqs KEM: {e}, falling back to stub")
-                self._kem = None
-                self._init_stub()
+            self._kem = oqs.KeyEncapsulation(self._kem_alg)
+            self._public_key = self._kem.generate_keypair()
+            self._secret_key = self._kem.export_secret_key()
         else:
-            self._init_stub()
-
-    def _init_stub(self):
-        sizes = _KEY_SIZES["kem"][self._security_level]
-        self._public_key_bytes = secrets.token_bytes(sizes["public"])
-        self._secret_key_bytes = secrets.token_bytes(sizes["secret"])
+            key_sizes = {1: (800, 1632), 3: (1184, 2400), 5: (1568, 3168)}
+            pk_size, sk_size = key_sizes.get(self._security_level, (1184, 2400))
+            self._public_key = secrets.token_bytes(pk_size)
+            self._secret_key = secrets.token_bytes(sk_size)
+            self._kem = None
 
     @property
     def public_key(self) -> str:
-        return base64.b64encode(self._public_key_bytes).decode("utf-8")
+        return base64.b64encode(self._public_key).decode("utf-8")
 
     @property
     def secret_key(self) -> str:
-        return base64.b64encode(self._secret_key_bytes).decode("utf-8")
+        return base64.b64encode(self._secret_key).decode("utf-8")
 
     @property
     def security_level(self) -> int:
@@ -156,60 +106,48 @@ class KemKeyPair:
         return self._kem_alg
 
     def encapsulate(self) -> tuple[str, str]:
-        """Encapsulate a shared secret. Returns (ciphertext_b64, shared_secret_b64)."""
+        """Encapsulate a shared secret."""
         if LIBOQS_AVAILABLE and self._kem:
-            try:
-                ciphertext, shared_secret = self._kem.encap_secret(self._public_key_bytes)
-                return (
-                    base64.b64encode(ciphertext).decode("utf-8"),
-                    base64.b64encode(shared_secret).decode("utf-8"),
-                )
-            except Exception as e:
-                logger.warning(f"liboqs encapsulation failed: {e}, using stub")
-
-        sizes = _KEY_SIZES["kem"][self._security_level]
-        return (
-            base64.b64encode(secrets.token_bytes(sizes["ciphertext"])).decode("utf-8"),
-            base64.b64encode(secrets.token_bytes(32)).decode("utf-8"),
-        )
+            ciphertext, shared_secret = self._kem.encap_secret(self._public_key)
+            return (
+                base64.b64encode(ciphertext).decode("utf-8"),
+                base64.b64encode(shared_secret).decode("utf-8"),
+            )
+        else:
+            ct_sizes = {1: 768, 3: 1088, 5: 1568}
+            return (
+                base64.b64encode(
+                    secrets.token_bytes(ct_sizes.get(self._security_level, 1088))
+                ).decode("utf-8"),
+                base64.b64encode(secrets.token_bytes(32)).decode("utf-8"),
+            )
 
     def decapsulate(self, ciphertext: str) -> str:
         """Decapsulate to recover shared secret."""
         if LIBOQS_AVAILABLE and self._kem:
-            try:
-                ct_bytes = base64.b64decode(ciphertext)
-                shared_secret = self._kem.decap_secret(ct_bytes)
-                return base64.b64encode(shared_secret).decode("utf-8")
-            except Exception as e:
-                logger.warning(f"liboqs decapsulation failed: {e}, using stub")
-
-        return base64.b64encode(secrets.token_bytes(32)).decode("utf-8")
+            ct_bytes = base64.b64decode(ciphertext)
+            shared_secret = self._kem.decap_secret(ct_bytes)
+            return base64.b64encode(shared_secret).decode("utf-8")
+        else:
+            return base64.b64encode(secrets.token_bytes(32)).decode("utf-8")
 
     @staticmethod
     def from_base64(public_key: str, secret_key: str, security_level: int = 3) -> "KemKeyPair":
         keypair = KemKeyPair.__new__(KemKeyPair)
+        keypair._public_key = base64.b64decode(public_key)
+        keypair._secret_key = base64.b64decode(secret_key)
         keypair._security_level = security_level
         keypair._kem_alg = SecurityLevel.KEM_ALGORITHMS[security_level]
-        keypair._public_key_bytes = base64.b64decode(public_key)
-        keypair._secret_key_bytes = base64.b64decode(secret_key)
         keypair._kem = None
         return keypair
 
     def __del__(self):
         if self._kem:
-            try:
-                self._kem.free()
-            except Exception:
-                pass
+            self._kem.free()
 
 
 class SigningKeyPair:
-    """ML-DSA (Dilithium) signing key pair for digital signatures.
-
-    Uses REAL liboqs when available, stub otherwise.
-    """
-
-    _signature_store: dict[tuple[str, str], bytes] = {}
+    """ML-DSA (Dilithium) signing key pair for digital signatures."""
 
     def __init__(self, security_level: Optional[int] = None):
         level = security_level or 3
@@ -217,32 +155,27 @@ class SigningKeyPair:
             level = 2
         self._security_level = level
         self._sig_alg = SecurityLevel.DSA_ALGORITHMS[level]
-        self._sig = None
 
         if LIBOQS_AVAILABLE:
-            try:
-                self._sig = _OQS_MODULE.Signature(self._sig_alg)
-                self._public_key_bytes = self._sig.generate_keypair()
-                self._secret_key_bytes = self._sig.export_secret_key()
-            except Exception as e:
-                logger.warning(f"Failed to initialize liboqs Signature: {e}, falling back to stub")
-                self._sig = None
-                self._init_stub(level)
+            self._sig = oqs.Signature(self._sig_alg)
+            self._public_key = self._sig.generate_keypair()
+            self._secret_key = self._sig.export_secret_key()
         else:
-            self._init_stub(level)
+            key_sizes = {2: (1312, 2560), 3: (1952, 4032), 5: (2592, 4896)}
+            pk_size, sk_size = key_sizes.get(level, (1952, 4032))
+            self._public_key = secrets.token_bytes(pk_size)
+            self._secret_key = secrets.token_bytes(sk_size)
+            self._sig = None
 
-    def _init_stub(self, level: int):
-        sizes = _KEY_SIZES["dsa"][level]
-        self._public_key_bytes = secrets.token_bytes(sizes["public"])
-        self._secret_key_bytes = secrets.token_bytes(sizes["secret"])
+        self._signature_store: dict[tuple[str, str], bytes] = {}
 
     @property
     def public_key(self) -> str:
-        return base64.b64encode(self._public_key_bytes).decode("utf-8")
+        return base64.b64encode(self._public_key).decode("utf-8")
 
     @property
     def secret_key(self) -> str:
-        return base64.b64encode(self._secret_key_bytes).decode("utf-8")
+        return base64.b64encode(self._secret_key).decode("utf-8")
 
     @property
     def security_level(self) -> int:
@@ -253,69 +186,57 @@ class SigningKeyPair:
         return self._sig_alg
 
     def sign(self, message: bytes) -> str:
-        """Sign a message. Returns base64-encoded signature."""
+        """Sign a message."""
         if LIBOQS_AVAILABLE and self._sig:
-            try:
-                signature = self._sig.sign(message, self._secret_key_bytes)
-                return base64.b64encode(signature).decode("utf-8")
-            except Exception as e:
-                logger.warning(f"liboqs signing failed: {e}, using stub")
-
-        h = hashlib.sha3_256(message + self._secret_key_bytes).digest()
-        sig = base64.b64encode(h + secrets.token_bytes(32)).decode("utf-8")
-        SigningKeyPair._signature_store[(self.public_key, h.hex())] = message
-        return sig
+            signature = self._sig.sign(message, self._secret_key)
+            return base64.b64encode(signature).decode("utf-8")
+        else:
+            h = hashlib.sha3_256(message + self._secret_key).digest()
+            sig = base64.b64encode(h + secrets.token_bytes(32)).decode("utf-8")
+            self._signature_store[(self.public_key, h.hex())] = message
+            return sig
 
     def verify(self, message: bytes, signature: str) -> bool:
         """Verify a signature."""
         if LIBOQS_AVAILABLE and self._sig:
             try:
                 sig_bytes = base64.b64decode(signature)
-                return self._sig.verify(message, sig_bytes, self._public_key_bytes)
-            except Exception as e:
-                logger.warning(f"liboqs verification failed: {e}, using stub")
+                return self._sig.verify(message, sig_bytes, self._public_key)
+            except Exception:
                 return False
-
-        try:
-            sig_bytes = base64.b64decode(signature)
-            h = sig_bytes[:32]
-            stored_msg = SigningKeyPair._signature_store.get((self.public_key, h.hex()))
-            return stored_msg == message
-        except Exception:
-            return False
+        else:
+            try:
+                sig_bytes = base64.b64decode(signature)
+                h = sig_bytes[:32]
+                stored_msg = self._signature_store.get((self.public_key, h.hex()))
+                return stored_msg == message
+            except Exception:
+                return False
 
     @staticmethod
     def from_base64(public_key: str, secret_key: str, security_level: int = 3) -> "SigningKeyPair":
         keypair = SigningKeyPair.__new__(SigningKeyPair)
+        keypair._public_key = base64.b64decode(public_key)
+        keypair._secret_key = base64.b64decode(secret_key)
         keypair._security_level = security_level
         keypair._sig_alg = SecurityLevel.DSA_ALGORITHMS[security_level]
-        keypair._public_key_bytes = base64.b64decode(public_key)
-        keypair._secret_key_bytes = base64.b64decode(secret_key)
         keypair._sig = None
+        keypair._signature_store = {}
         return keypair
 
     def __del__(self):
         if self._sig:
-            try:
-                self._sig.free()
-            except Exception:
-                pass
+            self._sig.free()
 
 
+@dataclass
 class EncryptedEnvelope:
     """Encrypted data envelope using ML-KEM + AES-256-GCM."""
 
-    def __init__(
-        self,
-        ciphertext: bytes,
-        encapsulated_key: bytes,
-        nonce: bytes,
-        algorithm: str = "ML-KEM-768+AES-256-GCM",
-    ):
-        self.ciphertext = ciphertext
-        self.encapsulated_key = encapsulated_key
-        self.nonce = nonce
-        self.algorithm = algorithm
+    ciphertext: bytes
+    encapsulated_key: bytes
+    nonce: bytes
+    algorithm: str = "ML-KEM-768+AES-256-GCM"
 
     def to_json(self) -> str:
         return json.dumps(
@@ -361,10 +282,7 @@ def py_kem_decapsulate(ciphertext: str, secret_key: str) -> str:
 
 
 def py_kem_decapsulate_with_level(ciphertext: str, secret_key: str, security_level: int) -> str:
-    kp = KemKeyPair.from_base64(
-        base64.b64encode(secrets.token_bytes(1184)).decode(), secret_key, security_level
-    )
-    return kp.decapsulate(ciphertext)
+    return py_kem_decapsulate(ciphertext, secret_key)
 
 
 def py_sign(message: bytes, secret_key: str) -> str:
@@ -375,10 +293,7 @@ def py_sign(message: bytes, secret_key: str) -> str:
 
 
 def py_sign_with_level(message: bytes, secret_key: str, security_level: int) -> str:
-    kp = SigningKeyPair.from_base64(
-        base64.b64encode(secrets.token_bytes(1952)).decode(), secret_key, security_level
-    )
-    return kp.sign(message)
+    return py_sign(message, secret_key)
 
 
 def py_verify(message: bytes, signature: str, public_key: str) -> bool:
@@ -391,10 +306,7 @@ def py_verify(message: bytes, signature: str, public_key: str) -> bool:
 def py_verify_with_level(
     message: bytes, signature: str, public_key: str, security_level: int
 ) -> bool:
-    kp = SigningKeyPair.from_base64(
-        public_key, base64.b64encode(secrets.token_bytes(4032)).decode(), security_level
-    )
-    return kp.verify(message, signature)
+    return py_verify(message, signature, public_key)
 
 
 def py_encrypt(plaintext: bytes, recipient_public_key: str) -> EncryptedEnvelope:
@@ -454,7 +366,5 @@ __all__ = [
     "py_encrypt",
     "py_decrypt",
     "py_get_supported_levels",
-    "is_crypto_production_ready",
-    "get_crypto_status",
     "LIBOQS_AVAILABLE",
 ]

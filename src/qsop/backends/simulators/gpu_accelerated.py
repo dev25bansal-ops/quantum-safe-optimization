@@ -551,8 +551,8 @@ class GPUAcceleratedSimulator:
         self._pending_jobs[job_id] = result
         return job_id
 
-    def get_result(self, job_id: str) -> QuantumExecutionResult:
-        """Get result of submitted job."""
+    def retrieve_result(self, job_id: str) -> QuantumExecutionResult:
+        """Retrieve result of submitted job."""
         if job_id not in self._pending_jobs:
             raise ValueError(f"Job {job_id} not found")
         return self._pending_jobs.pop(job_id)

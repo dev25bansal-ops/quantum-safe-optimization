@@ -33,8 +33,8 @@ class MitigatedBackend(QuantumBackend):
     def submit(self, circuit: Any, shots: int = 1024, **options: Any) -> str:
         return self._backend.submit(circuit, shots, **options)
 
-    def get_result(self, job_id: str) -> QuantumExecutionResult:
-        return self._backend.get_result(job_id)
+    def retrieve_result(self, job_id: str) -> QuantumExecutionResult:
+        return self._backend.retrieve_result(job_id)
 
     def get_job_status(self, job_id: str) -> str:
         return self._backend.get_job_status(job_id)

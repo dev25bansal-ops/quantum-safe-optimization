@@ -33,7 +33,7 @@ class MockProviderBackend:
     def submit(self, circuit: Any, shots: int = 1024, **options: Any) -> str:
         return f"mock_job_{self.name}"
 
-    def get_result(self, job_id: str) -> QuantumExecutionResult:
+    def retrieve_result(self, job_id: str) -> QuantumExecutionResult:
         return self.run(None)
 
     def get_job_status(self, job_id: str) -> str:
