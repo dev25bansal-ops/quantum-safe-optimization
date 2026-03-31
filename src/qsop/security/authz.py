@@ -139,13 +139,12 @@ class Principal:
         """Check if principal has permission through any role."""
         return any(role.has_permission(permission) for role in self.roles)
 
-
-def has_all_permissions(self, permissions: set[Permission]) -> bool:
-    """Check if principal has all permissions."""
-    all_perms: set[Permission] = set()
-    for role in self.roles:
-        all_perms.update(role.permissions)
-    return permissions.issubset(all_perms)
+    def has_all_permissions(self, permissions: set[Permission]) -> bool:
+        """Check if principal has all permissions."""
+        all_perms: set[Permission] = set()
+        for role in self.roles:
+            all_perms.update(role.permissions)
+        return permissions.issubset(all_perms)
 
     def owns_resource(self, resource_type: str, resource_id: str) -> bool:
         """Check if principal owns a specific resource."""
@@ -289,34 +288,33 @@ def require_permission(
         resource_id_param: Name of parameter containing resource ID
     """
 
+    def decorator(func: Callable[P, T]) -> Callable[P, T]:
+        @functools.wraps(func)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+            principal = get_current_principal()
 
-def decorator(func: Callable[P, T]) -> Callable[P, T]:
-    @functools.wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-        principal = get_current_principal()
+            resource_id: str | None = None
+            if resource_id_param and resource_id_param in kwargs:
+                rid = kwargs[resource_id_param]
+                if isinstance(rid, str):
+                    resource_id = rid
 
-        resource_id: str | None = None
-        if resource_id_param and resource_id_param in kwargs:
-            rid = kwargs[resource_id_param]
-            if isinstance(rid, str):
-                resource_id = rid
+            if not check_permission(
+                permission,
+                principal,
+                resource_type,
+                resource_id,
+            ):
+                principal_id = principal.id if principal else "anonymous"
+                raise AuthorizationError(
+                    f"Permission denied: {permission.name} for {principal_id}",
+                    required_permission=permission,
+                    principal_id=principal_id,
+                )
 
-        if not check_permission(
-            permission,
-            principal,
-            resource_type,
-            resource_id,
-        ):
-            principal_id = principal.id if principal else "anonymous"
-            raise AuthorizationError(
-                f"Permission denied: {permission.name} for {principal_id}",
-                required_permission=permission,
-                principal_id=principal_id,
-            )
+            return func(*args, **kwargs)
 
-        return func(*args, **kwargs)
-
-    return wrapper
+        return wrapper
 
     return decorator
 
