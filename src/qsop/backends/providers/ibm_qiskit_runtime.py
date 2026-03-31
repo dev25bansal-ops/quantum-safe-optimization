@@ -131,7 +131,7 @@ class IBMQuantumBackend:
         Uses Qiskit Runtime for optimized execution.
         """
         job_id = self.submit(circuit, shots=shots, **options)
-        return self.get_result(job_id)
+        return self.retrieve_result(job_id)
 
     def submit(
         self,
@@ -162,9 +162,9 @@ class IBMQuantumBackend:
         except Exception as e:
             raise RuntimeError(f"Job submission failed: {e}") from e
 
-    def get_result(self, job_id: str) -> QuantumExecutionResult:
+    def retrieve_result(self, job_id: str) -> QuantumExecutionResult:
         """
-        Get result of a submitted job.
+        Retrieve result of a submitted job.
 
         Blocks until job completes.
         """

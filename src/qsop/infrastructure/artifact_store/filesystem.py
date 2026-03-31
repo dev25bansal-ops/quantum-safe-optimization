@@ -22,7 +22,7 @@ class ArtifactMetadata:
     size: int
     hash: str
     created_at: datetime
-    metadata: dict
+    metadata: dict[str, str | int | float | bool | None]
 
 
 @dataclass
@@ -39,14 +39,14 @@ class FilesystemArtifactStore:
         """Initialize storage directory."""
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
-    def store(
-        self,
-        artifact_id: str,
-        data: bytes,
-        *,
-        content_type: str = "application/octet-stream",
-        metadata: dict | None = None,
-    ) -> ArtifactMetadata:
+def store(
+    self,
+    artifact_id: str,
+    data: bytes,
+    *,
+    content_type: str = "application/octet-stream",
+    metadata: dict[str, str | int | float | bool | None] | None = None,
+) -> ArtifactMetadata:
         """Store an artifact."""
         # Compute hash
         data_hash = hashlib.sha256(data).hexdigest()

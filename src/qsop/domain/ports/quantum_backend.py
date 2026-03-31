@@ -123,9 +123,9 @@ class QuantumBackend(Protocol):
         """
         ...
 
-    def get_result(self, job_id: str) -> QuantumExecutionResult:
+    def retrieve_result(self, job_id: str) -> QuantumExecutionResult:
         """
-        Get the result of a previously submitted job.
+        Retrieve the result of a previously submitted job.
 
         Args:
             job_id: The job identifier returned by submit().

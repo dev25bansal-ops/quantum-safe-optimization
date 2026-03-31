@@ -1,18 +1,43 @@
 """
 Rate limiting configuration for the API.
 
-Uses slowapi to prevent brute-force attacks on authentication endpoints.
+Uses slowapi with Redis backend for production, memory for development.
+Prevents brute-force attacks on authentication endpoints.
 """
 
 import os
+import logging
 from collections.abc import Callable
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.requests import Request
 
-# Check if we're in test mode
+logger = logging.getLogger(__name__)
+
 TESTING = os.environ.get("TESTING", "0") == "1"
+APP_ENV = os.environ.get("APP_ENV", "development")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
+
+
+def get_storage_uri() -> str:
+    """Get appropriate storage URI based on environment."""
+    if TESTING:
+        return "memory://"
+
+    if APP_ENV == "production":
+        if REDIS_URL:
+            logger.info(
+                f"Using Redis for rate limiting: {REDIS_URL.split('@')[-1] if '@' in REDIS_URL else REDIS_URL}"
+            )
+            return REDIS_URL
+        else:
+            logger.warning(
+                "PRODUCTION: No REDIS_URL set, falling back to memory (not recommended for multi-worker)"
+            )
+            return "memory://"
+
+    return "memory://"
 
 
 def get_client_identifier(request: Request) -> str:
@@ -22,31 +47,27 @@ def get_client_identifier(request: Request) -> str:
     Uses X-Forwarded-For header if behind proxy, otherwise remote address.
     For authenticated requests, includes user ID for per-user limits.
     """
-    # In test mode, use a unique identifier per test to avoid rate limit collisions
     if TESTING:
         return "test-client"
 
-    # Try to get forwarded IP (for reverse proxy setups)
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
-        # Take the first IP in the chain (original client)
         client_ip = forwarded.split(",")[0].strip()
     else:
         client_ip = get_remote_address(request)
 
-    # Include user ID if authenticated (for per-user rate limits)
     if hasattr(request.state, "user_id"):
         return f"{client_ip}:{request.state.user_id}"
 
     return client_ip
 
 
-# Create limiter instance with test mode consideration
 limiter = Limiter(
     key_func=get_client_identifier,
     default_limits=["1000/minute"] if TESTING else ["100/minute"],
-    storage_uri="memory://",  # Use Redis URI in production: "redis://localhost:6379"
-    enabled=not TESTING,  # Disable rate limiting in test mode
+    storage_uri=get_storage_uri(),
+    enabled=not TESTING,
+    strategy="fixed-window",
 )
 
 

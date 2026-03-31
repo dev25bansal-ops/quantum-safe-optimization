@@ -3,6 +3,7 @@ WebSocket endpoint for real-time job progress updates.
 
 Streams job progress from Redis pub/sub to connected clients.
 Features:
+- JWT token authentication
 - Connection health monitoring
 - Automatic reconnection support
 - Heartbeat/keepalive mechanism
@@ -23,12 +24,63 @@ from fastapi.websockets import WebSocketState
 
 router = APIRouter()
 
-# Redis configuration
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-
-# WebSocket configuration
 WS_HEARTBEAT_INTERVAL = int(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 WS_MAX_MESSAGE_SIZE = int(os.getenv("WS_MAX_MESSAGE_SIZE", "65536"))
+
+
+async def verify_websocket_token(token: str) -> str:
+    """Verify JWT token for WebSocket authentication.
+
+    Args:
+        token: JWT token string
+
+    Returns:
+        User ID from the token
+
+    Raises:
+        ValueError: If token is invalid or expired
+    """
+    import base64
+    import hashlib
+    import hmac
+    import json
+    import os
+    from datetime import datetime, timezone
+
+    secret = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
+
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            raise ValueError("Invalid token format")
+
+        header_b64, payload_b64, signature_b64 = parts
+
+        expected_sig = hmac.new(
+            secret.encode(), f"{header_b64}.{payload_b64}".encode(), hashlib.sha256
+        ).digest()
+        expected_sig_b64 = base64.urlsafe_b64encode(expected_sig).rstrip(b"=").decode()
+
+        if not hmac.compare_digest(signature_b64, expected_sig_b64):
+            raise ValueError("Invalid signature")
+
+        payload_json = base64.urlsafe_b64decode(payload_b64 + "==")
+        payload = json.loads(payload_json)
+
+        if "exp" in payload:
+            exp_time = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+            if datetime.now(timezone.utc) > exp_time:
+                raise ValueError("Token expired")
+
+        user_id = payload.get("sub") or payload.get("user_id")
+        if not user_id:
+            raise ValueError("No user ID in token")
+
+        return user_id
+
+    except Exception as e:
+        raise ValueError(f"Token verification failed: {e}") from e
 
 
 class ConnectionState(str, Enum):
@@ -289,7 +341,9 @@ class ConnectionManager:
 
                     for conn_info in connections:
                         # Check if connection is stale (no activity in 2x heartbeat interval)
-                        idle_time = (datetime.now(timezone.utc) - conn_info.last_activity).total_seconds()
+                        idle_time = (
+                            datetime.now(timezone.utc) - conn_info.last_activity
+                        ).total_seconds()
 
                         if idle_time > WS_HEARTBEAT_INTERVAL * 3:
                             stale_connections.append(conn_info)
@@ -395,9 +449,14 @@ async def job_progress_websocket(
     websocket: WebSocket,
     job_id: str,
     user_id: str | None = Query(None, description="User ID for authorization"),
+    token: str | None = Query(None, description="JWT token for authentication"),
 ):
     """
     WebSocket endpoint for streaming job progress.
+
+    Authentication:
+    - Pass JWT token via ?token=<jwt> query parameter
+    - Or pass user_id for legacy/demo mode
 
     Connect to receive real-time updates for a specific job.
 
@@ -414,7 +473,16 @@ async def job_progress_websocket(
     - {"type": "ping"} - Client-initiated ping
     - {"type": "unsubscribe"} - Disconnect from this job
     """
-    conn_info = await manager.connect(websocket, job_id, user_id)
+    authenticated_user_id = user_id
+
+    if token:
+        try:
+            authenticated_user_id = await verify_websocket_token(token)
+        except Exception as e:
+            await websocket.close(code=4001, reason=f"Authentication failed: {e}")
+            return
+
+    conn_info = await manager.connect(websocket, job_id, authenticated_user_id)
 
     try:
         # Send initial connection confirmation

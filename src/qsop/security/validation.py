@@ -12,6 +12,8 @@ from typing import Any, TypeVar
 
 T = TypeVar("T")
 
+PatternType = Pattern[str]
+
 
 class ValidationError(Exception):
     """Base exception for validation errors."""
@@ -510,7 +512,7 @@ class FieldSpec:
     max_length: int | None = None
     min_value: int | float | None = None
     max_value: int | float | None = None
-    pattern: Pattern | None = None
+    pattern: PatternType | None = None
     allowed_values: list[Any] | None = None
 
     def validate(self, value: Any, field_name: str) -> Any:

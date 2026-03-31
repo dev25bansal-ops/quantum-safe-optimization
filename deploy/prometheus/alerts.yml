@@ -1,0 +1,200 @@
+# Prometheus Alerting Rules for QSOP
+
+groups:
+  - name: qsop.availability
+    interval: 30s
+    rules:
+      - alert: QSOPDown
+        expr: up{job="qsop-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "QSOP API is down"
+          description: "QSOP API instance {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: QSOPHighLatency
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job="qsop-api"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency"
+          description: "P99 latency is {{ $value }}s, exceeding 2s threshold."
+
+  - name: qsop.errors
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{job="qsop-api",status=~"5.."}[5m]) / rate(http_requests_total{job="qsop-api"}[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx error rate"
+          description: "5xx error rate is {{ $value | humanizePercentage }}, exceeding 1%."
+
+      - alert: High4xxRate
+        expr: rate(http_requests_total{job="qsop-api",status=~"4.."}[5m]) / rate(http_requests_total{job="qsop-api"}[5m]) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 4xx error rate"
+          description: "4xx error rate is {{ $value | humanizePercentage }}, exceeding 5%."
+
+  - name: qsop.crypto
+    interval: 30s
+    rules:
+      - alert: CryptoStubActive
+        expr: qsop_crypto_implementation{implementation="STUB"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "STUB crypto in use"
+          description: "Production is using STUB crypto implementation. Install liboqs immediately."
+
+      - alert: CryptoOperationFailed
+        expr: rate(qsop_crypto_operations_failed_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Crypto operations failing"
+          description: "{{ $value }} crypto operations are failing per second."
+
+  - name: qsop.jobs
+    interval: 30s
+    rules:
+      - alert: JobQueueBacklog
+        expr: qsop_jobs_pending > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Job queue backlog"
+          description: "{{ $value }} jobs are pending, exceeding 100 threshold."
+
+      - alert: JobQueueCritical
+        expr: qsop_jobs_pending > 500
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical job queue backlog"
+          description: "{{ $value }} jobs are pending, exceeding 500 threshold. Scale workers."
+
+      - alert: HighJobFailureRate
+        expr: rate(qsop_jobs_failed_total[15m]) / rate(qsop_jobs_completed_total[15m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High job failure rate"
+          description: "Job failure rate is {{ $value | humanizePercentage }}."
+
+  - name: qsop.auth
+    interval: 30s
+    rules:
+      - alert: HighFailedLogins
+        expr: rate(qsop_auth_login_failed_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High failed login rate"
+          description: "{{ $value }} failed logins per second. Possible brute force attack."
+
+      - alert: TokenRevocationBacklog
+        expr: qsop_auth_revocation_queue_size > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Token revocation queue backlog"
+          description: "{{ $value }} tokens in revocation queue."
+
+  - name: qsop.rate_limiting
+    interval: 30s
+    rules:
+      - alert: RateLimitStorageMemory
+        expr: qsop_rate_limiter_storage{storage="memory"} == 1 and on() APP_ENV{env="production"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Memory-based rate limiting in production"
+          description: "Production is using memory for rate limiting. Configure Redis."
+
+      - alert: HighRateLimitHits
+        expr: rate(qsop_rate_limit_hits_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate limit hits"
+          description: "{{ $value }} rate limit hits per second. Consider adjusting limits."
+
+  - name: qsop.database
+    interval: 30s
+    rules:
+      - alert: DatabaseConnectionFailed
+        expr: qsop_db_connections_active == 0 and qsop_db_connections_errors > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection failed"
+          description: "Cannot connect to database. Check connection string and firewall."
+
+      - alert: HighDatabaseLatency
+        expr: histogram_quantile(0.95, rate(qsop_db_query_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database latency"
+          description: "P95 database query latency is {{ $value }}s."
+
+  - name: qsop.redis
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        expr: qsop_redis_connected == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection lost"
+          description: "Cannot connect to Redis. Rate limiting and caching unavailable."
+
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory nearly full"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}."
+
+  - name: qsop.websocket
+    interval: 30s
+    rules:
+      - alert: WebSocketConnectionDrop
+        expr: rate(qsop_ws_disconnections_total[5m]) > rate(qsop_ws_connections_total[5m]) * 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High WebSocket disconnection rate"
+          description: "WebSocket disconnection rate is {{ $value }} per second."
+
+      - alert: WebSocketAuthFailures
+        expr: rate(qsop_ws_auth_failures_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WebSocket authentication failures"
+          description: "{{ $value }} WebSocket auth failures per second."

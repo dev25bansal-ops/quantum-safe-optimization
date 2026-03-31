@@ -164,22 +164,43 @@ class RegistrationResponse(BaseModel):
 
 
 # In-memory storage (fallback when repository is not available)
-# Password for admin is "admin123!" - hashed with Argon2id
-_users_db = {
-    "admin": {
-        "user_id": "usr_001",
-        "id": "usr_001",
-        "username": "admin",
-        "password_hash": "$argon2id$v=19$m=65536,t=3,p=4$RicoB40mT5DxZGqpPral7w$JLxZvZ/PbHdGVitr3eu9RW9danm83u2OADLV5rwNoAw",
-        "email": "admin@example.com",
-        "roles": ["admin", "user"],
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "kem_public_key": None,  # ML-KEM public key for result encryption
-    }
-}
+# SECURE: Default admin credentials from environment variables
+# Set ADMIN_USERNAME and ADMIN_PASSWORD env vars in production
+# Default password for development only - CHANGE IN PRODUCTION!
+import os
 
-_tokens_db = {}
-_keys_db = {}
+_DEFAULT_ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+_DEFAULT_ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "changeme")
+
+if _DEFAULT_ADMIN_PASSWORD == "changeme" and os.environ.get("APP_ENV") == "production":
+    logger.critical(
+        "SECURITY: Using default admin password in production! Set ADMIN_PASSWORD env var."
+    )
+
+_users_db: dict[str, dict] = {}
+_tokens_db: dict[str, dict] = {}
+_keys_db: dict[str, dict] = {}
+
+
+def _initialize_default_admin():
+    """Initialize default admin user from environment or secure random."""
+    if _DEFAULT_ADMIN_USERNAME not in _users_db:
+        admin_password_hash = hash_password(_DEFAULT_ADMIN_PASSWORD)
+        _users_db[_DEFAULT_ADMIN_USERNAME] = {
+            "user_id": "usr_001",
+            "id": "usr_001",
+            "username": _DEFAULT_ADMIN_USERNAME,
+            "password_hash": admin_password_hash,
+            "email": os.environ.get("ADMIN_EMAIL", "admin@example.com"),
+            "roles": ["admin", "user"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "kem_public_key": None,
+        }
+        logger.info(f"Initialized admin user: {_DEFAULT_ADMIN_USERNAME}")
+    return _users_db.get(_DEFAULT_ADMIN_USERNAME)
+
+
+_initialize_default_admin()
 
 
 # Helper functions for database operations
