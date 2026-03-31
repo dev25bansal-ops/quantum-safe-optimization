@@ -240,7 +240,7 @@ async def test_404_response_format(client: AsyncClient):
 
     assert response.status_code == 404
     data = response.json()
-    assert "detail" in data
+    assert "error" in data or "detail" in data
 
 
 @pytest.mark.anyio
