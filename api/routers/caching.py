@@ -19,6 +19,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from api.routers.auth import get_current_user
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cache", tags=["Caching"])
 
@@ -332,7 +334,7 @@ class CachedResult:
 
 
 @router.get("/stats", response_model=CacheStats)
-async def get_cache_stats():
+async def get_cache_stats(current_user: dict = Depends(get_current_user)):
     """Get cache statistics."""
     total = _cache_stats["hits"] + _cache_stats["misses"]
     hit_rate = _cache_stats["hits"] / max(total, 1)
@@ -359,7 +361,10 @@ async def get_cache_stats():
 
 
 @router.get("/{key}")
-async def get_cached_value(key: str):
+async def get_cached_value(
+    key: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Get a cached value."""
     value = await cache_get(key)
     if value is None:
@@ -369,7 +374,10 @@ async def get_cached_value(key: str):
 
 
 @router.post("/")
-async def set_cached_value(request: CacheSetRequest):
+async def set_cached_value(
+    request: CacheSetRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """Set a cached value."""
     success = await cache_set(
         request.key,
@@ -384,7 +392,10 @@ async def set_cached_value(request: CacheSetRequest):
 
 
 @router.post("/batch")
-async def set_cached_values_batch(request: CacheBatchSetRequest):
+async def set_cached_values_batch(
+    request: CacheBatchSetRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """Set multiple cached values."""
     results = []
     for entry in request.entries:
@@ -400,7 +411,10 @@ async def set_cached_values_batch(request: CacheBatchSetRequest):
 
 
 @router.delete("/{key}")
-async def delete_cached_value(key: str):
+async def delete_cached_value(
+    key: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Delete a cached value."""
     deleted = await cache_delete(key)
     if deleted:
@@ -409,21 +423,27 @@ async def delete_cached_value(key: str):
 
 
 @router.post("/delete-pattern")
-async def delete_by_pattern(request: CacheKeyPattern):
+async def delete_by_pattern(
+    request: CacheKeyPattern,
+    current_user: dict = Depends(get_current_user),
+):
     """Delete cache entries matching a pattern."""
     deleted = await cache_delete_by_pattern(request.pattern)
     return {"message": f"Deleted {deleted} entries", "pattern": request.pattern}
 
 
 @router.post("/delete-tag/{tag}")
-async def delete_by_tag(tag: str):
+async def delete_by_tag(
+    tag: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Delete all cache entries with a specific tag."""
     deleted = await cache_delete_by_tag(tag)
     return {"message": f"Deleted {deleted} entries", "tag": tag}
 
 
 @router.post("/clear")
-async def clear_all_cache():
+async def clear_all_cache(current_user: dict = Depends(get_current_user)):
     """Clear all cache entries."""
     deleted = await cache_clear()
     return {"message": f"Cleared {deleted} cache entries"}
@@ -433,6 +453,7 @@ async def clear_all_cache():
 async def list_cache_keys(
     prefix: str = "",
     limit: int = 100,
+    current_user: dict = Depends(get_current_user),
 ):
     """List cache keys."""
     keys = []
@@ -457,7 +478,7 @@ async def list_cache_keys(
 
 
 @router.post("/warm")
-async def warm_cache():
+async def warm_cache(current_user: dict = Depends(get_current_user)):
     """Warm cache with frequently accessed data."""
     warmed = 0
 

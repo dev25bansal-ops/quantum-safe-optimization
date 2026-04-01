@@ -206,7 +206,9 @@ def generate_pkce_challenge() -> tuple[str, str]:
 
 def create_jwt_token(user_info: dict, expires_in: int = 3600) -> str:
     """Create a JWT token for the authenticated user."""
-    secret = os.getenv("JWT_SECRET", os.getenv("SECRET_KEY", "dev-secret-key"))
+    from api.security.jwt_config import get_jwt_secret
+
+    secret = get_jwt_secret()
 
     payload = {
         "sub": user_info.get("sub"),
@@ -479,7 +481,9 @@ async def get_userinfo(request: Request):
         raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
 
     token = auth_header.split(" ")[1]
-    secret = os.getenv("JWT_SECRET", os.getenv("SECRET_KEY", "dev-secret-key"))
+    from api.security.jwt_config import get_jwt_secret
+
+    secret = get_jwt_secret()
 
     try:
         payload = jwt.decode(token, secret, algorithms=["HS256"])
@@ -503,9 +507,10 @@ async def oauth_logout(request: Request):
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
         from api.security.token_revocation import token_revocation_service
+        from api.security.jwt_config import get_jwt_secret
 
         try:
-            secret = os.getenv("JWT_SECRET", os.getenv("SECRET_KEY", "dev-secret-key"))
+            secret = get_jwt_secret()
             payload = jwt.decode(token, secret, algorithms=["HS256"])
             jti = payload.get("jti")
             if jti:

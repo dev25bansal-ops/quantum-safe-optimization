@@ -19,6 +19,8 @@ from croniter import croniter
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from api.routers.auth import get_current_user
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/schedules", tags=["Job Scheduling"])
 
@@ -331,12 +333,16 @@ async def stop_scheduler():
 
 
 @router.post("/", response_model=ScheduleResponse, status_code=201)
-async def create_schedule(schedule: ScheduleCreate):
+async def create_schedule(
+    schedule: ScheduleCreate,
+    current_user: dict = Depends(get_current_user),
+):
     """Create a new scheduled job."""
     import uuid
 
     schedule_id = f"sched_{uuid.uuid4().hex[:12]}"
     now = datetime.now(timezone.utc)
+    user_id = current_user.get("sub", "anonymous")
 
     if schedule.schedule_type == ScheduleType.CRON:
         if not schedule.cron_expression:
@@ -363,6 +369,7 @@ async def create_schedule(schedule: ScheduleCreate):
         "retry_delay_seconds": schedule.retry_delay_seconds,
         "enabled": schedule.enabled,
         "tags": schedule.tags,
+        "user_id": user_id,
         "status": ScheduleStatus.ACTIVE.value if schedule.enabled else ScheduleStatus.PAUSED.value,
         "created_at": now.isoformat(),
         "next_run_at": None,
@@ -378,7 +385,7 @@ async def create_schedule(schedule: ScheduleCreate):
 
     _schedules[schedule_id] = schedule_data
 
-    logger.info(f"Created schedule: {schedule_id}")
+    logger.info(f"Created schedule: {schedule_id} by user: {user_id}")
 
     return ScheduleResponse(
         schedule_id=schedule_id,
@@ -398,16 +405,26 @@ async def create_schedule(schedule: ScheduleCreate):
     )
 
 
+def _check_schedule_ownership(schedule: dict, user_id: str) -> None:
+    """Check if user owns the schedule."""
+    if schedule.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
 @router.get("/", response_model=ScheduleList)
 async def list_schedules(
     skip: int = 0,
     limit: int = 50,
     status_filter: ScheduleStatus | None = None,
     job_type: str | None = None,
+    current_user: dict = Depends(get_current_user),
 ):
-    """List all schedules."""
+    """List all schedules for the current user."""
+    user_id = current_user.get("sub")
     schedules = []
     for sched in _schedules.values():
+        if sched.get("user_id") != user_id:
+            continue
         if status_filter and sched.get("status") != status_filter.value:
             continue
         if job_type and sched.get("job_type") != job_type:
@@ -439,11 +456,16 @@ async def list_schedules(
 
 
 @router.get("/{schedule_id}", response_model=ScheduleResponse)
-async def get_schedule(schedule_id: str):
+async def get_schedule(
+    schedule_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Get a specific schedule."""
     sched = _schedules.get(schedule_id)
     if not sched:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    _check_schedule_ownership(sched, current_user.get("sub", ""))
 
     next_run = sched.get("next_run_at")
     last_run = sched.get("last_run_at")
@@ -473,11 +495,14 @@ async def update_schedule(
     cron_expression: str | None = None,
     interval_seconds: int | None = None,
     job_config: dict | None = None,
+    current_user: dict = Depends(get_current_user),
 ):
     """Update a schedule."""
     sched = _schedules.get(schedule_id)
     if not sched:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    _check_schedule_ownership(sched, current_user.get("sub", ""))
 
     if enabled is not None:
         sched["enabled"] = enabled
@@ -499,17 +524,22 @@ async def update_schedule(
     next_run = calculate_next_run(sched)
     sched["next_run_at"] = next_run.isoformat() if next_run else None
 
-    logger.info(f"Updated schedule: {schedule_id}")
+    logger.info(f"Updated schedule: {schedule_id} by user: {current_user.get('sub')}")
 
     return {"message": "Schedule updated", "schedule_id": schedule_id}
 
 
 @router.post("/{schedule_id}/pause")
-async def pause_schedule(schedule_id: str):
+async def pause_schedule(
+    schedule_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Pause a schedule."""
     sched = _schedules.get(schedule_id)
     if not sched:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    _check_schedule_ownership(sched, current_user.get("sub", ""))
 
     sched["status"] = ScheduleStatus.PAUSED.value
     sched["enabled"] = False
@@ -518,11 +548,16 @@ async def pause_schedule(schedule_id: str):
 
 
 @router.post("/{schedule_id}/resume")
-async def resume_schedule(schedule_id: str):
+async def resume_schedule(
+    schedule_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Resume a paused schedule."""
     sched = _schedules.get(schedule_id)
     if not sched:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    _check_schedule_ownership(sched, current_user.get("sub", ""))
 
     sched["status"] = ScheduleStatus.ACTIVE.value
     sched["enabled"] = True
@@ -535,11 +570,16 @@ async def resume_schedule(schedule_id: str):
 
 
 @router.post("/{schedule_id}/run")
-async def run_schedule_now(schedule_id: str):
+async def run_schedule_now(
+    schedule_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Manually trigger a schedule run."""
     sched = _schedules.get(schedule_id)
     if not sched:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    _check_schedule_ownership(sched, current_user.get("sub", ""))
 
     log_entry = await execute_schedule(sched.copy())
 
@@ -552,16 +592,21 @@ async def run_schedule_now(schedule_id: str):
 
 
 @router.delete("/{schedule_id}")
-async def delete_schedule(schedule_id: str):
+async def delete_schedule(
+    schedule_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Delete a schedule."""
     if schedule_id not in _schedules:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    _check_schedule_ownership(_schedules[schedule_id], current_user.get("sub", ""))
 
     del _schedules[schedule_id]
     if schedule_id in _execution_logs:
         del _execution_logs[schedule_id]
 
-    logger.info(f"Deleted schedule: {schedule_id}")
+    logger.info(f"Deleted schedule: {schedule_id} by user: {current_user.get('sub')}")
 
     return {"message": "Schedule deleted", "schedule_id": schedule_id}
 
@@ -571,10 +616,13 @@ async def get_schedule_logs(
     schedule_id: str,
     skip: int = 0,
     limit: int = 50,
+    current_user: dict = Depends(get_current_user),
 ):
     """Get execution logs for a schedule."""
     if schedule_id not in _schedules:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    _check_schedule_ownership(_schedules[schedule_id], current_user.get("sub", ""))
 
     logs = _execution_logs.get(schedule_id, [])
 
@@ -598,7 +646,10 @@ async def get_schedule_logs(
 
 
 @router.post("/validate-cron")
-async def validate_cron_expression(expression: str):
+async def validate_cron_expression(
+    expression: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Validate a cron expression and show next run times."""
     try:
         cron = parse_cron(expression)
@@ -620,7 +671,7 @@ async def validate_cron_expression(expression: str):
 
 
 @router.get("/status/summary")
-async def get_scheduler_status():
+async def get_scheduler_status(current_user: dict = Depends(get_current_user)):
     """Get scheduler status summary."""
     active = sum(1 for s in _schedules.values() if s.get("status") == ScheduleStatus.ACTIVE.value)
     paused = sum(1 for s in _schedules.values() if s.get("status") == ScheduleStatus.PAUSED.value)

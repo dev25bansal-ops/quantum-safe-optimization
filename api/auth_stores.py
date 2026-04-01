@@ -54,10 +54,22 @@ class InMemoryUserStore:
     def _initialize_default_admin(self) -> None:
         """Initialize default admin user from environment variables."""
         admin_username = os.environ.get("ADMIN_USERNAME", "admin")
-        admin_password = os.environ.get("ADMIN_PASSWORD", "changeme")
+        admin_password = os.environ.get("ADMIN_PASSWORD")
 
-        if admin_password == "changeme" and os.environ.get("APP_ENV") == "production":
-            logger.critical("SECURITY: Using default admin password in production!")
+        app_env = os.environ.get("APP_ENV", "development")
+
+        if app_env == "production" and not admin_password:
+            raise RuntimeError(
+                "SECURITY CRITICAL: ADMIN_PASSWORD environment variable must be set in production. "
+                "Refusing to start with insecure configuration."
+            )
+
+        if not admin_password:
+            admin_password = "changeme"
+            logger.warning(
+                "Using default admin password 'changeme' for development. "
+                "Set ADMIN_PASSWORD environment variable for production."
+            )
 
         if admin_username not in self._users:
             self._users[admin_username] = {
