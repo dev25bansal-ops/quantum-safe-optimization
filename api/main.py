@@ -28,10 +28,15 @@ from slowapi.errors import RateLimitExceeded
 from api.db.cosmos import close_cosmos, init_cosmos
 from api.logging_config import setup_logging
 from api.routers import auth, auth_demo, health, jobs
+from api.routers.api_keys import router as api_keys_router
 from api.routers.backends import router as backends_router
+from api.routers.batch import router as batch_router
+from api.routers.caching import router as caching_router
 from api.routers.costs import router as costs_router
 from api.routers.metrics import MetricsMiddleware
 from api.routers.metrics import router as metrics_router
+from api.routers.oauth import router as oauth_router
+from api.routers.scheduling import router as scheduling_router, start_scheduler, stop_scheduler
 from api.routers.websocket import close_websocket_manager, init_websocket_manager
 from api.routers.websocket import router as websocket_router
 from api.security.middleware import (
@@ -118,6 +123,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("websocket_manager_init_failed", error=str(e))
 
+    # Initialize job scheduler
+    try:
+        await start_scheduler()
+        logger.info("job_scheduler_initialized")
+    except Exception as e:
+        logger.warning("job_scheduler_init_failed", error=str(e))
+
     # Initialize server signing key for PQC tokens
     from quantum_safe_crypto import SigningKeyPair
 
@@ -142,6 +154,11 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("application_stopping")
+    try:
+        await stop_scheduler()
+        logger.info("scheduler_stopped")
+    except Exception as e:
+        logger.warning("scheduler_stop_error", error=str(e))
     try:
         await close_websocket_manager()
         logger.info("websocket_manager_closed")
@@ -310,6 +327,11 @@ api_v1_router.include_router(jobs.router, prefix="/jobs", tags=["Optimization Jo
 api_v1_router.include_router(websocket_router, prefix="/ws", tags=["WebSocket"])
 api_v1_router.include_router(costs_router, tags=["Cost Estimation"])
 api_v1_router.include_router(backends_router, tags=["Quantum Backends"])
+api_v1_router.include_router(api_keys_router, tags=["API Keys"])
+api_v1_router.include_router(oauth_router, tags=["OAuth / SSO"])
+api_v1_router.include_router(scheduling_router, tags=["Job Scheduling"])
+api_v1_router.include_router(caching_router, tags=["Caching"])
+api_v1_router.include_router(batch_router, tags=["Batch Jobs"])
 
 # Mount versioned API
 app.include_router(api_v1_router)

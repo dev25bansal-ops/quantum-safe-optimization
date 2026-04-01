@@ -37,7 +37,7 @@ from optimization.src.qaoa.runner import QAOAConfig, QAOARunner
 from optimization.src.vqe.hamiltonians import IsingHamiltonian, MolecularHamiltonian
 from optimization.src.vqe.runner import VQEConfig, VQERunner
 
-from .auth import _users_db, check_token_revocation, get_current_user, verify_pqc_token
+from .auth import check_token_revocation, get_current_user, get_user_by_username, verify_pqc_token
 
 # Import Cosmos DB repositories (with fallback to in-memory)
 try:
@@ -407,13 +407,20 @@ def encrypt_result_for_user(result: dict[str, Any], user_public_key: str) -> str
         return None
 
 
-def get_user_public_key(user_id: str) -> str | None:
+async def get_user_public_key(user_id: str) -> str | None:
     """Get user's ML-KEM public key from the database."""
-    # Find user by user_id
-    for _username, user_data in _users_db.items():
-        if user_data.get("user_id") == user_id:
-            return user_data.get("kem_public_key")
+    user = await get_user_by_username(user_id) or await get_user_by_id(user_id)
+    if user:
+        return user.get("kem_public_key")
     return None
+
+
+async def get_user_by_id(user_id: str) -> dict | None:
+    """Get user by ID from auth stores."""
+    from api.auth_stores import get_auth_stores
+
+    stores = get_auth_stores()
+    return await stores.user_store.get_by_id(user_id)
 
 
 def decrypt_result_for_user(

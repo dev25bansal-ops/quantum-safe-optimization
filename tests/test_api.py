@@ -18,6 +18,16 @@ def anyio_backend():
     return "asyncio"
 
 
+@pytest.fixture(autouse=True)
+def reset_auth_stores():
+    """Reset auth stores before each test."""
+    from api.auth_stores import AuthStores
+
+    AuthStores.reset()
+    yield
+    AuthStores.reset()
+
+
 @pytest.fixture
 async def client():
     """Create async test client."""
@@ -108,7 +118,10 @@ async def test_submit_job_unauthorized(client: AsyncClient):
 @pytest.mark.anyio
 async def test_login_valid_credentials(client: AsyncClient):
     """Test login with valid credentials returns PQC-signed token."""
-    response = await client.post("/auth/login", json={"username": "admin", "password": "admin123!"})
+    response = await client.post(
+        "/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
+    )
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
@@ -125,7 +138,8 @@ async def test_authenticated_job_submission(client: AsyncClient):
     """Test job submission with valid authentication."""
     # First login
     login_response = await client.post(
-        "/auth/login", json={"username": "admin", "password": "admin123!"}
+        "/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
     )
     assert login_response.status_code == 200
     token = login_response.json()["access_token"]
@@ -152,7 +166,8 @@ async def test_get_user_info(client: AsyncClient):
     """Test getting current user info with valid token."""
     # Login
     login_response = await client.post(
-        "/auth/login", json={"username": "admin", "password": "admin123!"}
+        "/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
     )
     token = login_response.json()["access_token"]
 
@@ -169,7 +184,8 @@ async def test_generate_encryption_key(client: AsyncClient):
     """Test ML-KEM key generation endpoint."""
     # Login
     login_response = await client.post(
-        "/auth/login", json={"username": "admin", "password": "admin123!"}
+        "/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
     )
     token = login_response.json()["access_token"]
 
@@ -191,7 +207,8 @@ async def test_logout_revokes_token(client: AsyncClient):
     """Test that logout properly revokes the token."""
     # Login
     login_response = await client.post(
-        "/auth/login", json={"username": "admin", "password": "admin123!"}
+        "/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
     )
     token = login_response.json()["access_token"]
 
@@ -216,7 +233,8 @@ async def test_token_refresh(client: AsyncClient):
     """Test token refresh functionality."""
     # Login
     login_response = await client.post(
-        "/auth/login", json={"username": "admin", "password": "admin123!"}
+        "/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
     )
     old_token = login_response.json()["access_token"]
 
@@ -243,7 +261,8 @@ async def test_signature_verification_endpoint(client: AsyncClient):
 
     # Login
     login_response = await client.post(
-        "/auth/login", json={"username": "admin", "password": "admin123!"}
+        "/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
     )
     token = login_response.json()["access_token"]
 
@@ -279,7 +298,8 @@ async def test_worker_status_endpoint(client: AsyncClient):
     """Test the Celery worker status endpoint."""
     # Login first
     login_response = await client.post(
-        "/auth/login", json={"username": "admin", "password": "admin123!"}
+        "/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
     )
     assert login_response.status_code == 200
     token = login_response.json()["access_token"]
@@ -299,7 +319,8 @@ async def test_job_submission_with_message(client: AsyncClient):
     """Test that job submission returns informative message."""
     # Login first
     login_response = await client.post(
-        "/auth/login", json={"username": "admin", "password": "admin123!"}
+        "/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
     )
     assert login_response.status_code == 200
     token = login_response.json()["access_token"]
@@ -371,7 +392,8 @@ async def test_api_versioning(client: AsyncClient):
     """Test that API versioning works correctly."""
     # Test versioned login endpoint works
     login_response = await client.post(
-        "/api/v1/auth/login", json={"username": "admin", "password": "admin123!"}
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
     )
     assert login_response.status_code == 200
     assert "access_token" in login_response.json()
@@ -387,7 +409,8 @@ async def test_job_with_callback_url_validation(client: AsyncClient):
     """Test that invalid callback URLs are rejected."""
     # Login first
     login_response = await client.post(
-        "/auth/login", json={"username": "admin", "password": "admin123!"}
+        "/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
     )
     token = login_response.json()["access_token"]
 
@@ -412,7 +435,8 @@ async def test_update_encryption_key(client: AsyncClient):
 
     # Login
     login_response = await client.post(
-        "/auth/login", json={"username": "admin", "password": "admin123!"}
+        "/auth/login",
+        json={"username": "admin", "password": os.getenv("ADMIN_PASSWORD", "changeme")},
     )
     token = login_response.json()["access_token"]
 
