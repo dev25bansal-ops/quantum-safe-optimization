@@ -95,6 +95,26 @@ async def lifespan(app: FastAPI):
     logger.info("application_starting", platform="Quantum-Safe Optimization Platform")
     logger.info("crypto_initializing", subsystem="PQC")
 
+    # SECURITY: Check that real crypto is available in production
+    app_env = os.getenv("APP_ENV", "development")
+    if app_env == "production":
+        try:
+            from quantum_safe_crypto import is_crypto_production_ready, get_crypto_status
+
+            if not is_crypto_production_ready():
+                status = get_crypto_status()
+                logger.critical(
+                    "SECURITY CRITICAL: Production environment detected but using STUB crypto. "
+                    f"Status: {status}. Refusing to start."
+                )
+                raise RuntimeError(
+                    "SECURITY: Cannot start in production with stub cryptography. "
+                    "Install liboqs and liboqs-python for real post-quantum cryptography."
+                )
+        except ImportError:
+            logger.critical("SECURITY CRITICAL: quantum_safe_crypto module not found")
+            raise RuntimeError("Cannot start without cryptography module")
+
     # Initialize Secrets Manager first (needed by other services)
     try:
         await init_secrets_manager()

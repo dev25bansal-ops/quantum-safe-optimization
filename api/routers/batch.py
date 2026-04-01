@@ -19,6 +19,8 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from api.routers.auth import get_current_user
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/batch", tags=["Batch Jobs"])
 
@@ -292,10 +294,12 @@ async def execute_batch(batch_id: str):
 async def create_batch(
     batch_create: BatchCreate,
     background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
 ):
     """Create and submit a batch of jobs."""
     batch_id = f"batch_{uuid.uuid4().hex[:12]}"
     now = datetime.now(timezone.utc)
+    user_id = current_user.get("sub", "anonymous")
 
     jobs = []
     job_results = {}
@@ -331,6 +335,7 @@ async def create_batch(
         "created_at": now.isoformat(),
         "started_at": None,
         "completed_at": None,
+        "user_id": user_id,
         "jobs": jobs,
         "job_results": job_results,
         "parallel": batch_create.parallel,
@@ -344,7 +349,7 @@ async def create_batch(
 
     background_tasks.add_task(execute_batch, batch_id)
 
-    logger.info(f"Created batch: {batch_id} with {len(jobs)} jobs")
+    logger.info(f"Created batch: {batch_id} with {len(jobs)} jobs by user: {user_id}")
 
     return BatchResponse(
         batch_id=batch_id,
@@ -360,10 +365,14 @@ async def list_batches(
     skip: int = 0,
     limit: int = 50,
     status_filter: BatchStatus | None = None,
+    current_user: dict = Depends(get_current_user),
 ):
-    """List all batches."""
+    """List all batches for the current user."""
+    user_id = current_user.get("sub")
     batches = []
     for batch in _batches.values():
+        if batch.get("user_id") != user_id:
+            continue
         if status_filter and batch.get("status") != status_filter.value:
             continue
 
@@ -372,12 +381,23 @@ async def list_batches(
     return BatchList(batches=batches[skip : skip + limit], total=len(batches))
 
 
+def _check_batch_ownership(batch: dict, user_id: str) -> None:
+    """Check if user owns the batch."""
+    if batch.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
 @router.get("/{batch_id}", response_model=BatchStatusResponse)
-async def get_batch_status(batch_id: str):
+async def get_batch_status(
+    batch_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Get detailed batch status."""
     batch = _batches.get(batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+
+    _check_batch_ownership(batch, current_user.get("sub"))
 
     return _format_batch_status(batch)
 
@@ -442,11 +462,16 @@ def _format_batch_status(batch: dict) -> BatchStatusResponse:
 
 
 @router.post("/{batch_id}/cancel")
-async def cancel_batch(batch_id: str):
+async def cancel_batch(
+    batch_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Cancel a running batch."""
     batch = _batches.get(batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+
+    _check_batch_ownership(batch, current_user.get("sub", ""))
 
     if batch["status"] in [
         BatchStatus.COMPLETED.value,
@@ -463,7 +488,7 @@ async def cancel_batch(batch_id: str):
             job["status"] = "cancelled"
             job["error"] = "Batch cancelled"
 
-    logger.info(f"Batch {batch_id} cancelled")
+    logger.info(f"Batch {batch_id} cancelled by user: {current_user.get('sub')}")
 
     return {"message": "Batch cancelled", "batch_id": batch_id}
 
@@ -473,11 +498,14 @@ async def retry_batch(
     batch_id: str,
     background_tasks: BackgroundTasks,
     failed_only: bool = True,
+    current_user: dict = Depends(get_current_user),
 ):
     """Retry failed jobs in a batch."""
     batch = _batches.get(batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+
+    _check_batch_ownership(batch, current_user.get("sub", ""))
 
     if batch["status"] not in [
         BatchStatus.FAILED.value,
@@ -506,28 +534,38 @@ async def retry_batch(
 
 
 @router.delete("/{batch_id}")
-async def delete_batch(batch_id: str):
+async def delete_batch(
+    batch_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Delete a batch and its results."""
     batch = _batches.get(batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+
+    _check_batch_ownership(batch, current_user.get("sub", ""))
 
     if batch["status"] == BatchStatus.RUNNING.value:
         raise HTTPException(status_code=400, detail="Cannot delete running batch. Cancel first.")
 
     del _batches[batch_id]
 
-    logger.info(f"Batch {batch_id} deleted")
+    logger.info(f"Batch {batch_id} deleted by user: {current_user.get('sub')}")
 
     return {"message": "Batch deleted", "batch_id": batch_id}
 
 
 @router.get("/{batch_id}/results")
-async def get_batch_results(batch_id: str):
+async def get_batch_results(
+    batch_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Get all results from a completed batch."""
     batch = _batches.get(batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+
+    _check_batch_ownership(batch, current_user.get("sub", ""))
 
     results = []
     for job_id, job in batch.get("job_results", {}).items():
@@ -548,11 +586,17 @@ async def get_batch_results(batch_id: str):
 
 
 @router.post("/{batch_id}/export")
-async def export_batch_results(batch_id: str, format: str = "json"):
+async def export_batch_results(
+    batch_id: str,
+    format: str = "json",
+    current_user: dict = Depends(get_current_user),
+):
     """Export batch results in specified format."""
     batch = _batches.get(batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+
+    _check_batch_ownership(batch, current_user.get("sub", ""))
 
     results = []
     for job_id, job in batch.get("job_results", {}).items():

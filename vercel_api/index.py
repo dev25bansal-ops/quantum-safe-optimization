@@ -8,6 +8,7 @@ Quantum-Safe Optimization Platform when deployed on Vercel.
 import base64
 import hashlib
 import json
+import os
 import time
 import uuid
 from datetime import datetime, timezone
@@ -22,12 +23,26 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# Secure CORS configuration - use environment variable for allowed origins
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080")
+if cors_origins == "*":
+    # In production, don't allow wildcard
+    if os.getenv("VERCEL_ENV") == "production":
+        raise RuntimeError(
+            "SECURITY: CORS wildcard not allowed in production. "
+            "Set CORS_ORIGINS environment variable to specific domains."
+        )
+    cors_origins_list = ["*"]
+else:
+    cors_origins_list = [origin.strip() for origin in cors_origins.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    max_age=3600,
 )
 
 # ---------------------------------------------------------------------------
@@ -273,9 +288,24 @@ async def get_job(job_id: str, authorization: str = Header(None)):
 async def backends_status():
     return {
         "backends": [
-            {"name": "local_simulator", "status": "available", "queue_depth": 0, "provider": "Qiskit Aer"},
-            {"name": "ibm_quantum", "status": "available", "queue_depth": 12, "provider": "IBM Quantum"},
-            {"name": "aws_braket", "status": "available", "queue_depth": 3, "provider": "Amazon Braket"},
+            {
+                "name": "local_simulator",
+                "status": "available",
+                "queue_depth": 0,
+                "provider": "Qiskit Aer",
+            },
+            {
+                "name": "ibm_quantum",
+                "status": "available",
+                "queue_depth": 12,
+                "provider": "IBM Quantum",
+            },
+            {
+                "name": "aws_braket",
+                "status": "available",
+                "queue_depth": 3,
+                "provider": "Amazon Braket",
+            },
         ]
     }
 

@@ -245,25 +245,58 @@ def verify_pqc_token(token: str, signing_keypair: SigningKeyPair | None = None) 
             return None
 
         # Enforce active token check - tokens must be in database
-        import asyncio
+        # Note: This is called from async context, so we need to handle it properly
+        # The token check is done in get_current_user instead for proper async handling
 
-        try:
-            loop = asyncio.get_running_loop()
-            if loop.is_running():
-                token_record = None
-            else:
-                token_record = asyncio.run(get_token_data(token))
-        except RuntimeError:
-            token_record = None
-
-        if token_record is None:
+        # Verify signature if we have server signing keypair
+        if signing_keypair:
+            # For now, basic structure validation
             pass
-        elif token_record.get("revoked", False):
+
+        return payload
+    except Exception:
+        return None
+
+
+async def verify_pqc_token_async(
+    token: str, signing_keypair: SigningKeyPair | None = None
+) -> dict | None:
+    """
+    Async version of PQC token verification with proper database check.
+
+    Returns payload if valid, None otherwise.
+    """
+    import base64
+    import json
+
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+
+        header_b64, payload_b64, sig_truncated = parts
+
+        payload_b64_padded = (
+            payload_b64 + "=" * (4 - len(payload_b64) % 4) if len(payload_b64) % 4 else payload_b64
+        )
+
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64_padded))
+
+        if payload.get("exp", 0) < datetime.now(timezone.utc).timestamp():
+            return None
+
+        # Properly check token in database (async)
+        token_record = await get_token_data(token)
+        if token_record is None:
+            logger.warning("Token verification failed: token not in database")
+            return None
+
+        if token_record.get("revoked", False):
             logger.warning("Token verification failed: token revoked")
             return None
 
         # Verify signature if we have server signing keypair and stored full signature
-        if signing_keypair and token_record and token_record.get("full_signature"):
+        if signing_keypair and token_record.get("full_signature"):
             token_data = f"{header_b64}.{payload_b64}"
             signature = token_record["full_signature"]
             if not py_verify(token_data.encode("utf-8"), signature, signing_keypair.public_key):
@@ -290,7 +323,8 @@ async def get_current_user(
     if hasattr(request.app.state, "signing_keypair"):
         signing_keypair = request.app.state.signing_keypair
 
-    payload = verify_pqc_token(token, signing_keypair)
+    # Use async token verification
+    payload = await verify_pqc_token_async(token, signing_keypair)
 
     if payload is None:
         raise HTTPException(

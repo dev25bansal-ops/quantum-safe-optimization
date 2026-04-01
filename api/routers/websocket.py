@@ -48,7 +48,9 @@ async def verify_websocket_token(token: str) -> str:
     import os
     from datetime import datetime, timezone
 
-    secret = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
+    from api.security.jwt_config import get_jwt_secret
+
+    secret = get_jwt_secret()
 
     try:
         parts = token.split(".")
