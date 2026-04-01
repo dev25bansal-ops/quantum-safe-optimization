@@ -204,14 +204,16 @@ def create_pqc_token(
 
     token_data = f"{header_b64}.{payload_b64}"
 
-    # Sign with ML-DSA-65
-    signature = signing_keypair.sign(token_data.encode())
+    # Sign with ML-DSA-65 (returns base64-encoded signature string)
+    signature_b64 = signing_keypair.sign(token_data.encode())
 
-    # Use first 86 chars of signature for token (URL-safe truncation)
-    sig_truncated = signature[:86].replace("+", "-").replace("/", "_")
-    token = f"{token_data}.{sig_truncated}"
+    # Use full signature - DO NOT TRUNCATE
+    # ML-DSA-65 signatures are ~3293 bytes, truncating weakens security
+    # Convert to urlsafe base64 (signature_b64 is standard base64 from sign())
+    sig_urlsafe = signature_b64.replace("+", "-").replace("/", "_").rstrip("=")
+    token = f"{token_data}.{sig_urlsafe}"
 
-    return token, signature
+    return token, signature_b64
 
 
 def verify_pqc_token(token: str, signing_keypair: SigningKeyPair | None = None) -> dict | None:
@@ -231,7 +233,7 @@ def verify_pqc_token(token: str, signing_keypair: SigningKeyPair | None = None) 
         if len(parts) != 3:
             return None
 
-        header_b64, payload_b64, sig_truncated = parts
+        header_b64, payload_b64, sig_b64 = parts
 
         # Pad base64 if needed
         payload_b64_padded = (
@@ -244,14 +246,8 @@ def verify_pqc_token(token: str, signing_keypair: SigningKeyPair | None = None) 
         if payload.get("exp", 0) < datetime.now(timezone.utc).timestamp():
             return None
 
-        # Enforce active token check - tokens must be in database
-        # Note: This is called from async context, so we need to handle it properly
-        # The token check is done in get_current_user instead for proper async handling
-
-        # Verify signature if we have server signing keypair
-        if signing_keypair:
-            # For now, basic structure validation
-            pass
+        # Note: Token database check is done in verify_pqc_token_async
+        # This function is for sync contexts and doesn't check revocation
 
         return payload
     except Exception:
@@ -274,7 +270,7 @@ async def verify_pqc_token_async(
         if len(parts) != 3:
             return None
 
-        header_b64, payload_b64, sig_truncated = parts
+        header_b64, payload_b64, sig_b64 = parts
 
         payload_b64_padded = (
             payload_b64 + "=" * (4 - len(payload_b64) % 4) if len(payload_b64) % 4 else payload_b64
@@ -295,11 +291,18 @@ async def verify_pqc_token_async(
             logger.warning("Token verification failed: token revoked")
             return None
 
-        # Verify signature if we have server signing keypair and stored full signature
-        if signing_keypair and token_record.get("full_signature"):
+        # Verify signature with full signature from database or from token
+        if signing_keypair:
+            # Convert from urlsafe base64 to standard base64
+            # sig_b64 is urlsafe, verify() expects standard base64
+            sig_b64_padded = sig_b64 + "=" * (4 - len(sig_b64) % 4) if len(sig_b64) % 4 else sig_b64
+            signature_standard = sig_b64_padded.replace("-", "+").replace("_", "/")
+
             token_data = f"{header_b64}.{payload_b64}"
-            signature = token_record["full_signature"]
-            if not py_verify(token_data.encode("utf-8"), signature, signing_keypair.public_key):
+            if not py_verify(
+                token_data.encode("utf-8"), signature_standard, signing_keypair.public_key
+            ):
+                logger.warning("Token verification: signature invalid")
                 return None
 
         return payload

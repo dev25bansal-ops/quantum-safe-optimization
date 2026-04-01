@@ -1,0 +1,218 @@
+# =============================================================================
+# Quantum-Safe Secure Optimization Platform - Production Docker Compose
+# =============================================================================
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This file adds production-only services:
+#   - Redis Sentinel (High Availability)
+#   - Jaeger (Distributed Tracing)
+#   - Loki (Log Aggregation)
+#   - AlertManager (Alert Routing)
+
+services:
+  # ---------------------------------------------------------------------------
+  # Redis Sentinel (High Availability)
+  # ---------------------------------------------------------------------------
+  redis-master:
+    image: redis:7-alpine
+    container_name: qsop-redis-master
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-master-data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  redis-replica-1:
+    image: redis:7-alpine
+    container_name: qsop-redis-replica-1
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-replica-1-data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --replicaof redis-master 6379
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  redis-replica-2:
+    image: redis:7-alpine
+    container_name: qsop-redis-replica-2
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis-replica-2-data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --replicaof redis-master 6379
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  redis-sentinel-1:
+    image: redis:7-alpine
+    container_name: qsop-redis-sentinel-1
+    ports:
+      - "26379:26379"
+    command: redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - ./deploy/redis/sentinel.conf:/etc/redis/sentinel.conf:ro
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  redis-sentinel-2:
+    image: redis:7-alpine
+    container_name: qsop-redis-sentinel-2
+    ports:
+      - "26380:26379"
+    command: redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - ./deploy/redis/sentinel.conf:/etc/redis/sentinel.conf:ro
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  redis-sentinel-3:
+    image: redis:7-alpine
+    container_name: qsop-redis-sentinel-3
+    ports:
+      - "26381:26379"
+    command: redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - ./deploy/redis/sentinel.conf:/etc/redis/sentinel.conf:ro
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  # ---------------------------------------------------------------------------
+  # Jaeger (Distributed Tracing)
+  # ---------------------------------------------------------------------------
+  jaeger:
+    image: jaegertracing/all-in-one:1.53
+    container_name: qsop-jaeger
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "14268:14268" # Jaeger HTTP
+      - "14250:14250" # Jaeger gRPC
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  # ---------------------------------------------------------------------------
+  # Loki (Log Aggregation)
+  # ---------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: qsop-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./deploy/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  # ---------------------------------------------------------------------------
+  # Promtail (Log Shipper)
+  # ---------------------------------------------------------------------------
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: qsop-promtail
+    volumes:
+      - ./deploy/loki/promtail-config.yaml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - ./logs:/app/logs:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  # ---------------------------------------------------------------------------
+  # AlertManager
+  # ---------------------------------------------------------------------------
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: qsop-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./deploy/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--web.external-url=http://localhost:9093"
+    restart: unless-stopped
+    networks:
+      - qsop-network
+
+  # ---------------------------------------------------------------------------
+  # Production Application (overrides)
+  # ---------------------------------------------------------------------------
+  qsop:
+    environment:
+      QSOP_ENV: production
+      QSOP_DEBUG: "false"
+      QSOP_LOG_LEVEL: INFO
+      QSOP_REDIS_URL: redis://redis-sentinel-1:26379/0?sentinel_master_id=mymaster
+      QSOP_OTEL_EXPORTER_ENDPOINT: http://jaeger:14250
+      QSOP_LOKI_URL: http://loki:3100
+    depends_on:
+      redis-sentinel-1:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+      loki:
+        condition: service_started
+
+volumes:
+  redis-master-data:
+  redis-replica-1-data:
+  redis-replica-2-data:
+  loki-data:
+  alertmanager-data:
+
+networks:
+  qsop-network:
+    driver: bridge

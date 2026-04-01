@@ -27,11 +27,20 @@ class Settings:
         self.vault_url: str = os.getenv("VAULT_URL", "")
         self.s3_bucket: str = os.getenv("S3_BUCKET", "")
         self.artifact_path: str = os.getenv("ARTIFACT_PATH", "./artifacts")
-        self.jwt_secret: str = os.getenv("JWT_SECRET", "dev-secret-change-in-prod")
+        self.environment: str = os.getenv("ENVIRONMENT", "development")
+
+        jwt_secret = os.getenv("JWT_SECRET")
+        if not jwt_secret:
+            if self.environment == "production":
+                raise RuntimeError(
+                    "SECURITY CRITICAL: JWT_SECRET environment variable must be set in production. "
+                    "Refusing to start with insecure configuration."
+                )
+            jwt_secret = "dev-secret-change-in-prod"
+        self.jwt_secret: str = jwt_secret
         self.jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
         self.rate_limit_requests: int = int(os.getenv("RATE_LIMIT_REQUESTS", "100"))
         self.rate_limit_window: int = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
-        self.environment: str = os.getenv("ENVIRONMENT", "development")
 
 
 @lru_cache

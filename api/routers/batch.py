@@ -301,6 +301,14 @@ async def create_batch(
     now = datetime.now(timezone.utc)
     user_id = current_user.get("sub", "anonymous")
 
+    # Validate webhook URL if provided
+    if batch_create.notify_on_complete:
+        from api.security.ssrf_protection import validate_webhook_url
+
+        is_valid, error = validate_webhook_url(batch_create.notify_on_complete)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=f"notify_on_complete URL rejected: {error}")
+
     jobs = []
     job_results = {}
     for i, job_req in enumerate(batch_create.jobs):
