@@ -208,15 +208,33 @@ async def execute_schedule(schedule: dict) -> dict:
 
         elif job_type == "webhook":
             import httpx
+            from api.security.ssrf_protection import validate_webhook_url
 
             webhook_url = job_config.get("webhook_url")
             if webhook_url:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(webhook_url, json=job_config.get("payload", {}))
-                    log_entry["status"] = "success" if response.status_code < 400 else "failed"
-                    log_entry["error"] = (
-                        f"HTTP {response.status_code}" if response.status_code >= 400 else None
-                    )
+                # Validate URL for SSRF protection
+                is_valid, error = validate_webhook_url(webhook_url)
+                if not is_valid:
+                    log_entry["status"] = "failed"
+                    log_entry["error"] = f"Webhook URL blocked: {error}"
+                    logger.warning(f"SSRF blocked webhook URL: {webhook_url} - {error}")
+                else:
+                    try:
+                        async with httpx.AsyncClient(timeout=30.0) as client:
+                            response = await client.post(
+                                webhook_url, json=job_config.get("payload", {})
+                            )
+                            log_entry["status"] = (
+                                "success" if response.status_code < 400 else "failed"
+                            )
+                            log_entry["error"] = (
+                                f"HTTP {response.status_code}"
+                                if response.status_code >= 400
+                                else None
+                            )
+                    except httpx.RequestError as e:
+                        log_entry["status"] = "failed"
+                        log_entry["error"] = f"Request failed: {str(e)}"
             else:
                 log_entry["status"] = "failed"
                 log_entry["error"] = "No webhook URL configured"
@@ -353,6 +371,16 @@ async def create_schedule(
             parse_cron(schedule.cron_expression)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid cron expression: {e}")
+
+    # Validate webhook URLs in job_config for SSRF protection
+    if schedule.job_type == "webhook":
+        from api.security.ssrf_protection import validate_webhook_url
+
+        webhook_url = schedule.job_config.get("webhook_url")
+        if webhook_url:
+            is_valid, error = validate_webhook_url(webhook_url)
+            if not is_valid:
+                raise HTTPException(status_code=400, detail=f"webhook_url rejected: {error}")
 
     schedule_data = {
         "schedule_id": schedule_id,

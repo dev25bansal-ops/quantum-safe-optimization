@@ -760,7 +760,7 @@ async def process_optimization_job(job_id: str, job_data: dict[str, Any]):
         encrypted_result = None
         if job_data.get("encrypt_result"):
             user_id = job_data.get("user_id")
-            user_public_key = get_user_public_key(user_id)
+            user_public_key = await get_user_public_key(user_id)
             if user_public_key:
                 encrypted_result = encrypt_result_for_user(result, user_public_key)
 
@@ -843,7 +843,7 @@ async def submit_job(
     # Check if user has public key for result encryption
     should_encrypt = job_request.should_encrypt_result()
     if should_encrypt:
-        user_public_key = get_user_public_key(current_user["sub"])
+        user_public_key = await get_user_public_key(current_user["sub"])
         if not user_public_key:
             # In demo mode, skip encryption instead of failing
             if DEMO_MODE and current_user.get("sub") == "demo_user":
