@@ -31,6 +31,7 @@ argon2-cffi>=23.1.0
 # Task Queue
 celery[redis]>=5.3.0
 redis>=5.0.0
+croniter>=2.0.0
 
 # Security & Rate Limiting
 cryptography>=41.0.0

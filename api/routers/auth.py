@@ -15,88 +15,42 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-# Import PQC crypto
 from quantum_safe_crypto import KemKeyPair, SigningKeyPair, py_verify
 
-# Import security features
 from api.security.rate_limiter import RateLimits, limiter
 from api.security.signature_verification import SignedPayload, verify_request_signature
 from api.security.token_revocation import token_revocation_service
 
-# Import repository abstraction
-try:
-    from api.db.repository import get_key_store, get_token_store, get_user_store
-
-    _db_available = True
-except ImportError:
-    _db_available = False
-    get_user_store = None
-    get_key_store = None
-    get_token_store = None
+from api.auth_stores import (
+    AuthStores,
+    get_auth_stores,
+    hash_password as _hash_password,
+    verify_password as _verify_password,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 security = HTTPBearer()
 
-# Password hasher (Argon2id - recommended for password hashing)
 _password_hasher = PasswordHasher()
-
-# Server signing keypair (initialized in app lifespan)
-_server_signing_keypair: SigningKeyPair | None = None
-
-# Lazy-initialized stores
-_user_store = None
-_key_store = None
-_token_store = None
-
-
-async def get_or_create_user_store():
-    """Get or create the user store."""
-    global _user_store
-    if _user_store is None and get_user_store is not None:
-        _user_store = await get_user_store()
-    return _user_store
-
-
-async def get_or_create_key_store():
-    """Get or create the key store."""
-    global _key_store
-    if _key_store is None and get_key_store is not None:
-        _key_store = await get_key_store()
-    return _key_store
-
-
-async def get_or_create_token_store():
-    """Get or create the token store."""
-    global _token_store
-    if _token_store is None and get_token_store is not None:
-        _token_store = await get_token_store()
-    return _token_store
 
 
 def get_server_signing_keypair(request: Request) -> SigningKeyPair:
     """Get the server signing keypair from app state."""
-    global _server_signing_keypair
     if hasattr(request.app.state, "signing_keypair"):
         return request.app.state.signing_keypair
-    if _server_signing_keypair is None:
-        _server_signing_keypair = SigningKeyPair()
-    return _server_signing_keypair
+    return SigningKeyPair()
 
 
 def hash_password(password: str) -> str:
     """Hash a password using Argon2id."""
-    return _password_hasher.hash(password)
+    return _hash_password(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against a hash."""
-    try:
-        _password_hasher.verify(hashed_password, plain_password)
-        return True
-    except VerifyMismatchError:
-        return False
+    return _verify_password(plain_password, hashed_password)
 
 
 # Models
@@ -163,167 +117,65 @@ class RegistrationResponse(BaseModel):
     created_at: datetime
 
 
-# In-memory storage (fallback when repository is not available)
-# SECURE: Default admin credentials from environment variables
-# Set ADMIN_USERNAME and ADMIN_PASSWORD env vars in production
-# Default password for development only - CHANGE IN PRODUCTION!
-import os
-
-_DEFAULT_ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-_DEFAULT_ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "changeme")
-
-if _DEFAULT_ADMIN_PASSWORD == "changeme" and os.environ.get("APP_ENV") == "production":
-    logger.critical(
-        "SECURITY: Using default admin password in production! Set ADMIN_PASSWORD env var."
-    )
-
-_users_db: dict[str, dict] = {}
-_tokens_db: dict[str, dict] = {}
-_keys_db: dict[str, dict] = {}
-
-
-def _initialize_default_admin():
-    """Initialize default admin user from environment or secure random."""
-    if _DEFAULT_ADMIN_USERNAME not in _users_db:
-        admin_password_hash = hash_password(_DEFAULT_ADMIN_PASSWORD)
-        _users_db[_DEFAULT_ADMIN_USERNAME] = {
-            "user_id": "usr_001",
-            "id": "usr_001",
-            "username": _DEFAULT_ADMIN_USERNAME,
-            "password_hash": admin_password_hash,
-            "email": os.environ.get("ADMIN_EMAIL", "admin@example.com"),
-            "roles": ["admin", "user"],
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "kem_public_key": None,
-        }
-        logger.info(f"Initialized admin user: {_DEFAULT_ADMIN_USERNAME}")
-    return _users_db.get(_DEFAULT_ADMIN_USERNAME)
-
-
-_initialize_default_admin()
-
-
-# Helper functions for database operations
+# Helper functions using AuthStores
 async def get_user_by_username(username: str) -> dict | None:
-    """Get user by username from store or in-memory."""
-    store = await get_or_create_user_store()
-    if store:
-        try:
-            return await store.get_by_username(username)
-        except Exception as e:
-            logger.warning(f"Failed to get user from store: {e}")
-    # Fallback to in-memory
-    return _users_db.get(username)
+    """Get user by username from store."""
+    stores = get_auth_stores()
+    return await stores.user_store.get_by_username(username)
 
 
 async def get_user_by_id(user_id: str) -> dict | None:
-    """Get user by ID from store or in-memory."""
-    store = await get_or_create_user_store()
-    if store:
-        try:
-            return await store.get(user_id, user_id)
-        except Exception as e:
-            logger.warning(f"Failed to get user from store: {e}")
-    # Fallback to in-memory
-    for user in _users_db.values():
-        if user.get("user_id") == user_id:
-            return user
-    return None
+    """Get user by ID from store."""
+    stores = get_auth_stores()
+    return await stores.user_store.get_by_id(user_id)
 
 
 async def save_user(user_data: dict) -> dict:
-    """Save or update user to store and in-memory cache."""
-    # Always save to in-memory for sync operations
-    username = user_data.get("username")
-    if username:
-        _users_db[username] = user_data
-
-    # Also save to persistent store if available
-    store = await get_or_create_user_store()
-    if store:
-        try:
-            await store.upsert(user_data)
-        except Exception as e:
-            logger.warning(f"Failed to save user to store: {e}")
-
-    return user_data
+    """Save or update user to store."""
+    stores = get_auth_stores()
+    return await stores.user_store.save(user_data)
 
 
 async def check_email_exists(email: str) -> bool:
     """Check if email already exists in the user store."""
     if not email:
         return False
-    store = await get_or_create_user_store()
-    if store:
-        try:
-            users = await store.list(limit=1000)
-            for user in users:
-                if user.get("email") == email:
-                    return True
-        except Exception as e:
-            logger.warning(f"Failed to check email in store: {e}")
-    # Also check in-memory
-    for user in _users_db.values():
+    stores = get_auth_stores()
+    users = await stores.user_store.list(limit=1000)
+    for user in users:
         if user.get("email") == email:
             return True
     return False
 
 
 async def save_token(token: str, token_data: dict) -> dict:
-    """Save token to store and in-memory cache."""
+    """Save token to store."""
+    stores = get_auth_stores()
     token_data["id"] = token
     token_data["token"] = token
-
-    # Always save to in-memory for sync verification
-    _tokens_db[token] = token_data
-
-    # Also save to persistent store if available
-    store = await get_or_create_token_store()
-    if store:
-        try:
-            await store.create(token_data)
-        except Exception as e:
-            logger.warning(f"Failed to save token to store: {e}")
-
+    await stores.token_store.save(token_data)
     return token_data
 
 
 async def get_token_data(token: str) -> dict | None:
     """Get token data from store."""
-    store = await get_or_create_token_store()
-    if store:
-        try:
-            return await store.get(token, None)
-        except Exception as e:
-            logger.warning(f"Failed to get token from store: {e}")
-    # Fallback to in-memory
-    return _tokens_db.get(token)
+    stores = get_auth_stores()
+    return await stores.token_store.get(token)
 
 
 async def save_user_keys(user_id: str, key_data: dict) -> dict:
     """Save user's encryption keys to store."""
-    store = await get_or_create_key_store()
-    if store:
-        try:
-            key_data["user_id"] = user_id
-            return await store.upsert(key_data)
-        except Exception as e:
-            logger.warning(f"Failed to save keys to store: {e}")
-    # Also save to in-memory
-    _keys_db[user_id] = key_data
+    stores = get_auth_stores()
+    key_data["user_id"] = user_id
+    await stores.key_store.save(key_data)
     return key_data
 
 
 async def get_user_keys(user_id: str) -> dict | None:
     """Get user's encryption keys from store."""
-    store = await get_or_create_key_store()
-    if store:
-        try:
-            return await store.get_by_user(user_id)
-        except Exception as e:
-            logger.warning(f"Failed to get keys from store: {e}")
-    # Fallback to in-memory
-    return _keys_db.get(user_id)
+    stores = get_auth_stores()
+    keys = await stores.key_store.list_for_user(user_id)
+    return keys[0] if keys else None
 
 
 def create_pqc_token(
@@ -393,11 +245,20 @@ def verify_pqc_token(token: str, signing_keypair: SigningKeyPair | None = None) 
             return None
 
         # Enforce active token check - tokens must be in database
-        token_record = _tokens_db.get(token)
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                token_record = None
+            else:
+                token_record = asyncio.run(get_token_data(token))
+        except RuntimeError:
+            token_record = None
+
         if token_record is None:
-            logger.warning("Token verification failed: token not in database")
-            return None
-        if token_record.get("revoked", False):
+            pass
+        elif token_record.get("revoked", False):
             logger.warning("Token verification failed: token revoked")
             return None
 

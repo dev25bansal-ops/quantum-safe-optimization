@@ -651,3 +651,11 @@ def reset_stores():
     _key_store = None
     _token_store = None
     _cosmos_initialized = False
+
+    # Also reset AuthStores singleton
+    try:
+        from api.auth_stores import AuthStores
+
+        AuthStores.reset()
+    except ImportError:
+        pass
