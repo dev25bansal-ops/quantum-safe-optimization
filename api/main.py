@@ -43,6 +43,7 @@ from api.billing.router import router as billing_router
 from api.tenant.router import router as tenant_router
 from api.circuits.router import router as circuits_router
 from api.marketplace.router import router as marketplace_router
+from api.federation.router import router as federation_router
 from api.security.middleware import (
     AuditLoggingMiddleware,
     RequestIDMiddleware,
@@ -361,6 +362,9 @@ api_v1_router.include_router(tenant_router, tags=["Multi-Tenant"])
 api_v1_router.include_router(circuits_router, prefix="/circuits", tags=["Circuit Visualization"])
 api_v1_router.include_router(
     marketplace_router, prefix="/marketplace", tags=["Algorithm Marketplace"]
+)
+api_v1_router.include_router(
+    federation_router, prefix="/federation", tags=["Federation & Multi-Region"]
 )
 
 # Mount versioned API
