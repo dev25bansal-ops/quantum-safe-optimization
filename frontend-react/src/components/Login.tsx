@@ -58,7 +58,7 @@ export function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="input"
-              placeholder="••••••••"
+              placeholder="changeme"
               required
             />
           </div>
@@ -83,7 +83,7 @@ export function Login() {
         </form>
 
         <p className="text-center text-gray-500 text-sm mt-4">
-          Default credentials: admin / admin123!
+          Default credentials: admin / changeme
         </p>
       </div>
     </div>
