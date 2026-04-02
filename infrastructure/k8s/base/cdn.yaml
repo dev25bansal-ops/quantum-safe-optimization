@@ -1,0 +1,140 @@
+# CDN Configuration for Frontend Static Assets
+# Uses Azure CDN with managed TLS for optimal performance
+
+# Azure CDN Profile
+apiVersion: infrastructure.azure.com/v1alpha1
+kind: CDNProfile
+metadata:
+  name: quantum-cdn
+  namespace: quantum-platform
+spec:
+  location: global
+  sku: Standard_Microsoft
+  tags:
+    environment: production
+
+---
+# CDN Endpoint for Static Assets
+apiVersion: infrastructure.azure.com/v1alpha1
+kind: CDNEndpoint
+metadata:
+  name: quantum-static-cdn
+  namespace: quantum-platform
+spec:
+  profileName: quantum-cdn
+  location: global
+  origins:
+    - name: quantum-api-origin
+      hostName: quantum-api.quantum-platform.svc.cluster.local
+      httpPort: 80
+      httpsPort: 443
+      originHostHeader: quantum-api.quantum-platform.svc.cluster.local
+  originPath: /static
+  contentTypesToCompress:
+    - text/html
+    - text/css
+    - application/javascript
+    - application/json
+    - image/svg+xml
+  isCompressionEnabled: true
+  isHttpAllowed: false
+  isHttpsAllowed: true
+  queryStringCachingBehavior: IgnoreQueryString
+  optimizationType: GeneralWebDelivery
+
+---
+# Frontend ConfigMap with CDN URLs
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-cdn-config
+  namespace: quantum-platform
+data:
+  CDN_ENABLED: "true"
+  CDN_URL: "https://quantum-cdn.azureedge.net"
+  STATIC_BASE_URL: "https://quantum-cdn.azureedge.net"
+  ASSET_VERSION: "1.0.0"
+  CACHE_MAX_AGE: "31536000"
+
+---
+# Ingress with CDN-aware headers
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: quantum-api-cdn
+  namespace: quantum-platform
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+    nginx.ingress.kubernetes.io/proxy-cache: "true"
+    nginx.ingress.kubernetes.io/proxy-cache-valid: "200 1h"
+    nginx.ingress.kubernetes.io/proxy-cache-valid: "404 1m"
+    nginx.ingress.kubernetes.io/add-header: "Cache-Control public, max-age=3600"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      # Static assets - 1 year cache
+      location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-CDN-Cache "HIT";
+      }
+      # HTML - no cache for SPA
+      location ~* \.html$ {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header X-CDN-Cache "BYPASS";
+      }
+spec:
+  tls:
+    - hosts:
+        - quantum-platform.example.com
+      secretName: quantum-tls
+  rules:
+    - host: quantum-platform.example.com
+      http:
+        paths:
+          - path: /css
+            pathType: Prefix
+            backend:
+              service:
+                name: quantum-api
+                port:
+                  number: 80
+          - path: /js
+            pathType: Prefix
+            backend:
+              service:
+                name: quantum-api
+                port:
+                  number: 80
+          - path: /static
+            pathType: Prefix
+            backend:
+              service:
+                name: quantum-api
+                port:
+                  number: 80
+
+---
+# Cache-Control ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cache-control-config
+  namespace: quantum-platform
+data:
+  # Cache durations by content type
+  cache-config.json: |
+    {
+      "static_assets": {
+        "css": "public, max-age=31536000, immutable",
+        "js": "public, max-age=31536000, immutable",
+        "images": "public, max-age=31536000, immutable",
+        "fonts": "public, max-age=31536000, immutable",
+        "html": "no-cache, no-store, must-revalidate",
+        "json": "public, max-age=60"
+      },
+      "api_responses": {
+        "jobs_list": "public, max-age=10",
+        "job_detail": "public, max-age=5",
+        "static_data": "public, max-age=3600"
+      }
+    }

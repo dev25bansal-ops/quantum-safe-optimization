@@ -1,0 +1,302 @@
+# Blue-Green Deployment Strategy
+# Provides zero-downtime deployments with instant rollback capability
+
+# Blue deployment (active)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quantum-api-blue
+  namespace: quantum-platform
+  labels:
+    app: quantum-api
+    slot: blue
+    component: api
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: quantum-api
+      slot: blue
+  template:
+    metadata:
+      labels:
+        app: quantum-api
+        slot: blue
+        component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      serviceAccountName: quantum-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values: [quantum-api]
+                    - key: slot
+                      operator: In
+                      values: [blue]
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: api
+          image: ghcr.io/quantum-platform/quantum-api:blue
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: quantum-api-config
+            - secretRef:
+                name: quantum-api-secrets
+          env:
+            - name: DEPLOYMENT_SLOT
+              value: "blue"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+
+---
+# Green deployment (standby)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quantum-api-green
+  namespace: quantum-platform
+  labels:
+    app: quantum-api
+    slot: green
+    component: api
+spec:
+  replicas: 0 # Scaled down until deployment
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: quantum-api
+      slot: green
+  template:
+    metadata:
+      labels:
+        app: quantum-api
+        slot: green
+        component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      serviceAccountName: quantum-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values: [quantum-api]
+                    - key: slot
+                      operator: In
+                      values: [green]
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: api
+          image: ghcr.io/quantum-platform/quantum-api:green
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: quantum-api-config
+            - secretRef:
+                name: quantum-api-secrets
+          env:
+            - name: DEPLOYMENT_SLOT
+              value: "green"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+
+---
+# Active service (points to current slot)
+apiVersion: v1
+kind: Service
+metadata:
+  name: quantum-api-active
+  namespace: quantum-platform
+  labels:
+    app: quantum-api
+spec:
+  type: ClusterIP
+  selector:
+    app: quantum-api
+    slot: blue # Changed during promotion
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+
+---
+# Preview service (points to standby slot)
+apiVersion: v1
+kind: Service
+metadata:
+  name: quantum-api-preview
+  namespace: quantum-platform
+  labels:
+    app: quantum-api
+spec:
+  type: ClusterIP
+  selector:
+    app: quantum-api
+    slot: green # Changed during promotion
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+
+---
+# Promotion script as ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blue-green-promote
+  namespace: quantum-platform
+data:
+  promote.sh: |
+    #!/bin/bash
+    set -e
+
+    CURRENT_SLOT=$(kubectl get service quantum-api-active -n quantum-platform -o jsonpath='{.spec.selector.slot}')
+
+    if [ "$CURRENT_SLOT" = "blue" ]; then
+      NEW_SLOT="green"
+      OLD_SLOT="blue"
+    else
+      NEW_SLOT="blue"
+      OLD_SLOT="green"
+    fi
+
+    echo "Promoting from $OLD_SLOT to $NEW_SLOT..."
+
+    # Scale up new deployment
+    kubectl scale deployment quantum-api-$NEW_SLOT --replicas=3 -n quantum-platform
+
+    # Wait for readiness
+    echo "Waiting for $NEW_SLOT pods to be ready..."
+    kubectl rollout status deployment/quantum-api-$NEW_SLOT -n quantum-platform --timeout=300s
+
+    # Switch service selector
+    kubectl patch service quantum-api-active -n quantum-platform -p "{\"spec\":{\"selector\":{\"slot\":\"$NEW_SLOT\"}}}"
+    kubectl patch service quantum-api-preview -n quantum-platform -p "{\"spec\":{\"selector\":{\"slot\":\"$OLD_SLOT\"}}}"
+
+    echo "Promotion complete! Active: $NEW_SLOT, Preview: $OLD_SLOT"
+
+    # Scale down old deployment after grace period
+    sleep 60
+    kubectl scale deployment quantum-api-$OLD_SLOT --replicas=0 -n quantum-platform
+
+    echo "Old deployment scaled down."
+
+---
+# Rollback script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blue-green-rollback
+  namespace: quantum-platform
+data:
+  rollback.sh: |
+    #!/bin/bash
+    set -e
+
+    CURRENT_SLOT=$(kubectl get service quantum-api-active -n quantum-platform -o jsonpath='{.spec.selector.slot}')
+
+    if [ "$CURRENT_SLOT" = "blue" ]; then
+      OLD_SLOT="green"
+    else
+      OLD_SLOT="blue"
+    fi
+
+    echo "Rolling back to $OLD_SLOT..."
+
+    # Scale up old deployment if needed
+    CURRENT_REPLICAS=$(kubectl get deployment quantum-api-$OLD_SLOT -n quantum-platform -o jsonpath='{.spec.replicas}')
+    if [ "$CURRENT_REPLICAS" = "0" ]; then
+      kubectl scale deployment quantum-api-$OLD_SLOT --replicas=3 -n quantum-platform
+      kubectl rollout status deployment/quantum-api-$OLD_SLOT -n quantum-platform --timeout=300s
+    fi
+
+    # Switch service selector
+    kubectl patch service quantum-api-active -n quantum-platform -p "{\"spec\":{\"selector\":{\"slot\":\"$OLD_SLOT\"}}}"
+
+    echo "Rollback complete! Active: $OLD_SLOT"

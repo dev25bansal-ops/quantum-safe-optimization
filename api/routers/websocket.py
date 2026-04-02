@@ -8,6 +8,7 @@ Features:
 - Automatic reconnection support
 - Heartbeat/keepalive mechanism
 - Metrics integration
+- Message compression for large payloads
 """
 
 import asyncio
@@ -27,6 +28,7 @@ router = APIRouter()
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 WS_HEARTBEAT_INTERVAL = int(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 WS_MAX_MESSAGE_SIZE = int(os.getenv("WS_MAX_MESSAGE_SIZE", "65536"))
+WS_COMPRESSION_THRESHOLD = int(os.getenv("WS_COMPRESSION_THRESHOLD", "1024"))
 
 
 async def verify_websocket_token(token: str) -> str:
