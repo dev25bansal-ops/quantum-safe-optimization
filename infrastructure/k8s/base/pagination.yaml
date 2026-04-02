@@ -1,0 +1,19 @@
+# Pagination configuration for API responses
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pagination-config
+  namespace: quantum-platform
+data:
+  DEFAULT_PAGE_SIZE: "20"
+  MAX_PAGE_SIZE: "100"
+  MAX_OFFSET: "10000"
+  ENABLE_CURSOR_PAGINATION: "true"
+  ENABLE_TOTAL_COUNT: "true"
+---
+# This defines standard pagination patterns for all API endpoints
+# Endpoints should implement:
+# - Offset-based pagination: ?page=1&page_size=20
+# - Cursor-based pagination: ?cursor=abc123&limit=20 (for large datasets)
+# - Total count header: X-Total-Count: 100
+# - Link header for navigation: Link: <next>; rel="next"
