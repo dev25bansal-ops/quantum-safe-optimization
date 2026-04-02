@@ -39,6 +39,10 @@ from api.routers.oauth import router as oauth_router
 from api.routers.scheduling import router as scheduling_router, start_scheduler, stop_scheduler
 from api.routers.websocket import close_websocket_manager, init_websocket_manager
 from api.routers.websocket import router as websocket_router
+from api.billing.router import router as billing_router
+from api.tenant.router import router as tenant_router
+from api.circuits.router import router as circuits_router
+from api.marketplace.router import router as marketplace_router
 from api.security.middleware import (
     AuditLoggingMiddleware,
     RequestIDMiddleware,
@@ -352,6 +356,12 @@ api_v1_router.include_router(oauth_router, tags=["OAuth / SSO"])
 api_v1_router.include_router(scheduling_router, tags=["Job Scheduling"])
 api_v1_router.include_router(caching_router, tags=["Caching"])
 api_v1_router.include_router(batch_router, tags=["Batch Jobs"])
+api_v1_router.include_router(billing_router, prefix="/billing", tags=["Billing & Usage"])
+api_v1_router.include_router(tenant_router, tags=["Multi-Tenant"])
+api_v1_router.include_router(circuits_router, prefix="/circuits", tags=["Circuit Visualization"])
+api_v1_router.include_router(
+    marketplace_router, prefix="/marketplace", tags=["Algorithm Marketplace"]
+)
 
 # Mount versioned API
 app.include_router(api_v1_router)
