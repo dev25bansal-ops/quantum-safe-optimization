@@ -1,16 +1,23 @@
-"""Security router for encryption, rotation, and audit APIs."""
+"""
+Security router for encryption, rotation, audit, and integrity APIs.
+"""
 
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from .encryption import (
     EncryptionManager,
     encrypt_data,
     decrypt_data,
     get_encryption_manager,
+)
+from .quantum_encryption import (
+    get_qs_encryption_manager,
+    encrypt_with_mlkem,
+    decrypt_with_mlkem,
 )
 from .secrets_rotation import (
     SecretType,
@@ -29,6 +36,15 @@ from .audit_retention import (
     get_audit_logs,
     cleanup_old_logs,
 )
+from .audit_integrity import (
+    get_audit_integrity,
+    sign_audit_entry,
+    verify_audit_chain,
+)
+from .request_signing import (
+    get_request_signer,
+    sign_api_request,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,17 +52,304 @@ router = APIRouter()
 
 
 def get_user_id() -> str:
-    """Get current user ID (stub for auth integration)."""
     return "user_default"
 
 
 def get_tenant_id() -> str:
-    """Get current tenant ID (stub for auth integration)."""
     return "tenant_default"
 
 
 # ============================================================================
-# Encryption Endpoints
+# Quantum-Safe Encryption Endpoints
+# ============================================================================
+
+
+@router.get("/quantum-encryption/status")
+async def get_qs_encryption_status():
+    """Get quantum-safe encryption status."""
+    manager = get_qs_encryption_manager()
+    return manager.export_public_params()
+
+
+@router.post("/quantum-encryption/encrypt")
+async def quantum_encrypt_endpoint(
+    data: dict[str, Any],
+    user_id: str = Depends(get_user_id),
+):
+    """Encrypt data with ML-KEM wrapped AES."""
+    ciphertext = encrypt_with_mlkem(data)
+
+    log_audit_event(
+        event_type=AuditEventType.DATA_ACCESS,
+        severity=AuditSeverity.INFO,
+        user_id=user_id,
+        action="data_encrypted_mlkem",
+    )
+
+    return {"ciphertext": ciphertext, "algorithm": "ML-KEM-768 + AES-256-GCM"}
+
+
+@router.post("/quantum-encryption/decrypt")
+async def quantum_decrypt_endpoint(
+    ciphertext: str,
+    user_id: str = Depends(get_user_id),
+):
+    """Decrypt data encrypted with ML-KEM wrapped AES."""
+    try:
+        plaintext = decrypt_with_mlkem(ciphertext)
+
+        log_audit_event(
+            event_type=AuditEventType.DATA_ACCESS,
+            severity=AuditSeverity.INFO,
+            user_id=user_id,
+            action="data_decrypted_mlkem",
+        )
+
+        return {"plaintext": plaintext}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Decryption failed: {e}")
+
+
+@router.post("/quantum-encryption/rotate")
+async def rotate_qs_key(user_id: str = Depends(get_user_id)):
+    """Rotate quantum-safe encryption key."""
+    manager = get_qs_encryption_manager()
+    new_key_id = manager.rotate_key()
+
+    log_audit_event(
+        event_type=AuditEventType.SECRET_ROTATE,
+        severity=AuditSeverity.WARNING,
+        user_id=user_id,
+        action="mlkem_key_rotated",
+        details={"new_key_id": new_key_id},
+    )
+
+    return {"status": "rotated", "new_key_id": new_key_id}
+
+
+# ============================================================================
+# Audit Integrity Endpoints
+# ============================================================================
+
+
+@router.get("/audit-integrity/status")
+async def get_audit_integrity_status():
+    """Get audit log integrity status."""
+    manager = get_audit_integrity()
+    return manager.get_integrity_status()
+
+
+@router.post("/audit-integrity/verify")
+async def verify_audit_integrity(
+    start_index: int = Query(default=0, ge=0),
+    user_id: str = Depends(get_user_id),
+):
+    """Verify audit log chain integrity."""
+    result = verify_audit_chain()
+
+    log_audit_event(
+        event_type=AuditEventType.ADMIN_ACTION,
+        severity=AuditSeverity.INFO,
+        user_id=user_id,
+        action="audit_chain_verified",
+        details=result,
+    )
+
+    return result
+
+
+@router.get("/audit-integrity/public-key")
+async def get_audit_public_key():
+    """Get public key for audit log verification."""
+    manager = get_audit_integrity()
+    return {
+        "public_key": manager.get_public_key(),
+        "algorithm": "ML-DSA-65",
+    }
+
+
+@router.post("/audit-integrity/sign")
+async def sign_audit_event(
+    event_data: dict[str, Any],
+    user_id: str = Depends(get_user_id),
+):
+    """Sign an audit event."""
+    entry = sign_audit_entry(event_data)
+    return entry.to_dict()
+
+
+# ============================================================================
+# Request Signing Endpoints
+# ============================================================================
+
+
+@router.get("/request-signing/status")
+async def get_request_signing_status():
+    """Get request signing manager status."""
+    signer = get_request_signer()
+    return signer.get_status()
+
+
+@router.get("/request-signing/public-key")
+async def get_signing_public_key(key_id: str | None = None):
+    """Get public key for request verification."""
+    signer = get_request_signer()
+    return {
+        "public_key": signer.get_public_key(key_id),
+        "algorithm": "ML-DSA-65",
+    }
+
+
+@router.post("/request-signing/sign")
+async def sign_outgoing_request(
+    method: str,
+    path: str,
+    body: str | None = None,
+    user_id: str = Depends(get_user_id),
+):
+    """Generate signature headers for outgoing request."""
+    headers = sign_api_request(
+        method=method,
+        path=path,
+        body=body,
+    )
+
+    log_audit_event(
+        event_type=AuditEventType.API_ACCESS,
+        severity=AuditSeverity.INFO,
+        user_id=user_id,
+        action="request_signed",
+        details={"method": method, "path": path},
+    )
+
+    return {"headers": headers}
+
+
+@router.post("/request-signing/rotate")
+async def rotate_signing_key(user_id: str = Depends(get_user_id)):
+    """Rotate request signing key."""
+    signer = get_request_signer()
+    new_key_id = signer.rotate_key()
+
+    log_audit_event(
+        event_type=AuditEventType.SECRET_ROTATE,
+        severity=AuditSeverity.WARNING,
+        user_id=user_id,
+        action="signing_key_rotated",
+        details={"new_key_id": new_key_id},
+    )
+
+    return {"status": "rotated", "new_key_id": new_key_id}
+
+
+# ============================================================================
+# PQC Key Rotation Endpoints
+# ============================================================================
+
+
+@router.get("/pqc-keys/status")
+async def get_pqc_key_status():
+    """Get PQC key rotation status."""
+    manager = get_rotation_manager()
+
+    pqc_types = [
+        SecretType.PQC_SIGNING_KEY,
+        SecretType.PQC_ENCRYPTION_KEY,
+    ]
+
+    keys_status = []
+    for st in pqc_types:
+        secret = manager.get_current_secret(st)
+        if secret:
+            keys_status.append(
+                {
+                    "type": st.value,
+                    "secret_id": secret.metadata.secret_id,
+                    "version": secret.metadata.version,
+                    "created_at": secret.metadata.created_at.isoformat(),
+                    "expires_at": secret.metadata.expires_at.isoformat()
+                    if secret.metadata.expires_at
+                    else None,
+                    "is_current": secret.metadata.is_current,
+                }
+            )
+
+    return {
+        "keys": keys_status,
+        "rotation_interval_days": 90,
+        "algorithm_signing": "ML-DSA-65",
+        "algorithm_encryption": "ML-KEM-768",
+    }
+
+
+@router.post("/pqc-keys/rotate/{key_type}")
+async def rotate_pqc_key(
+    key_type: str,
+    user_id: str = Depends(get_user_id),
+):
+    """Rotate PQC key (signing or encryption)."""
+    type_map = {
+        "signing": SecretType.PQC_SIGNING_KEY,
+        "encryption": SecretType.PQC_ENCRYPTION_KEY,
+    }
+
+    if key_type not in type_map:
+        raise HTTPException(status_code=400, detail=f"Invalid key type: {key_type}")
+
+    secret_type = type_map[key_type]
+    new_value = rotate_secret(secret_type)
+
+    log_audit_event(
+        event_type=AuditEventType.SECRET_ROTATE,
+        severity=AuditSeverity.WARNING,
+        user_id=user_id,
+        action=f"pqc_key_rotated:{key_type}",
+        details={"key_type": key_type},
+    )
+
+    return {
+        "status": "rotated",
+        "key_type": key_type,
+        "new_key_preview": new_value[:16] + "..." if new_value else None,
+    }
+
+
+# ============================================================================
+# Security Headers Status
+# ============================================================================
+
+
+@router.get("/headers/status")
+async def get_security_headers_status(request: Request):
+    """Get current security headers configuration."""
+    return {
+        "headers_applied": {
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+            "X-XSS-Protection": "1; mode=block",
+            "Referrer-Policy": "strict-origin-when-cross-origin",
+            "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+            "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+        },
+        "hsts": {
+            "enabled": request.url.scheme == "https",
+            "max_age": 31536000,
+            "include_subdomains": True,
+            "preload": True,
+        },
+        "csp": {
+            "default_src": "'none'",
+            "frame_ancestors": "'none'",
+            "script_src": "'self'",
+            "style_src": "'self' 'unsafe-inline'",
+            "img_src": "'self' data:",
+            "connect_src": "'self'",
+        },
+    }
+
+
+# ============================================================================
+# Legacy Encryption Endpoints
 # ============================================================================
 
 
@@ -76,76 +379,10 @@ async def rotate_encryption_key(
     return {"status": "rotated", "new_key_id": new_key_id}
 
 
-@router.post("/encryption/encrypt")
-async def encrypt_endpoint(
-    data: dict[str, Any],
-    user_id: str = Depends(get_user_id),
-):
-    """Encrypt data."""
-    ciphertext = encrypt_data(data)
-
-    log_audit_event(
-        event_type=AuditEventType.DATA_ACCESS,
-        severity=AuditSeverity.INFO,
-        user_id=user_id,
-        action="data_encrypted",
-    )
-
-    return {"ciphertext": ciphertext}
-
-
-@router.post("/encryption/decrypt")
-async def decrypt_endpoint(
-    ciphertext: str,
-    user_id: str = Depends(get_user_id),
-):
-    """Decrypt data."""
-    try:
-        plaintext = decrypt_data(ciphertext)
-
-        log_audit_event(
-            event_type=AuditEventType.DATA_ACCESS,
-            severity=AuditSeverity.INFO,
-            user_id=user_id,
-            action="data_decrypted",
-        )
-
-        return {"plaintext": plaintext}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Decryption failed: {e}")
-
-
-# ============================================================================
-# Secret Rotation Endpoints
-# ============================================================================
-
-
 @router.get("/rotation/status")
 async def get_secret_rotation_status():
     """Get secret rotation status."""
     return get_rotation_status()
-
-
-@router.post("/rotation/rotate/{secret_type}")
-async def rotate_secret_endpoint(
-    secret_type: SecretType,
-    user_id: str = Depends(get_user_id),
-):
-    """Rotate a secret."""
-    new_value = rotate_secret(secret_type)
-
-    log_audit_event(
-        event_type=AuditEventType.SECRET_ROTATE,
-        severity=AuditSeverity.WARNING,
-        user_id=user_id,
-        action=f"secret_rotated:{secret_type.value}",
-    )
-
-    return {
-        "status": "rotated",
-        "secret_type": secret_type.value,
-        "new_value_preview": new_value[:8] + "..." if new_value else None,
-    }
 
 
 @router.get("/rotation/expiring")
@@ -169,23 +406,6 @@ async def get_expiring_secrets(
     }
 
 
-@router.get("/rotation/policies")
-async def get_rotation_policies():
-    """Get all rotation policies."""
-    manager = get_rotation_manager()
-    return {
-        "policies": [
-            {
-                "type": st.value,
-                "interval_days": p.rotation_interval_days,
-                "grace_period_hours": p.grace_period_hours,
-                "auto_rotate": p.auto_rotate,
-            }
-            for st, p in manager._policies.items()
-        ]
-    }
-
-
 # ============================================================================
 # Audit Log Endpoints
 # ============================================================================
@@ -197,8 +417,6 @@ async def list_audit_logs(
     end_time: datetime | None = None,
     event_type: AuditEventType | None = None,
     user_id: str | None = None,
-    tenant_id: str | None = None,
-    severity: AuditSeverity | None = None,
     limit: int = Query(default=100, le=1000),
     offset: int = Query(default=0, ge=0),
     current_user_id: str = Depends(get_user_id),
@@ -209,8 +427,6 @@ async def list_audit_logs(
         end_time=end_time,
         event_type=event_type,
         user_id=user_id,
-        tenant_id=tenant_id,
-        severity=severity,
         limit=limit,
         offset=offset,
     )
@@ -221,34 +437,20 @@ async def list_audit_logs(
     }
 
 
-@router.get("/audit/events/{event_id}")
-async def get_audit_event(
-    event_id: str,
-    user_id: str = Depends(get_user_id),
-):
-    """Get a specific audit event."""
-    manager = get_audit_manager()
-    events = [e for e in manager._events if e.event_id == event_id]
-
-    if not events:
-        raise HTTPException(status_code=404, detail="Event not found")
-
-    return events[0].to_dict()
-
-
 @router.post("/audit/cleanup")
 async def trigger_audit_cleanup(
     user_id: str = Depends(get_user_id),
 ):
     """Trigger audit log cleanup."""
+    stats = await cleanup_old_logs()
+
     log_audit_event(
         event_type=AuditEventType.ADMIN_ACTION,
         severity=AuditSeverity.WARNING,
         user_id=user_id,
         action="audit_cleanup_triggered",
+        details=stats,
     )
-
-    stats = await cleanup_old_logs()
 
     return {"status": "completed", "stats": stats}
 
@@ -258,42 +460,6 @@ async def get_audit_storage_stats():
     """Get audit storage statistics."""
     manager = get_audit_manager()
     return manager.get_storage_stats()
-
-
-@router.get("/audit/retention-policy")
-async def get_retention_policy():
-    """Get current retention policy."""
-    manager = get_audit_manager()
-    return {
-        "policy": {
-            "default_retention_days": manager._policy.default_retention_days,
-            "severity_retention": manager._policy.severity_retention,
-            "event_type_retention": manager._policy.event_type_retention,
-            "compress_after_days": manager._policy.compress_after_days,
-            "archive_after_days": manager._policy.archive_after_days,
-            "delete_archived_after_days": manager._policy.delete_archived_after_days,
-        }
-    }
-
-
-@router.put("/audit/retention-policy")
-async def update_retention_policy(
-    default_retention_days: int = Query(default=90, ge=1, le=3650),
-    user_id: str = Depends(get_user_id),
-):
-    """Update retention policy."""
-    manager = get_audit_manager()
-    manager._policy.default_retention_days = default_retention_days
-
-    log_audit_event(
-        event_type=AuditEventType.CONFIG_CHANGE,
-        severity=AuditSeverity.WARNING,
-        user_id=user_id,
-        action="retention_policy_updated",
-        details={"default_retention_days": default_retention_days},
-    )
-
-    return {"status": "updated", "default_retention_days": default_retention_days}
 
 
 @router.get("/audit/summary")
@@ -312,16 +478,10 @@ async def get_audit_summary(
 
     by_type: dict[str, int] = {}
     by_severity: dict[str, int] = {}
-    by_user: dict[str, int] = {}
-    failed_count = 0
 
     for event in events:
         by_type[event.event_type.value] = by_type.get(event.event_type.value, 0) + 1
         by_severity[event.severity.value] = by_severity.get(event.severity.value, 0) + 1
-        if event.user_id:
-            by_user[event.user_id] = by_user.get(event.user_id, 0) + 1
-        if not event.success:
-            failed_count += 1
 
     return {
         "period": {
@@ -329,68 +489,6 @@ async def get_audit_summary(
             "end": end_time.isoformat(),
         },
         "total_events": len(events),
-        "failed_events": failed_count,
         "by_type": by_type,
         "by_severity": by_severity,
-        "top_users": sorted(by_user.items(), key=lambda x: x[1], reverse=True)[:10],
-    }
-
-
-# ============================================================================
-# WebSocket Auth Check
-# ============================================================================
-
-
-@router.get("/websocket/auth-check")
-async def websocket_auth_check(
-    token: str | None = None,
-    user_id: str | None = None,
-):
-    """Check WebSocket authentication requirements."""
-    if not token and not user_id:
-        return {
-            "authenticated": False,
-            "error": "Either token or user_id required",
-            "requirements": {
-                "token": "JWT token for authentication (preferred)",
-                "user_id": "User ID for legacy/demo mode (not recommended for production)",
-            },
-        }
-
-    if token:
-        try:
-            from api.routers.websocket import verify_websocket_token
-
-            verified_user_id = await verify_websocket_token(token)
-
-            log_audit_event(
-                event_type=AuditEventType.WEBSOCKET_CONNECT,
-                severity=AuditSeverity.INFO,
-                user_id=verified_user_id,
-                action="websocket_auth_validated",
-            )
-
-            return {
-                "authenticated": True,
-                "user_id": verified_user_id,
-                "method": "jwt_token",
-            }
-        except Exception as e:
-            log_audit_event(
-                event_type=AuditEventType.AUTH_FAILED,
-                severity=AuditSeverity.WARNING,
-                action="websocket_auth_failed",
-                error_message=str(e),
-            )
-
-            return {
-                "authenticated": False,
-                "error": str(e),
-            }
-
-    return {
-        "authenticated": True,
-        "user_id": user_id,
-        "method": "user_id",
-        "warning": "Using user_id auth is not recommended for production",
     }
