@@ -44,6 +44,7 @@ from api.tenant.router import router as tenant_router
 from api.circuits.router import router as circuits_router
 from api.marketplace.router import router as marketplace_router
 from api.federation.router import router as federation_router
+from api.security.enhanced.router import router as security_router
 from api.security.middleware import (
     AuditLoggingMiddleware,
     RequestIDMiddleware,
@@ -366,6 +367,7 @@ api_v1_router.include_router(
 api_v1_router.include_router(
     federation_router, prefix="/federation", tags=["Federation & Multi-Region"]
 )
+api_v1_router.include_router(security_router, prefix="/security", tags=["Security & Audit"])
 
 # Mount versioned API
 app.include_router(api_v1_router)
