@@ -107,7 +107,7 @@ def install_wheel(crypto_dir: Path) -> bool:
 
     print(f"\n📦 Installing {wheels[0].name}...")
     return run_command(
-        [sys.executable, "-m", "pip", "install", "--force-reinstall", str(wheels[0])]
+        [sys.executable, "-m", "pip", "install", "--no-deps", "--force-reinstall", str(wheels[0])]
     )
 
 
