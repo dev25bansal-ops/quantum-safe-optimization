@@ -54,7 +54,7 @@ Synchronous Usage:
 
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __author__ = "QSOP Team"
 __all__ = [
     "QSOPClient",
@@ -66,6 +66,12 @@ __all__ = [
     "JobStatus",
     "AlgorithmType",
     "BackendType",
+    "Tenant",
+    "BillingUsage",
+    "Invoice",
+    "Algorithm",
+    "QKDSimulationResult",
+    "BenchmarkResult",
 ]
 
 import asyncio
@@ -211,6 +217,158 @@ class User:
             email=data.get("email"),
             roles=data.get("roles", []),
             created_at=data.get("created_at", ""),
+        )
+
+
+@dataclass
+class Tenant:
+    """Represents a tenant in multi-tenant system."""
+
+    tenant_id: str
+    name: str
+    tier: str
+    is_active: bool
+    created_at: str
+    quotas: dict[str, int] = field(default_factory=dict)
+    usage: dict[str, int] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Tenant":
+        return cls(
+            tenant_id=data["tenant_id"],
+            name=data["name"],
+            tier=data.get("tier", "free"),
+            is_active=data.get("is_active", True),
+            created_at=data.get("created_at", ""),
+            quotas=data.get("quotas", {}),
+            usage=data.get("usage", {}),
+        )
+
+
+@dataclass
+class BillingUsage:
+    """Represents billing usage event."""
+
+    event_id: str
+    resource_type: str
+    quantity: int
+    unit_price: float
+    total_price: float
+    timestamp: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BillingUsage":
+        return cls(
+            event_id=data["event_id"],
+            resource_type=data["resource_type"],
+            quantity=data["quantity"],
+            unit_price=data.get("unit_price", 0.0),
+            total_price=data.get("total_price", 0.0),
+            timestamp=data.get("timestamp", ""),
+        )
+
+
+@dataclass
+class Invoice:
+    """Represents a billing invoice."""
+
+    invoice_id: str
+    status: str
+    subtotal: float
+    tax: float
+    total: float
+    created_at: str
+    paid_at: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Invoice":
+        return cls(
+            invoice_id=data["invoice_id"],
+            status=data.get("status", "pending"),
+            subtotal=data.get("subtotal", 0.0),
+            tax=data.get("tax", 0.0),
+            total=data.get("total", 0.0),
+            created_at=data.get("created_at", ""),
+            paid_at=data.get("paid_at"),
+        )
+
+
+@dataclass
+class Algorithm:
+    """Represents an algorithm in the marketplace."""
+
+    algorithm_id: str
+    name: str
+    description: str
+    category: str
+    author_name: str
+    version: str
+    pricing_model: str
+    price: float
+    downloads: int
+    rating_avg: float
+    tags: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Algorithm":
+        return cls(
+            algorithm_id=data["algorithm_id"],
+            name=data["name"],
+            description=data.get("description", ""),
+            category=data.get("category", ""),
+            author_name=data.get("author_name", ""),
+            version=data.get("version", "1.0.0"),
+            pricing_model=data.get("pricing_model", "free"),
+            price=data.get("price", 0.0),
+            downloads=data.get("downloads", 0),
+            rating_avg=data.get("rating_avg", 0.0),
+            tags=data.get("tags", []),
+        )
+
+
+@dataclass
+class QKDSimulationResult:
+    """Represents a QKD simulation result."""
+
+    simulation_id: str
+    protocol: str
+    sifted_key_length: int
+    error_rate: float
+    secure_key_length: int
+    eavesdropper_detected: bool
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "QKDSimulationResult":
+        return cls(
+            simulation_id=data["simulation_id"],
+            protocol=data.get("protocol", "bb84"),
+            sifted_key_length=data.get("sifted_key_length", 0),
+            error_rate=data.get("error_rate", 0.0),
+            secure_key_length=data.get("secure_key_length", 0),
+            eavesdropper_detected=data.get("eavesdropper_detected", False),
+        )
+
+
+@dataclass
+class BenchmarkResult:
+    """Represents a benchmark result."""
+
+    benchmark_id: str
+    name: str
+    category: str
+    status: str
+    duration_ms: float
+    metrics: dict[str, float] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BenchmarkResult":
+        return cls(
+            benchmark_id=data["benchmark_id"],
+            name=data.get("name", ""),
+            category=data.get("category", ""),
+            status=data.get("status", ""),
+            duration_ms=data.get("duration_ms", 0.0),
+            metrics=data.get("metrics", {}),
         )
 
 
@@ -590,6 +748,215 @@ class QSOPClient:
         """Check crypto provider status."""
         return await self._request("GET", "/health/crypto")
 
+    # Billing Methods
+
+    async def record_usage(
+        self,
+        resource_type: str,
+        quantity: int,
+        metadata: dict[str, Any] | None = None,
+    ) -> BillingUsage:
+        """Record a usage event for billing."""
+        payload: dict[str, Any] = {"resource_type": resource_type, "quantity": quantity}
+        if metadata:
+            payload["metadata"] = metadata
+        response = await self._request("POST", "/api/v1/billing/usage", json=payload)
+        return BillingUsage.from_dict(response)
+
+    async def get_usage_summary(self, period: str = "month") -> dict[str, Any]:
+        """Get usage summary for billing period."""
+        return await self._request(
+            "GET", "/api/v1/billing/usage/summary", params={"period": period}
+        )
+
+    async def get_pricing(self) -> list[dict[str, Any]]:
+        """Get current pricing for all resources."""
+        return await self._request("GET", "/api/v1/billing/pricing")
+
+    async def estimate_cost(
+        self,
+        shots: int = 0,
+        jobs: int = 0,
+        compute_seconds: int = 0,
+    ) -> dict[str, Any]:
+        """Estimate cost for a job configuration."""
+        return await self._request(
+            "POST",
+            "/api/v1/billing/estimate",
+            json={"shots": shots, "jobs": jobs, "compute_seconds": compute_seconds},
+        )
+
+    async def generate_invoice(self, period: str = "month") -> Invoice:
+        """Generate an invoice for the billing period."""
+        response = await self._request(
+            "POST", "/api/v1/billing/invoices/generate", params={"period": period}
+        )
+        return Invoice.from_dict(response)
+
+    async def get_invoices(self, limit: int = 10) -> list[Invoice]:
+        """List invoices."""
+        response = await self._request("GET", "/api/v1/billing/invoices", params={"limit": limit})
+        return [Invoice.from_dict(inv) for inv in response]
+
+    # Tenant Methods
+
+    async def create_tenant(
+        self,
+        name: str,
+        tier: str = "free",
+        admin_email: str = "",
+    ) -> Tenant:
+        """Create a new tenant."""
+        response = await self._request(
+            "POST",
+            "/api/v1/tenants",
+            json={"name": name, "tier": tier, "admin_email": admin_email},
+        )
+        return Tenant.from_dict(response)
+
+    async def get_tenant(self, tenant_id: str) -> Tenant:
+        """Get tenant details."""
+        response = await self._request("GET", f"/api/v1/tenants/{tenant_id}")
+        return Tenant.from_dict(response)
+
+    async def list_tenants(self, limit: int = 20) -> list[Tenant]:
+        """List tenants for current user."""
+        response = await self._request("GET", "/api/v1/tenants", params={"limit": limit})
+        return [Tenant.from_dict(t) for t in response]
+
+    async def get_tenant_quotas(self, tenant_id: str) -> list[dict[str, Any]]:
+        """Get tenant quota usage."""
+        return await self._request("GET", f"/api/v1/tenants/{tenant_id}/quota")
+
+    async def get_tenant_usage(self, tenant_id: str, period: str = "month") -> dict[str, Any]:
+        """Get tenant usage statistics."""
+        return await self._request(
+            "GET", f"/api/v1/tenants/{tenant_id}/usage", params={"period": period}
+        )
+
+    # Marketplace Methods
+
+    async def search_algorithms(
+        self,
+        query: str | None = None,
+        category: str | None = None,
+        min_rating: float | None = None,
+        limit: int = 20,
+    ) -> list[Algorithm]:
+        """Search algorithms in marketplace."""
+        params: dict[str, Any] = {"limit": limit}
+        if query:
+            params["q"] = query
+        if category:
+            params["category"] = category
+        if min_rating:
+            params["min_rating"] = min_rating
+        response = await self._request("GET", "/api/v1/marketplace/search", params=params)
+        return [Algorithm.from_dict(a) for a in response]
+
+    async def get_algorithm(self, algorithm_id: str) -> Algorithm:
+        """Get algorithm details."""
+        response = await self._request("GET", f"/api/v1/marketplace/{algorithm_id}")
+        return Algorithm.from_dict(response)
+
+    async def purchase_algorithm(self, algorithm_id: str) -> dict[str, Any]:
+        """Purchase an algorithm."""
+        return await self._request("POST", f"/api/v1/marketplace/{algorithm_id}/purchase")
+
+    async def get_user_purchases(self) -> list[dict[str, Any]]:
+        """Get user's purchased algorithms."""
+        return await self._request("GET", "/api/v1/marketplace/user/purchases")
+
+    # Federation Methods
+
+    async def get_federation_status(self) -> dict[str, Any]:
+        """Get overall federation status."""
+        return await self._request("GET", "/api/v1/federation/status")
+
+    async def list_regions(self, provider: str | None = None) -> list[dict[str, Any]]:
+        """List all federation regions."""
+        params = {}
+        if provider:
+            params["provider"] = provider
+        return await self._request("GET", "/api/v1/federation/regions", params=params)
+
+    async def route_job(
+        self,
+        shots: int,
+        preferred_provider: str | None = None,
+        max_cost: float | None = None,
+    ) -> dict[str, Any]:
+        """Get routing decision for a job."""
+        payload: dict[str, Any] = {
+            "shots": shots,
+            "job_type": "optimization",
+            "algorithm": "QAOA",
+            "num_qubits": 4,
+        }
+        if preferred_provider:
+            payload["preferred_provider"] = preferred_provider
+        if max_cost:
+            payload["max_cost"] = max_cost
+        return await self._request("POST", "/api/v1/federation/route", json=payload)
+
+    # Circuit Visualization Methods
+
+    async def generate_circuit(
+        self,
+        num_qubits: int = 4,
+        depth: int = 3,
+    ) -> dict[str, Any]:
+        """Generate a sample quantum circuit."""
+        return await self._request(
+            "POST",
+            "/api/v1/circuits/circuits/generate",
+            params={"num_qubits": num_qubits, "depth": depth},
+        )
+
+    async def execute_circuit(self, circuit_id: str, shots: int = 1024) -> dict[str, Any]:
+        """Execute a circuit."""
+        return await self._request(
+            "POST",
+            f"/api/v1/circuits/circuits/{circuit_id}/execute",
+            params={"shots": shots},
+        )
+
+    async def get_circuit_execution(self, execution_id: str) -> dict[str, Any]:
+        """Get execution status."""
+        return await self._request("GET", f"/api/v1/circuits/executions/{execution_id}")
+
+    # Security Methods
+
+    async def get_quantum_encryption_status(self) -> dict[str, Any]:
+        """Get quantum-safe encryption status."""
+        return await self._request("GET", "/api/v1/security/quantum-encryption/status")
+
+    async def encrypt_data(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Encrypt data with ML-KEM wrapped AES."""
+        return await self._request("POST", "/api/v1/security/quantum-encryption/encrypt", json=data)
+
+    async def decrypt_data(self, ciphertext: str) -> dict[str, Any]:
+        """Decrypt data encrypted with ML-KEM wrapped AES."""
+        return await self._request(
+            "POST",
+            "/api/v1/security/quantum-encryption/decrypt",
+            params={"ciphertext": ciphertext},
+        )
+
+    async def get_audit_logs(self, limit: int = 100) -> dict[str, Any]:
+        """Get audit logs."""
+        return await self._request("GET", "/api/v1/security/audit/logs", params={"limit": limit})
+
+    # Performance Methods
+
+    async def get_performance_metrics(self) -> dict[str, Any]:
+        """Get performance metrics."""
+        return await self._request("GET", "/api/v1/performance/metrics")
+
+    async def get_query_stats(self) -> dict[str, Any]:
+        """Get query performance statistics."""
+        return await self._request("GET", "/api/v1/performance/queries")
+
 
 class SyncQSOPClient:
     """
@@ -670,3 +1037,110 @@ class SyncQSOPClient:
 
     def crypto_status(self) -> dict[str, Any]:
         return self._run(self._async_client.crypto_status())
+
+    # Billing Methods
+
+    def record_usage(
+        self, resource_type: str, quantity: int, metadata: dict[str, Any] | None = None
+    ) -> BillingUsage:
+        return self._run(self._async_client.record_usage(resource_type, quantity, metadata))
+
+    def get_usage_summary(self, period: str = "month") -> dict[str, Any]:
+        return self._run(self._async_client.get_usage_summary(period))
+
+    def get_pricing(self) -> list[dict[str, Any]]:
+        return self._run(self._async_client.get_pricing())
+
+    def estimate_cost(
+        self, shots: int = 0, jobs: int = 0, compute_seconds: int = 0
+    ) -> dict[str, Any]:
+        return self._run(self._async_client.estimate_cost(shots, jobs, compute_seconds))
+
+    def generate_invoice(self, period: str = "month") -> Invoice:
+        return self._run(self._async_client.generate_invoice(period))
+
+    def get_invoices(self, limit: int = 10) -> list[Invoice]:
+        return self._run(self._async_client.get_invoices(limit))
+
+    # Tenant Methods
+
+    def create_tenant(self, name: str, tier: str = "free", admin_email: str = "") -> Tenant:
+        return self._run(self._async_client.create_tenant(name, tier, admin_email))
+
+    def get_tenant(self, tenant_id: str) -> Tenant:
+        return self._run(self._async_client.get_tenant(tenant_id))
+
+    def list_tenants(self, limit: int = 20) -> list[Tenant]:
+        return self._run(self._async_client.list_tenants(limit))
+
+    def get_tenant_quotas(self, tenant_id: str) -> list[dict[str, Any]]:
+        return self._run(self._async_client.get_tenant_quotas(tenant_id))
+
+    def get_tenant_usage(self, tenant_id: str, period: str = "month") -> dict[str, Any]:
+        return self._run(self._async_client.get_tenant_usage(tenant_id, period))
+
+    # Marketplace Methods
+
+    def search_algorithms(
+        self,
+        query: str | None = None,
+        category: str | None = None,
+        min_rating: float | None = None,
+        limit: int = 20,
+    ) -> list[Algorithm]:
+        return self._run(self._async_client.search_algorithms(query, category, min_rating, limit))
+
+    def get_algorithm(self, algorithm_id: str) -> Algorithm:
+        return self._run(self._async_client.get_algorithm(algorithm_id))
+
+    def purchase_algorithm(self, algorithm_id: str) -> dict[str, Any]:
+        return self._run(self._async_client.purchase_algorithm(algorithm_id))
+
+    def get_user_purchases(self) -> list[dict[str, Any]]:
+        return self._run(self._async_client.get_user_purchases())
+
+    # Federation Methods
+
+    def get_federation_status(self) -> dict[str, Any]:
+        return self._run(self._async_client.get_federation_status())
+
+    def list_regions(self, provider: str | None = None) -> list[dict[str, Any]]:
+        return self._run(self._async_client.list_regions(provider))
+
+    def route_job(
+        self, shots: int, preferred_provider: str | None = None, max_cost: float | None = None
+    ) -> dict[str, Any]:
+        return self._run(self._async_client.route_job(shots, preferred_provider, max_cost))
+
+    # Circuit Methods
+
+    def generate_circuit(self, num_qubits: int = 4, depth: int = 3) -> dict[str, Any]:
+        return self._run(self._async_client.generate_circuit(num_qubits, depth))
+
+    def execute_circuit(self, circuit_id: str, shots: int = 1024) -> dict[str, Any]:
+        return self._run(self._async_client.execute_circuit(circuit_id, shots))
+
+    def get_circuit_execution(self, execution_id: str) -> dict[str, Any]:
+        return self._run(self._async_client.get_circuit_execution(execution_id))
+
+    # Security Methods
+
+    def get_quantum_encryption_status(self) -> dict[str, Any]:
+        return self._run(self._async_client.get_quantum_encryption_status())
+
+    def encrypt_data(self, data: dict[str, Any]) -> dict[str, Any]:
+        return self._run(self._async_client.encrypt_data(data))
+
+    def decrypt_data(self, ciphertext: str) -> dict[str, Any]:
+        return self._run(self._async_client.decrypt_data(ciphertext))
+
+    def get_audit_logs(self, limit: int = 100) -> dict[str, Any]:
+        return self._run(self._async_client.get_audit_logs(limit))
+
+    # Performance Methods
+
+    def get_performance_metrics(self) -> dict[str, Any]:
+        return self._run(self._async_client.get_performance_metrics())
+
+    def get_query_stats(self) -> dict[str, Any]:
+        return self._run(self._async_client.get_query_stats())
