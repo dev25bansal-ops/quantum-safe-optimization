@@ -26,55 +26,103 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Add security headers to all responses.
 
-    Implements OWASP security header recommendations.
+    Implements OWASP security header recommendations with:
+    - Strict-Transport-Security (HSTS) with preload
+    - Content-Security-Policy (CSP) for XSS protection
+    - X-Frame-Options for clickjacking protection
+    - X-Content-Type-Options for MIME sniffing protection
+    - Permissions-Policy for feature control
     """
 
-    # Default security headers
+    # Default security headers (always applied)
     DEFAULT_HEADERS = {
         "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
+        "X-Frame-Options": "DENY",
         "X-XSS-Protection": "1; mode=block",
         "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()",
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
         "Pragma": "no-cache",
+        "X-Permitted-Cross-Domain-Policies": "none",
+        "Cross-Origin-Embedder-Policy": "require-corp",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Resource-Policy": "same-origin",
     }
 
-    # CSP for API responses (relaxed for JSON APIs)
-    API_CSP = "default-src 'none'; frame-ancestors 'none'"
+    # CSP for API responses
+    API_CSP = (
+        "default-src 'none'; "
+        "frame-ancestors 'none'; "
+        "form-action 'none'; "
+        "base-uri 'none'; "
+        "upgrade-insecure-requests"
+    )
+
+    # CSP for frontend responses (more permissive)
+    FRONTEND_CSP = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; "
+        "font-src 'self' data:; "
+        "connect-src 'self' ws: wss:; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        "base-uri 'self'; "
+        "object-src 'none'; "
+        "upgrade-insecure-requests"
+    )
 
     def __init__(
         self,
-        app: ASGIApp,
+        app,
         enable_hsts: bool = True,
         hsts_max_age: int = 31536000,
+        hsts_include_subdomains: bool = True,
+        hsts_preload: bool = True,
         custom_headers: dict[str, str] | None = None,
+        custom_csp: str | None = None,
     ):
         super().__init__(app)
         self.enable_hsts = enable_hsts
         self.hsts_max_age = hsts_max_age
+        self.hsts_include_subdomains = hsts_include_subdomains
+        self.hsts_preload = hsts_preload
         self.custom_headers = custom_headers or {}
+        self.custom_csp = custom_csp
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(self, request, call_next):
         response = await call_next(request)
 
         # Add default security headers
         for header, value in self.DEFAULT_HEADERS.items():
             response.headers[header] = value
 
-        # Add CSP for API responses
+        # Add appropriate CSP based on path
         if request.url.path.startswith("/api/"):
-            response.headers["Content-Security-Policy"] = self.API_CSP
+            response.headers["Content-Security-Policy"] = self.custom_csp or self.API_CSP
+        elif request.url.path in ("/", "/index.html", "/dashboard", "/dashboard.html"):
+            response.headers["Content-Security-Policy"] = self.custom_csp or self.FRONTEND_CSP
+        else:
+            response.headers["Content-Security-Policy"] = self.custom_csp or self.API_CSP
 
         # Add HSTS if enabled and using HTTPS
         if self.enable_hsts and request.url.scheme == "https":
-            response.headers["Strict-Transport-Security"] = (
-                f"max-age={self.hsts_max_age}; includeSubDomains; preload"
-            )
+            hsts_value = f"max-age={self.hsts_max_age}"
+            if self.hsts_include_subdomains:
+                hsts_value += "; includeSubDomains"
+            if self.hsts_preload:
+                hsts_value += "; preload"
+            response.headers["Strict-Transport-Security"] = hsts_value
 
         # Add custom headers
         for header, value in self.custom_headers.items():
             response.headers[header] = value
+
+        # Remove potentially dangerous headers
+        for header in ["Server", "X-Powered-By", "X-AspNet-Version"]:
+            if header in response.headers:
+                del response.headers[header]
 
         return response
 

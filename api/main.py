@@ -45,6 +45,7 @@ from api.circuits.router import router as circuits_router
 from api.marketplace.router import router as marketplace_router
 from api.federation.router import router as federation_router
 from api.security.enhanced.router import router as security_router
+from api.security.enhanced.request_signing import RequestSigningMiddleware
 from api.security.middleware import (
     AuditLoggingMiddleware,
     RequestIDMiddleware,
@@ -258,6 +259,10 @@ if os.getenv("ENABLE_AUDIT_LOGGING", "true").lower() == "true":
 
 # Request validation (content type, size limits, etc.)
 app.add_middleware(RequestValidationMiddleware)
+
+# Request signing verification (optional - verify ML-DSA signatures)
+if os.getenv("ENABLE_REQUEST_SIGNING", "false").lower() == "true":
+    app.add_middleware(RequestSigningMiddleware)
 
 # Add rate limiter to app state
 app.state.limiter = limiter
