@@ -1,16 +1,15 @@
 //! ML-KEM (CRYSTALS-Kyber) Key Encapsulation Mechanism
-//! 
+//!
 //! Implements NIST FIPS 203 ML-KEM for post-quantum secure key exchange.
 //! Supports all three security levels:
 //! - ML-KEM-512 (Level 1) - Lightweight, ~AES-128 equivalent
 //! - ML-KEM-768 (Level 3) - Recommended, ~AES-192 equivalent
 //! - ML-KEM-1024 (Level 5) - Maximum security, ~AES-256 equivalent
 
-use pqcrypto_kyber::{kyber512, kyber768, kyber1024};
-use pqcrypto_traits::kem::{PublicKey, SecretKey, SharedSecret, Ciphertext};
-use rand::RngCore;
-use serde::{Deserialize, Serialize};
 use crate::error::CryptoError;
+use pqcrypto_kyber::{kyber1024, kyber512, kyber768};
+use pqcrypto_traits::kem::{Ciphertext, PublicKey, SecretKey, SharedSecret};
+use serde::{Deserialize, Serialize};
 
 /// Security level for ML-KEM
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,7 +37,7 @@ impl KemSecurityLevel {
             KemSecurityLevel::Level5 => "ML-KEM-1024",
         }
     }
-    
+
     /// Get key sizes for this security level
     pub fn key_sizes(&self) -> (usize, usize, usize) {
         // Returns (public_key_size, secret_key_size, ciphertext_size)
@@ -48,7 +47,7 @@ impl KemSecurityLevel {
             KemSecurityLevel::Level5 => (1568, 3168, 1568),
         }
     }
-    
+
     /// Parse from string (e.g., "1", "3", "5" or "level1", "level3", "level5")
     pub fn from_str(s: &str) -> Result<Self, CryptoError> {
         match s.to_lowercase().trim() {
@@ -123,7 +122,7 @@ impl KemKeyPair {
         let secret_key = base64::engine::general_purpose::STANDARD
             .decode(secret_key_b64)
             .map_err(|_| CryptoError::InvalidKeyFormat)?;
-        
+
         Ok(KemKeyPair {
             public_key,
             secret_key,
@@ -147,11 +146,11 @@ impl EncapsulationResult {
 }
 
 /// Encapsulate a shared secret using recipient's public key
-/// 
+///
 /// # Arguments
 /// * `public_key` - Recipient's ML-KEM public key
 /// * `level` - Security level (determines key sizes)
-/// 
+///
 /// # Returns
 /// * `EncapsulationResult` containing ciphertext and shared secret
 pub fn encapsulate(public_key: &[u8]) -> Result<EncapsulationResult, CryptoError> {
@@ -159,7 +158,10 @@ pub fn encapsulate(public_key: &[u8]) -> Result<EncapsulationResult, CryptoError
 }
 
 /// Encapsulate with explicit security level
-pub fn encapsulate_with_level(public_key: &[u8], level: KemSecurityLevel) -> Result<EncapsulationResult, CryptoError> {
+pub fn encapsulate_with_level(
+    public_key: &[u8],
+    level: KemSecurityLevel,
+) -> Result<EncapsulationResult, CryptoError> {
     match level {
         KemSecurityLevel::Level1 => {
             let pk = kyber512::PublicKey::from_bytes(public_key)
@@ -192,11 +194,11 @@ pub fn encapsulate_with_level(public_key: &[u8], level: KemSecurityLevel) -> Res
 }
 
 /// Decapsulate shared secret from ciphertext using secret key
-/// 
+///
 /// # Arguments
 /// * `ciphertext` - The encapsulated ciphertext
 /// * `secret_key` - Recipient's ML-KEM secret key
-/// 
+///
 /// # Returns
 /// * Shared secret bytes
 pub fn decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> Result<Vec<u8>, CryptoError> {
@@ -204,7 +206,11 @@ pub fn decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> Result<Vec<u8>, Cryp
 }
 
 /// Decapsulate with explicit security level
-pub fn decapsulate_with_level(ciphertext: &[u8], secret_key: &[u8], level: KemSecurityLevel) -> Result<Vec<u8>, CryptoError> {
+pub fn decapsulate_with_level(
+    ciphertext: &[u8],
+    secret_key: &[u8],
+    level: KemSecurityLevel,
+) -> Result<Vec<u8>, CryptoError> {
     match level {
         KemSecurityLevel::Level1 => {
             let ct = kyber512::Ciphertext::from_bytes(ciphertext)
@@ -243,7 +249,10 @@ pub fn encapsulate_base64(public_key_b64: &str) -> Result<EncapsulationResult, C
 }
 
 /// Decapsulate using base64 encoded inputs
-pub fn decapsulate_base64(ciphertext_b64: &str, secret_key_b64: &str) -> Result<Vec<u8>, CryptoError> {
+pub fn decapsulate_base64(
+    ciphertext_b64: &str,
+    secret_key_b64: &str,
+) -> Result<Vec<u8>, CryptoError> {
     use base64::Engine;
     let ciphertext = base64::engine::general_purpose::STANDARD
         .decode(ciphertext_b64)
@@ -261,24 +270,42 @@ mod tests {
     #[test]
     fn test_kem_roundtrip_level1() {
         let keypair = KemKeyPair::generate_with_level(KemSecurityLevel::Level1).unwrap();
-        let encap_result = encapsulate_with_level(&keypair.public_key, KemSecurityLevel::Level1).unwrap();
-        let decap_secret = decapsulate_with_level(&encap_result.ciphertext, &keypair.secret_key, KemSecurityLevel::Level1).unwrap();
+        let encap_result =
+            encapsulate_with_level(&keypair.public_key, KemSecurityLevel::Level1).unwrap();
+        let decap_secret = decapsulate_with_level(
+            &encap_result.ciphertext,
+            &keypair.secret_key,
+            KemSecurityLevel::Level1,
+        )
+        .unwrap();
         assert_eq!(encap_result.shared_secret, decap_secret);
     }
 
     #[test]
     fn test_kem_roundtrip_level3() {
         let keypair = KemKeyPair::generate_with_level(KemSecurityLevel::Level3).unwrap();
-        let encap_result = encapsulate_with_level(&keypair.public_key, KemSecurityLevel::Level3).unwrap();
-        let decap_secret = decapsulate_with_level(&encap_result.ciphertext, &keypair.secret_key, KemSecurityLevel::Level3).unwrap();
+        let encap_result =
+            encapsulate_with_level(&keypair.public_key, KemSecurityLevel::Level3).unwrap();
+        let decap_secret = decapsulate_with_level(
+            &encap_result.ciphertext,
+            &keypair.secret_key,
+            KemSecurityLevel::Level3,
+        )
+        .unwrap();
         assert_eq!(encap_result.shared_secret, decap_secret);
     }
 
     #[test]
     fn test_kem_roundtrip_level5() {
         let keypair = KemKeyPair::generate_with_level(KemSecurityLevel::Level5).unwrap();
-        let encap_result = encapsulate_with_level(&keypair.public_key, KemSecurityLevel::Level5).unwrap();
-        let decap_secret = decapsulate_with_level(&encap_result.ciphertext, &keypair.secret_key, KemSecurityLevel::Level5).unwrap();
+        let encap_result =
+            encapsulate_with_level(&keypair.public_key, KemSecurityLevel::Level5).unwrap();
+        let decap_secret = decapsulate_with_level(
+            &encap_result.ciphertext,
+            &keypair.secret_key,
+            KemSecurityLevel::Level5,
+        )
+        .unwrap();
         assert_eq!(encap_result.shared_secret, decap_secret);
     }
 
@@ -288,12 +315,12 @@ mod tests {
         let kp1 = KemKeyPair::generate_with_level(KemSecurityLevel::Level1).unwrap();
         assert_eq!(kp1.public_key.len(), 800);
         assert_eq!(kp1.secret_key.len(), 1632);
-        
+
         // Level 3
         let kp3 = KemKeyPair::generate_with_level(KemSecurityLevel::Level3).unwrap();
         assert_eq!(kp3.public_key.len(), 1184);
         assert_eq!(kp3.secret_key.len(), 2400);
-        
+
         // Level 5
         let kp5 = KemKeyPair::generate_with_level(KemSecurityLevel::Level5).unwrap();
         assert_eq!(kp5.public_key.len(), 1568);
@@ -305,21 +332,33 @@ mod tests {
         let keypair = KemKeyPair::generate().unwrap();
         let pk_b64 = keypair.public_key_base64();
         let sk_b64 = keypair.secret_key_base64();
-        
+
         let encap_result = encapsulate_base64(&pk_b64).unwrap();
         let ct_b64 = encap_result.ciphertext_base64();
-        
+
         let decap_secret = decapsulate_base64(&ct_b64, &sk_b64).unwrap();
-        
+
         assert_eq!(encap_result.shared_secret, decap_secret);
     }
-    
+
     #[test]
     fn test_security_level_parsing() {
-        assert_eq!(KemSecurityLevel::from_str("1").unwrap(), KemSecurityLevel::Level1);
-        assert_eq!(KemSecurityLevel::from_str("level3").unwrap(), KemSecurityLevel::Level3);
-        assert_eq!(KemSecurityLevel::from_str("L5").unwrap(), KemSecurityLevel::Level5);
-        assert_eq!(KemSecurityLevel::from_str("768").unwrap(), KemSecurityLevel::Level3);
+        assert_eq!(
+            KemSecurityLevel::from_str("1").unwrap(),
+            KemSecurityLevel::Level1
+        );
+        assert_eq!(
+            KemSecurityLevel::from_str("level3").unwrap(),
+            KemSecurityLevel::Level3
+        );
+        assert_eq!(
+            KemSecurityLevel::from_str("L5").unwrap(),
+            KemSecurityLevel::Level5
+        );
+        assert_eq!(
+            KemSecurityLevel::from_str("768").unwrap(),
+            KemSecurityLevel::Level3
+        );
         assert!(KemSecurityLevel::from_str("invalid").is_err());
     }
 }
