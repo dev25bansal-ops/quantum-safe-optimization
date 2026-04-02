@@ -450,15 +450,18 @@ async def websocket_status() -> dict[str, Any]:
 async def job_progress_websocket(
     websocket: WebSocket,
     job_id: str,
-    user_id: str | None = Query(None, description="User ID for authorization"),
-    token: str | None = Query(None, description="JWT token for authentication"),
+    token: str | None = Query(None, description="JWT token for authentication (required)"),
 ):
     """
     WebSocket endpoint for streaming job progress.
 
     Authentication:
-    - Pass JWT token via ?token=<jwt> query parameter
-    - Or pass user_id for legacy/demo mode
+    - JWT token via ?token=<jwt> query parameter is REQUIRED
+    - Token must be valid and not expired
+
+    Security:
+    - Unauthenticated connections are rejected with code 4001
+    - Token is verified before connection is accepted
 
     Connect to receive real-time updates for a specific job.
 
@@ -475,14 +478,15 @@ async def job_progress_websocket(
     - {"type": "ping"} - Client-initiated ping
     - {"type": "unsubscribe"} - Disconnect from this job
     """
-    authenticated_user_id = user_id
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required: provide token parameter")
+        return
 
-    if token:
-        try:
-            authenticated_user_id = await verify_websocket_token(token)
-        except Exception as e:
-            await websocket.close(code=4001, reason=f"Authentication failed: {e}")
-            return
+    try:
+        authenticated_user_id = await verify_websocket_token(token)
+    except Exception as e:
+        await websocket.close(code=4001, reason=f"Authentication failed: {e}")
+        return
 
     conn_info = await manager.connect(websocket, job_id, authenticated_user_id)
 
@@ -583,12 +587,18 @@ async def job_progress_websocket(
 @router.websocket("/jobs")
 async def all_jobs_websocket(
     websocket: WebSocket,
-    user_id: str = Query(..., description="User ID for filtering"),
+    token: str = Query(..., description="JWT token for authentication (required)"),
 ):
     """
     WebSocket endpoint for streaming all job updates for a user.
 
-    Requires user_id query parameter for filtering.
+    Authentication:
+    - JWT token via ?token=<jwt> query parameter is REQUIRED
+    - Token must be valid and not expired
+
+    Security:
+    - Unauthenticated connections are rejected with code 4001
+    - User ID is extracted from token, not from query parameter
 
     Messages sent by server:
     - {"type": "connected", "channel": "...", "timestamp": "..."} - Connection confirmed
@@ -604,6 +614,12 @@ async def all_jobs_websocket(
     - {"type": "status"} - Request connection status
     - {"type": "unsubscribe"} - Disconnect
     """
+    try:
+        user_id = await verify_websocket_token(token)
+    except Exception as e:
+        await websocket.close(code=4001, reason=f"Authentication failed: {e}")
+        return
+
     await websocket.accept()
 
     # Subscribe to user's job channel
