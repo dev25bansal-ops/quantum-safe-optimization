@@ -1,0 +1,203 @@
+syntax = "proto3";
+
+package quantum;
+
+// Quantum Job Service - gRPC API
+service QuantumJobService {
+    // Submit a quantum optimization job
+    rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+    
+    // Get job status and results
+    rpc GetJob(GetJobRequest) returns (GetJobResponse);
+    
+    // Stream job progress updates
+    rpc StreamJobProgress(JobProgressRequest) returns (stream JobProgressUpdate);
+    
+    // Cancel a running job
+    rpc CancelJob(CancelJobRequest) returns (CancelJobResponse);
+    
+    // List jobs for a user
+    rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+    
+    // Estimate job cost
+    rpc EstimateCost(CostEstimateRequest) returns (CostEstimateResponse);
+    
+    // Get available backends
+    rpc GetBackends(GetBackendsRequest) returns (GetBackendsResponse);
+    
+    // Health check
+    rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Job submission
+message SubmitJobRequest {
+    string user_id = 1;
+    string tenant_id = 2;
+    ProblemType problem_type = 3;
+    bytes problem_config = 4;  // JSON-encoded config
+    string backend = 5;
+    int32 shots = 6;
+    int32 priority = 7;
+    map<string, string> metadata = 8;
+}
+
+enum ProblemType {
+    PROBLEM_TYPE_UNSPECIFIED = 0;
+    QAOA = 1;
+    VQE = 2;
+    QUANTUM_ANNEALING = 3;
+    GROVER = 4;
+    QFT = 5;
+    CUSTOM = 6;
+}
+
+message SubmitJobResponse {
+    string job_id = 1;
+    JobStatus status = 2;
+    int64 created_at = 3;  // Unix timestamp
+    int64 estimated_duration_ms = 4;
+    double estimated_cost_usd = 5;
+}
+
+// Job retrieval
+message GetJobRequest {
+    string job_id = 1;
+    string user_id = 2;
+}
+
+message GetJobResponse {
+    Job job = 1;
+}
+
+message Job {
+    string job_id = 1;
+    string user_id = 2;
+    string tenant_id = 3;
+    ProblemType problem_type = 4;
+    string problem_config_json = 5;
+    string backend = 6;
+    int32 shots = 7;
+    JobStatus status = 8;
+    int64 created_at = 9;
+    int64 started_at = 10;
+    int64 completed_at = 11;
+    double cost_usd = 12;
+    bytes result = 13;  // JSON-encoded result
+    string error_message = 14;
+    map<string, string> metadata = 15;
+}
+
+enum JobStatus {
+    JOB_STATUS_UNSPECIFIED = 0;
+    QUEUED = 1;
+    RUNNING = 2;
+    COMPLETED = 3;
+    FAILED = 4;
+    CANCELLED = 5;
+}
+
+// Job progress streaming
+message JobProgressRequest {
+    string job_id = 1;
+    string user_id = 2;
+}
+
+message JobProgressUpdate {
+    string job_id = 1;
+    JobStatus status = 2;
+    int32 progress_percent = 3;
+    string current_step = 4;
+    int64 elapsed_ms = 5;
+    int64 remaining_ms = 6;
+    map<string, double> metrics = 7;
+}
+
+// Job cancellation
+message CancelJobRequest {
+    string job_id = 1;
+    string user_id = 2;
+}
+
+message CancelJobResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// Job listing
+message ListJobsRequest {
+    string user_id = 1;
+    string tenant_id = 2;
+    JobStatus status_filter = 3;
+    int32 limit = 4;
+    int32 offset = 5;
+}
+
+message ListJobsResponse {
+    repeated Job jobs = 1;
+    int32 total_count = 2;
+}
+
+// Cost estimation
+message CostEstimateRequest {
+    ProblemType problem_type = 1;
+    int32 shots = 2;
+    string backend = 3;
+    int32 estimated_duration_seconds = 4;
+}
+
+message CostEstimateResponse {
+    double estimated_cost_usd = 1;
+    map<string, double> cost_breakdown = 2;
+    string currency = 3;
+}
+
+// Backend information
+message GetBackendsRequest {
+    string tenant_id = 1;
+}
+
+message GetBackendsResponse {
+    repeated Backend backends = 1;
+}
+
+message Backend {
+    string backend_id = 1;
+    string name = 2;
+    string provider = 3;
+    BackendStatus status = 4;
+    int32 max_qubits = 5;
+    repeated string supported_problems = 6;
+    double cost_per_shot = 7;
+    int32 queue_length = 8;
+}
+
+enum BackendStatus {
+    BACKEND_STATUS_UNSPECIFIED = 0;
+    ONLINE = 1;
+    OFFLINE = 2;
+    BUSY = 3;
+    MAINTENANCE = 4;
+}
+
+// Health check
+message HealthCheckRequest {
+    string service = 1;
+}
+
+message HealthCheckResponse {
+    HealthStatus status = 1;
+    map<string, ComponentHealth> components = 2;
+}
+
+enum HealthStatus {
+    HEALTH_STATUS_UNSPECIFIED = 0;
+    HEALTHY = 1;
+    DEGRADED = 2;
+    UNHEALTHY = 3;
+}
+
+message ComponentHealth {
+    HealthStatus status = 1;
+    string message = 2;
+    int64 last_check = 3;
+}
