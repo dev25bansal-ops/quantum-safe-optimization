@@ -11,12 +11,12 @@ Features:
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 from croniter import croniter
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.routers.auth import get_current_user
@@ -114,7 +114,7 @@ _running = False
 
 def parse_cron(expression: str) -> croniter:
     """Parse a cron expression."""
-    return croniter(expression, datetime.now(timezone.utc))
+    return croniter(expression, datetime.now(UTC))
 
 
 def get_next_run(cron: croniter) -> datetime:
@@ -127,7 +127,7 @@ def calculate_next_run(schedule: dict) -> datetime | None:
     schedule_type = schedule.get("schedule_type")
     tz = schedule.get("timezone", "UTC")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if schedule_type == ScheduleType.CRON.value:
         cron_expr = schedule.get("cron_expression")
@@ -167,7 +167,7 @@ async def execute_schedule(schedule: dict) -> dict:
 
     execution_id = f"exec_{uuid.uuid4().hex[:12]}"
     schedule_id = schedule.get("schedule_id")
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
 
     log_entry = {
         "execution_id": execution_id,
@@ -208,6 +208,7 @@ async def execute_schedule(schedule: dict) -> dict:
 
         elif job_type == "webhook":
             import httpx
+
             from api.security.ssrf_protection import validate_webhook_url
 
             webhook_url = job_config.get("webhook_url")
@@ -254,7 +255,7 @@ async def execute_schedule(schedule: dict) -> dict:
         if retry_count < max_retries:
             schedule["retry_count"] = retry_count + 1
             schedule["next_run_at"] = (
-                datetime.now(timezone.utc)
+                datetime.now(UTC)
                 + timedelta(seconds=schedule.get("retry_delay_seconds", 60))
             ).isoformat()
             logger.info(f"Scheduling retry {retry_count + 1}/{max_retries} for {schedule_id}")
@@ -262,7 +263,7 @@ async def execute_schedule(schedule: dict) -> dict:
             schedule["status"] = ScheduleStatus.DISABLED.value
             logger.error(f"Schedule {schedule_id} disabled after {max_retries} failures")
 
-    completed_at = datetime.now(timezone.utc)
+    completed_at = datetime.now(UTC)
     log_entry["completed_at"] = completed_at
     log_entry["duration_ms"] = int((completed_at - started_at).total_seconds() * 1000)
 
@@ -297,7 +298,7 @@ async def scheduler_loop():
 
     while _running:
         try:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             for schedule_id, schedule in list(_schedules.items()):
                 if schedule.get("status") != ScheduleStatus.ACTIVE.value:
@@ -359,7 +360,7 @@ async def create_schedule(
     import uuid
 
     schedule_id = f"sched_{uuid.uuid4().hex[:12]}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     user_id = current_user.get("sub", "anonymous")
 
     if schedule.schedule_type == ScheduleType.CRON:

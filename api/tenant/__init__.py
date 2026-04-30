@@ -1,9 +1,10 @@
 """Multi-tenant isolation module."""
 
 from .models import (
+    ROLE_PERMISSIONS,
     Permission,
     Role,
-    ROLE_PERMISSIONS,
+    RoleUpdate,
     Tenant,
     TenantCreate,
     TenantMemberCreate,
@@ -14,7 +15,6 @@ from .models import (
     TenantSettingsUpdate,
     TenantTier,
     TenantUsage,
-    RoleUpdate,
     get_tier_quotas,
 )
 from .router import router

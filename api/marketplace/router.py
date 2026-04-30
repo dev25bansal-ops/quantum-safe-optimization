@@ -12,20 +12,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from .models import (
     AlgorithmCategory,
     AlgorithmCreate,
-    AlgorithmPurchase,
     AlgorithmRating,
     AlgorithmResponse,
     AlgorithmReviewCreate,
-    LicenseType,
     MarketplaceAlgorithm,
     PricingModel,
     PurchaseResponse,
     ReviewResponse,
+    _algorithms,
+    _ratings,
     purchase_algorithm,
     search_algorithms,
     seed_marketplace,
-    _algorithms,
-    _ratings,
 )
 
 logger = logging.getLogger(__name__)

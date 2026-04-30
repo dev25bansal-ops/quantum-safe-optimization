@@ -43,8 +43,8 @@ async def test_get_federation_status(client: AsyncClient, auth_token: str):
     data = response.json()
     assert "total_regions" in data
     assert "healthy_regions" in data
-    assert "unhealthy_regions" in data
-    assert "federation_enabled" in data
+    assert "offline_regions" in data
+    assert "federation_id" in data
 
 
 @pytest.mark.anyio
@@ -252,6 +252,9 @@ async def test_route_job(client: AsyncClient, auth_token: str):
     response = await client.post(
         "/api/v1/federation/route",
         json={
+            "job_type": "optimization",
+            "algorithm": "vqe",
+            "num_qubits": 4,
             "shots": 10000,
             "preferred_provider": "ibm",
         },
@@ -273,6 +276,9 @@ async def test_route_job_with_constraints(client: AsyncClient, auth_token: str):
     response = await client.post(
         "/api/v1/federation/route",
         json={
+            "job_type": "optimization",
+            "algorithm": "qaoa",
+            "num_qubits": 8,
             "shots": 5000,
             "max_cost": 10.0,
             "max_latency_ms": 500,
@@ -297,6 +303,9 @@ async def test_route_job_with_preferred_region(client: AsyncClient, auth_token: 
         response = await client.post(
             "/api/v1/federation/route",
             json={
+                "job_type": "optimization",
+                "algorithm": "vqe",
+                "num_qubits": 2,
                 "shots": 1000,
                 "preferred_region": preferred_region,
             },
@@ -418,7 +427,12 @@ async def test_region_response_fields(client: AsyncClient, auth_token: str):
 async def test_routing_decision_fields(client: AsyncClient, auth_token: str):
     response = await client.post(
         "/api/v1/federation/route",
-        json={"shots": 1000},
+        json={
+            "job_type": "optimization",
+            "algorithm": "vqe",
+            "num_qubits": 4,
+            "shots": 1000,
+        },
         headers={"Authorization": f"Bearer {auth_token}"},
     )
     data = response.json()

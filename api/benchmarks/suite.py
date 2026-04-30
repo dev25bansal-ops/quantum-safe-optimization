@@ -4,16 +4,14 @@ Quantum Algorithm Benchmark Suite.
 Provides standardized benchmarks for quantum algorithms and backends.
 """
 
-import asyncio
 import json
-import os
 import statistics
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 from uuid import uuid4
 
 import structlog
@@ -45,7 +43,7 @@ class BenchmarkResult:
     backend: str
     status: BenchmarkStatus
     start_time: datetime
-    end_time: Optional[datetime] = None
+    end_time: datetime | None = None
     duration_ms: float = 0.0
     metrics: dict[str, float] = field(default_factory=dict)
     details: dict[str, Any] = field(default_factory=dict)
@@ -85,7 +83,7 @@ class QAOABenchmark:
     async def run(self) -> BenchmarkResult:
         """Run QAOA benchmark."""
         benchmark_id = f"bench_qaoa_{uuid4().hex[:8]}"
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         result = BenchmarkResult(
             benchmark_id=benchmark_id,
@@ -138,7 +136,7 @@ class QAOABenchmark:
             }
 
             result.status = BenchmarkStatus.COMPLETED
-            result.end_time = datetime.now(timezone.utc)
+            result.end_time = datetime.now(UTC)
             result.duration_ms = (result.end_time - start_time).total_seconds() * 1000
 
         except Exception as e:
@@ -158,7 +156,7 @@ class VQEBenchmark:
     async def run(self) -> BenchmarkResult:
         """Run VQE benchmark."""
         benchmark_id = f"bench_vqe_{uuid4().hex[:8]}"
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         result = BenchmarkResult(
             benchmark_id=benchmark_id,
@@ -198,7 +196,7 @@ class VQEBenchmark:
             }
 
             result.status = BenchmarkStatus.COMPLETED
-            result.end_time = datetime.now(timezone.utc)
+            result.end_time = datetime.now(UTC)
             result.duration_ms = (result.end_time - start_time).total_seconds() * 1000
 
         except Exception as e:
@@ -217,7 +215,7 @@ class CircuitDepthBenchmark:
     async def run(self) -> BenchmarkResult:
         """Run circuit compilation benchmark."""
         benchmark_id = f"bench_depth_{uuid4().hex[:8]}"
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         result = BenchmarkResult(
             benchmark_id=benchmark_id,
@@ -253,7 +251,7 @@ class CircuitDepthBenchmark:
             }
 
             result.status = BenchmarkStatus.COMPLETED
-            result.end_time = datetime.now(timezone.utc)
+            result.end_time = datetime.now(UTC)
             result.duration_ms = (result.end_time - start_time).total_seconds() * 1000
 
         except Exception as e:
@@ -288,8 +286,8 @@ class BenchmarkSuite:
 
     async def run_suite(
         self,
-        config: Optional[BenchmarkConfig] = None,
-        categories: Optional[list[BenchmarkCategory]] = None,
+        config: BenchmarkConfig | None = None,
+        categories: list[BenchmarkCategory] | None = None,
     ) -> list[BenchmarkResult]:
         """Run full benchmark suite."""
         if config is None:
@@ -313,10 +311,10 @@ class BenchmarkSuite:
 
         return results
 
-    def save_results(self, filename: Optional[str] = None) -> str:
+    def save_results(self, filename: str | None = None) -> str:
         """Save benchmark results to file."""
         if filename is None:
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             filename = f"benchmark_{timestamp}.json"
 
         filepath = self.results_path / filename
@@ -342,7 +340,7 @@ class BenchmarkSuite:
         with open(filepath, "w") as f:
             json.dump(
                 {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "total_benchmarks": len(results_data),
                     "results": results_data,
                 },
@@ -386,7 +384,7 @@ class BenchmarkSuite:
         """Generate benchmark report."""
         report_lines = [
             "# Quantum Algorithm Benchmark Report",
-            f"\nGenerated: {datetime.now(timezone.utc).isoformat()}",
+            f"\nGenerated: {datetime.now(UTC).isoformat()}",
             f"Total Benchmarks: {len(self._results)}",
             "\n## Results\n",
         ]

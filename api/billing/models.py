@@ -6,7 +6,7 @@ Tracks API calls, quantum shots, compute time, and generates invoices.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -103,7 +103,7 @@ class UsageEvent:
             quantity=quantity,
             unit_price=unit_price,
             total_price=total_price,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             metadata=metadata or {},
         )
 
@@ -133,7 +133,7 @@ class Invoice:
     tax: float
     total: float
     status: InvoiceStatus = InvoiceStatus.OPEN
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     paid_at: datetime | None = None
     payment_id: str | None = None
 

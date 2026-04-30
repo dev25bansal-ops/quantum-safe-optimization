@@ -6,9 +6,10 @@ Prevents cascading failures by failing fast when a service is down.
 
 import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -100,10 +101,10 @@ class CircuitBreaker:
             )
             await self._record_success()
             return result
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             await self._record_failure()
             raise CircuitTimeoutError(f"Circuit '{self.name}' timed out") from e
-        except Exception as e:
+        except Exception:
             await self._record_failure()
             raise
 

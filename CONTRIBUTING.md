@@ -203,6 +203,35 @@ src/qsop/
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
 
+## Architecture Decision Records
+
+For significant architectural decisions, we use ADRs. See `docs/adr/` for existing decisions.
+
+When making architectural changes:
+
+1. Create an ADR in `docs/adr/NNNN-title.md`
+2. Use the ADR template
+3. Link the ADR in your PR
+
+## GraphQL API
+
+We support both REST and GraphQL APIs:
+
+```bash
+# Access GraphQL playground
+http://localhost:8000/api/v1/graphql
+```
+
+When adding endpoints, consider both APIs.
+
+## Chaos Engineering
+
+We use chaos tests to verify system resilience:
+
+```bash
+pytest tests/chaos/ -v
+```
+
 ## Questions?
 
 - Open a GitHub Discussion for general questions

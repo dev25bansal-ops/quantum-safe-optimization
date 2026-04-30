@@ -9,7 +9,6 @@ Provides endpoints for:
 """
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 

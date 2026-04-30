@@ -1,76 +1,121 @@
-# syntax=docker/dockerfile:1.4
+# Quantum-Safe Optimization Platform - Production Dockerfile
+# Multi-stage build for optimized image size
 
-# =============================================================================
-# Quantum-Safe Secure Optimization Platform - Production Dockerfile
-# =============================================================================
+# ===========================
+# Stage 1: Base image with dependencies
+# ===========================
+FROM python:3.11-slim as base
 
-# -----------------------------------------------------------------------------
-# Build stage
-# -----------------------------------------------------------------------------
-FROM python:3.11-slim-bookworm AS builder
-
-WORKDIR /app
-
+# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    cmake \
-    ninja-build \
-    libssl-dev \
-    git \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-COPY pyproject.toml README.md ./
-COPY src ./src
-
-RUN pip install --upgrade pip setuptools wheel \
-    && pip install .
-
-# -----------------------------------------------------------------------------
-# Runtime stage
-# -----------------------------------------------------------------------------
-FROM python:3.11-slim-bookworm AS runtime
-
-LABEL maintainer="QSOP Team <team@qsop.dev>" \
-    version="0.1.0" \
-    description="Quantum-Safe Secure Optimization Platform"
-
+# Set working directory
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONFAULTHANDLER=1 \
-    PATH="/opt/venv/bin:$PATH" \
-    QSOP_ENV=prod \
-    QSOP_API_HOST=0.0.0.0 \
-    QSOP_API_PORT=8000
+# Install Python dependencies
+COPY pyproject.toml .
+COPY README.md .
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl3 \
-    ca-certificates \
-    curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid 1000 qsop \
-    && useradd --uid 1000 --gid qsop --shell /bin/bash --create-home qsop
+RUN pip install --upgrade pip && \
+    pip install . && \
+    pip install gunicorn uvicorn[standard]
 
-COPY --from=builder /opt/venv /opt/venv
-COPY --chown=qsop:qsop src ./src
+# ===========================
+# Stage 2: Development image
+# ===========================
+FROM base as development
 
-RUN mkdir -p /app/data && chown -R qsop:qsop /app/data
+ENV APP_ENV=development
 
-USER qsop
+# Install development dependencies
+COPY pyproject.toml .
+RUN pip install -e ".[dev]" && \
+    pip install pytest-cov
 
+# Copy source code
+COPY . .
+
+# Expose port
 EXPOSE 8000
 
+# Run with auto-reload
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+# ===========================
+# Stage 3: Production image
+# ===========================
+FROM base as production
+
+# Create non-root user for security
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+
+ENV APP_ENV=production
+
+# Copy application code
+COPY src/qsop src/qsop
+COPY api/ api/
+COPY quantum_safe_crypto*.py .
+COPY alembic.ini .
+COPY alembic/ alembic/
+
+# Set ownership
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
+
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-ENTRYPOINT ["python", "-m", "uvicorn"]
-CMD ["qsop.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Expose port
+EXPOSE 8000
+
+# Run with gunicorn workers
+CMD ["gunicorn", "api.main:app", \
+     "--bind", "0.0.0.0:8000", \
+     "--workers", "4", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--timeout", "120", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--capture-output"]
+
+# ===========================
+# Stage 4: Minimal image for serverless
+# ===========================
+FROM python:3.11-slim as minimal
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Install only required packages
+WORKDIR /app
+
+COPY pyproject.toml .
+RUN pip install --no-cache-dir . && \
+    pip install --no-cache-dir gunicorn
+
+# Copy only necessary files
+COPY src/qsop src/qsop
+COPY api/ api/
+COPY quantum_safe_crypto*.py .
+
+# Expose port
+EXPOSE 8000
+
+# Run minimal version
+CMD ["gunicorn", "api.main:app", \
+     "--bind", "0.0.0.0:8000", \
+     "--workers", "2", \
+     "--worker-class", "uvicorn.workers.UvicornWorker"]

@@ -1,0 +1,293 @@
+# Prometheus Alerting Rules for Quantum Platform
+
+groups:
+  - name: quantum_platform.rules
+    rules:
+      # API Health Alerts
+      - alert: APIHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) 
+          / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      - alert: APIHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High API latency"
+          description: "95th percentile latency is {{ $value }}s"
+
+      - alert: APIDown
+        expr: up{job="quantum-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "API service is down"
+          description: "Quantum API service is not responding"
+
+      # Job Processing Alerts
+      - alert: HighJobQueueLength
+        expr: quantum_jobs_queued_total > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: jobs
+        annotations:
+          summary: "High job queue length"
+          description: "{{ $value }} jobs are queued for processing"
+
+      - alert: HighJobFailureRate
+        expr: |
+          sum(rate(quantum_jobs_failed_total[1h])) 
+          / sum(rate(quantum_jobs_total[1h])) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          service: jobs
+        annotations:
+          summary: "High job failure rate"
+          description: "Job failure rate is {{ $value | humanizePercentage }}"
+
+      - alert: JobProcessingStalled
+        expr: |
+          delta(quantum_jobs_processed_total[10m]) == 0 
+          and quantum_jobs_queued_total > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: jobs
+        annotations:
+          summary: "Job processing appears stalled"
+          description: "No jobs processed in 10 minutes but queue has jobs"
+
+      # Backend Alerts
+      - alert: BackendUnavailable
+        expr: quantum_backend_up == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: backends
+        annotations:
+          summary: "Quantum backend unavailable"
+          description: "Backend {{ $labels.backend }} is not available"
+
+      - alert: AllBackendsDown
+        expr: |
+          count(quantum_backend_up == 0) 
+          / count(quantum_backend_up) > 0.8
+        for: 5m
+        labels:
+          severity: critical
+          service: backends
+        annotations:
+          summary: "Most quantum backends unavailable"
+          description: "{{ $value | humanizePercentage }} of backends are down"
+
+      - alert: BackendHighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            rate(quantum_backend_request_duration_seconds_bucket[5m])
+          ) > 30
+        for: 10m
+        labels:
+          severity: warning
+          service: backends
+        annotations:
+          summary: "High backend latency"
+          description: "Backend {{ $labels.backend }} has high latency"
+
+      # Resource Alerts
+      - alert: HighMemoryUsage
+        expr: |
+          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) 
+          / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}%"
+
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} 
+          / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Low disk space"
+          description: "Disk {{ $labels.mountpoint }} has less than 10% free space"
+
+      # Redis Alerts
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis service is not responding"
+
+      - alert: RedisHighMemory
+        expr: |
+          redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: RedisConnectionPoolExhausted
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis connection pool near limit"
+          description: "{{ $value }} Redis clients connected"
+
+      # Security Alerts
+      - alert: HighAuthenticationFailures
+        expr: |
+          sum(rate(auth_failures_total[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "{{ $value }} auth failures per second"
+
+      - alert: RateLimitExceeded
+        expr: |
+          sum(rate(rate_limit_exceeded_total[5m])) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "High rate limit violations"
+          description: "{{ $value }} rate limit violations per second"
+
+      - alert: KeyRotationOverdue
+        expr: |
+          time() - key_last_rotation_timestamp_seconds > 7776000
+        for: 1h
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "Key rotation overdue"
+          description: "Key {{ $labels.key_id }} hasn't been rotated in 90+ days"
+
+      # Billing Alerts
+      - alert: HighComputeCost
+        expr: |
+          sum(increase(billing_compute_cost_usd_total[1h])) > 50
+        for: 1h
+        labels:
+          severity: warning
+          service: billing
+        annotations:
+          summary: "High compute cost"
+          description: "Compute cost exceeded $50 in the last hour"
+
+      - alert: QuotaNearLimit
+        expr: |
+          tenant_quota_used / tenant_quota_limit > 0.9
+        for: 15m
+        labels:
+          severity: warning
+          service: billing
+        annotations:
+          summary: "Tenant quota near limit"
+          description: "Tenant {{ $labels.tenant_id }} is at {{ $value | humanizePercentage }} of quota"
+
+      # WebSocket Alerts
+      - alert: WebSocketConnectionsHigh
+        expr: websocket_active_connections > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: websocket
+        annotations:
+          summary: "High WebSocket connections"
+          description: "{{ $value }} active WebSocket connections"
+
+      - alert: WebSocketMessageQueueBacklog
+        expr: websocket_message_queue_size > 10000
+        for: 5m
+        labels:
+          severity: warning
+          service: websocket
+        annotations:
+          summary: "WebSocket message backlog"
+          description: "{{ $value }} messages queued"
+
+      # Federation Alerts
+      - alert: FederationRegionDown
+        expr: federation_region_health_status == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: federation
+        annotations:
+          summary: "Federation region down"
+          description: "Region {{ $labels.region_id }} is unhealthy"
+
+      - alert: FederationNoHealthyRegions
+        expr: |
+          sum(federation_region_health_status) == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: federation
+        annotations:
+          summary: "No healthy federation regions"
+          description: "All federation regions are unhealthy"
+
+  - name: slo.rules
+    rules:
+      - alert: SLAErrorBudgetBurned
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[1h]))
+            / sum(rate(http_requests_total[1h]))
+          ) > 0.01
+        for: 30m
+        labels:
+          severity: page
+          service: api
+        annotations:
+          summary: "SLA error budget is burning"
+          description: "Error rate exceeds SLO threshold"

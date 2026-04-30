@@ -14,7 +14,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -30,7 +30,7 @@ class SignedAuditEntry:
     signature: str
     previous_hash: str
     current_hash: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     algorithm: str = "ML-DSA-65"
 
     def to_dict(self) -> dict[str, Any]:
@@ -51,7 +51,7 @@ class SignedAuditEntry:
 
             message = self._get_signing_message()
             return py_verify(public_key, message, self.signature, security_level=3)
-        except ImportError:
+        except (ImportError, AttributeError, TypeError):
             return self._verify_fallback(public_key)
 
     def _verify_fallback(self, public_key: bytes) -> bool:
@@ -106,7 +106,7 @@ class AuditIntegrityManager:
 
             logger.info("Initialized ML-DSA-65 for audit log signing")
 
-        except ImportError:
+        except (ImportError, AttributeError, TypeError):
             self._signing_key = os.urandom(32)
             self._public_key = self._signing_key
 
@@ -142,7 +142,7 @@ class AuditIntegrityManager:
                 "event_id": event_id,
                 "event_data": event_data,
                 "previous_hash": previous_hash,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
             sort_keys=True,
         )
@@ -153,7 +153,7 @@ class AuditIntegrityManager:
             signature = py_sign(self._signing_key, message, security_level=3)
             return signature
 
-        except ImportError:
+        except (ImportError, AttributeError, TypeError):
             import hmac
 
             sig = hmac.new(self._signing_key, message.encode(), hashlib.sha256).hexdigest()

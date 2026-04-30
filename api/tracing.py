@@ -6,8 +6,9 @@ Provides distributed tracing for observability.
 
 import logging
 import os
+from collections.abc import Callable
 from contextlib import contextmanager
-from typing import Any, Callable
+from typing import Any
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -83,7 +84,7 @@ def get_trace_context() -> dict[str, str]:
 def set_trace_context(carrier: dict[str, str]) -> None:
     """Set trace context from carrier."""
     context = _propagator.extract(carrier)
-    from opentelemetry.context import attach, detach
+    from opentelemetry.context import attach
 
     token = attach(context)
     return token

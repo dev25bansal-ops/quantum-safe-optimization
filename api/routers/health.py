@@ -11,7 +11,7 @@ import asyncio
 import os
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -60,8 +60,8 @@ def get_uptime() -> float:
     """Get service uptime in seconds."""
     global _service_start_time
     if _service_start_time is None:
-        _service_start_time = datetime.now(timezone.utc)
-    return (datetime.now(timezone.utc) - _service_start_time).total_seconds()
+        _service_start_time = datetime.now(UTC)
+    return (datetime.now(UTC) - _service_start_time).total_seconds()
 
 
 async def check_cosmos_health() -> ComponentHealth:
@@ -69,9 +69,9 @@ async def check_cosmos_health() -> ComponentHealth:
     try:
         from api.db.cosmos import cosmos_manager
 
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         health_status = await cosmos_manager.health_check()
-        latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+        latency = (datetime.now(UTC) - start).total_seconds() * 1000
 
         if health_status.healthy:
             return ComponentHealth(
@@ -105,7 +105,7 @@ async def check_redis_health() -> ComponentHealth:
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
 
     try:
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         client = redis.from_url(redis_url, decode_responses=True)
 
         # Ping Redis
@@ -113,7 +113,7 @@ async def check_redis_health() -> ComponentHealth:
 
         # Get some stats
         info = await client.info("server")
-        latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+        latency = (datetime.now(UTC) - start).total_seconds() * 1000
 
         await client.close()
 
@@ -139,7 +139,7 @@ async def check_crypto_health() -> ComponentHealth:
     try:
         import quantum_safe_crypto as pqc
 
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
 
         # Quick test of crypto operations
         kem_keys = pqc.KemKeyPair()
@@ -154,7 +154,7 @@ async def check_crypto_health() -> ComponentHealth:
         sig = sign_keys.sign(msg)
         valid = sign_keys.verify(msg, sig)
 
-        latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+        latency = (datetime.now(UTC) - start).total_seconds() * 1000
 
         if ss1 == ss2 and valid:
             # Get supported levels
@@ -194,13 +194,13 @@ async def check_secrets_health() -> ComponentHealth:
     try:
         from api.security.secrets_manager import SecretsManager
 
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         manager = SecretsManager.get_instance()
 
         # Try to get a known secret (JWT secret should always exist)
         jwt_secret = await manager.get_secret("jwt-secret", fallback="default")
 
-        latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+        latency = (datetime.now(UTC) - start).total_seconds() * 1000
 
         return ComponentHealth(
             name="secrets_manager",
@@ -246,7 +246,7 @@ async def health_check() -> dict[str, Any]:
     """
     return {
         "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "version": os.getenv("APP_VERSION", "0.1.0"),
         "environment": os.getenv("APP_ENV", "development"),
     }
@@ -276,7 +276,7 @@ async def readiness_check(response: Response) -> dict[str, Any]:
         return {
             "ready": False,
             "reason": "Health checks timed out",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     # Process results
@@ -305,7 +305,7 @@ async def readiness_check(response: Response) -> dict[str, Any]:
     return {
         "ready": all_ready,
         "components": components,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -319,7 +319,7 @@ async def liveness_check() -> dict[str, str]:
     """
     return {
         "status": "alive",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -368,7 +368,7 @@ async def detailed_health_check(response: Response) -> dict[str, Any]:
         status=overall_status,
         version=os.getenv("APP_VERSION", "0.1.0"),
         environment=os.getenv("APP_ENV", "development"),
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         uptime_seconds=round(get_uptime(), 2),
         components={
             comp.name: {
@@ -411,7 +411,7 @@ async def crypto_health() -> dict[str, Any]:
         if ss1 != ss2 or not valid:
             return {
                 "status": "unhealthy",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "error": "Crypto verification failed",
             }
 
@@ -419,7 +419,7 @@ async def crypto_health() -> dict[str, Any]:
 
         return {
             "status": "healthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "latency_ms": round(latency_ms, 2),
             "algorithms": {
                 "kem": {
@@ -440,6 +440,6 @@ async def crypto_health() -> dict[str, Any]:
     except Exception as e:
         return {
             "status": "unhealthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "error": str(e),
         }

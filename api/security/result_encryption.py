@@ -7,11 +7,10 @@ Encrypts quantum computation results before storage using ML-KEM wrapped AES.
 import base64
 import hashlib
 import json
-import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 import structlog
@@ -29,7 +28,7 @@ class EncryptedResult:
     encrypted_key: bytes
     key_id: str
     created_at: datetime
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -71,8 +70,8 @@ class ResultEncryptionManager:
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
-        self._current_key_id: Optional[str] = None
-        self._encryption_key: Optional[bytes] = None
+        self._current_key_id: str | None = None
+        self._encryption_key: bytes | None = None
         self._initialize_keys()
 
     def _initialize_keys(self) -> None:
@@ -102,7 +101,7 @@ class ResultEncryptionManager:
         job_id: str,
         result_data: dict[str, Any],
         user_id: str,
-        expires_days: Optional[int] = 90,
+        expires_days: int | None = 90,
     ) -> EncryptedResult:
         """Encrypt and store a computation result."""
         result_id = f"result_{uuid4().hex[:12]}"
@@ -110,8 +109,9 @@ class ResultEncryptionManager:
         plaintext = json.dumps(result_data).encode("utf-8")
 
         try:
-            from cryptography.fernet import Fernet
             import os
+
+            from cryptography.fernet import Fernet
 
             fernet = Fernet(base64.urlsafe_b64encode(self._encryption_key[:32]))
             ciphertext = fernet.encrypt(plaintext)
@@ -126,7 +126,7 @@ class ResultEncryptionManager:
             ciphertext = aesgcm.encrypt(nonce, plaintext, None)
             encrypted_key = self._encryption_key
 
-        created_at = datetime.now(timezone.utc)
+        created_at = datetime.now(UTC)
         expires_at = None
         if expires_days:
             from datetime import timedelta
@@ -167,7 +167,7 @@ class ResultEncryptionManager:
         self,
         result_id: str,
         user_id: str,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Decrypt and retrieve a computation result."""
         result_file = self.storage_path / f"{result_id}.json"
 
@@ -181,7 +181,7 @@ class ResultEncryptionManager:
         encrypted_result = EncryptedResult.from_dict(data)
 
         if encrypted_result.expires_at:
-            if datetime.now(timezone.utc) > encrypted_result.expires_at:
+            if datetime.now(UTC) > encrypted_result.expires_at:
                 logger.warning("result_expired", result_id=result_id)
                 return None
 
@@ -238,8 +238,8 @@ class ResultEncryptionManager:
 
     def list_results(
         self,
-        user_id: Optional[str] = None,
-        job_id: Optional[str] = None,
+        user_id: str | None = None,
+        job_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """List encrypted results."""
         results = []

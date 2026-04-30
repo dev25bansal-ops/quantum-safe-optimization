@@ -4,8 +4,8 @@ JWT Configuration - Secure secret key management.
 Ensures JWT secrets are properly configured in production.
 """
 
-import os
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 

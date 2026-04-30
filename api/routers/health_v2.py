@@ -16,10 +16,10 @@ New endpoint:
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -48,12 +48,12 @@ class HealthResponse(BaseModel):
 
 
 # Store startup time
-_startup_time = datetime.now(timezone.utc)
+_startup_time = datetime.now(UTC)
 
 
 def get_uptime() -> float:
     """Get process uptime in seconds."""
-    return (datetime.now(timezone.utc) - _startup_time).total_seconds()
+    return (datetime.now(UTC) - _startup_time).total_seconds()
 
 
 async def check_database() -> tuple[bool, str, int]:
@@ -178,28 +178,28 @@ async def health_full():
             name="database",
             status="healthy" if db_healthy else "unhealthy",
             message=db_message,
-            last_check=datetime.now(timezone.utc).isoformat(),
+            last_check=datetime.now(UTC).isoformat(),
             duration_ms=db_duration,
         ),
         ComponentHealth(
             name="task_queue",
             status="healthy" if celery_healthy else "degraded",
             message=celery_message,
-            last_check=datetime.now(timezone.utc).isoformat(),
+            last_check=datetime.now(UTC).isoformat(),
             duration_ms=celery_duration,
         ),
         ComponentHealth(
             name="webhook_service",
             status="healthy" if webhook_healthy else "degraded",
             message=webhook_message,
-            last_check=datetime.now(timezone.utc).isoformat(),
+            last_check=datetime.now(UTC).isoformat(),
             duration_ms=webhook_duration,
         ),
         ComponentHealth(
             name="credential_storage",
             status="healthy" if cred_healthy else "degraded",
             message=cred_message,
-            last_check=datetime.now(timezone.utc).isoformat(),
+            last_check=datetime.now(UTC).isoformat(),
             duration_ms=cred_duration,
         ),
     ]
@@ -219,7 +219,7 @@ async def health_full():
 
     return HealthResponse(
         status=overall_status,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         uptime_seconds=get_uptime(),
         version="0.1.0",
         components=components,
@@ -237,7 +237,7 @@ async def health_simple():
     """
     return {
         "status": "ok",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "uptime_seconds": get_uptime(),
     }
 
@@ -259,5 +259,5 @@ async def health_ready():
 
     return {
         "status": "ready",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }

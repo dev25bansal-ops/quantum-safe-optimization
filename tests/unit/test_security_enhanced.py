@@ -47,7 +47,7 @@ async def test_get_qs_encryption_status(client: AsyncClient, auth_token: str):
     assert response.status_code == 200
     data = response.json()
     assert "algorithm" in data
-    assert "key_id" in data
+    assert "active_key_id" in data
 
 
 @pytest.mark.anyio
@@ -119,7 +119,7 @@ async def test_get_audit_integrity_status(client: AsyncClient, auth_token: str):
     assert response.status_code == 200
     data = response.json()
     assert "algorithm" in data
-    assert "entries_signed" in data
+    assert "entries_count" in data
 
 
 @pytest.mark.anyio
@@ -130,8 +130,8 @@ async def test_verify_audit_integrity(client: AsyncClient, auth_token: str):
     )
     assert response.status_code == 200
     data = response.json()
-    assert "valid" in data
-    assert "entries_checked" in data
+    assert "verified" in data
+    assert "verified_count" in data
 
 
 @pytest.mark.anyio
@@ -398,7 +398,7 @@ async def test_get_audit_storage_stats(client: AsyncClient, auth_token: str):
     )
     assert response.status_code == 200
     data = response.json()
-    assert "total_events" in data
+    assert "events_in_memory" in data
 
 
 @pytest.mark.anyio

@@ -13,15 +13,11 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
 from cryptography.fernet import Fernet
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +28,7 @@ class EncryptionKey:
 
     key_id: str
     key: bytes
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
     is_active: bool = True
     algorithm: str = "AES-256-GCM"
@@ -120,7 +116,7 @@ class EncryptionManager:
             "key_id": key_id or self._active_key_id,
             "algorithm": "AES-256-GCM",
             "encrypted": base64.urlsafe_b64encode(encrypted).decode(),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         return base64.urlsafe_b64encode(json.dumps(result).encode()).decode()

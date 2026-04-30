@@ -1,0 +1,30 @@
+{
+  "name": "quantum-safe-platform-frontend",
+  "version": "1.0.0",
+  "description": "Quantum-Safe Optimization Platform Frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint js/ --ext .js",
+    "format": "prettier --write 'js/**/*.js'",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "terser": "^5.29.2",
+    "typescript": "^5.4.2",
+    "vite": "^5.1.6",
+    "vitest": "^1.4.0"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

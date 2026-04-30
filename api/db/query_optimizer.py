@@ -12,13 +12,12 @@ import asyncio
 import hashlib
 import json
 import logging
-import os
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Generic, TypeVar
-from uuid import uuid4
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -263,7 +262,7 @@ class NPlusOneDetector:
                 "pattern": pattern_name,
                 "count": cls._counts[pattern_name],
                 "threshold": cls._thresholds[pattern_name],
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
             cls._warnings.append(warning)
             logger.warning(

@@ -3,10 +3,11 @@ Rate limiting configuration for the API.
 
 Uses slowapi with Redis backend for production, memory for development.
 Prevents brute-force attacks on authentication endpoints.
+Includes backup persistence for Redis failover scenarios.
 """
 
-import os
 import logging
+import os
 from collections.abc import Callable
 
 from slowapi import Limiter
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 TESTING = os.environ.get("TESTING", "0") == "1"
 APP_ENV = os.environ.get("APP_ENV", "development")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
+ENABLE_BACKUP = os.environ.get("RATE_LIMIT_BACKUP_ENABLED", "true").lower() == "true"
 
 
 def get_storage_uri() -> str:
@@ -46,6 +48,7 @@ def get_client_identifier(request: Request) -> str:
 
     Uses X-Forwarded-For header if behind proxy, otherwise remote address.
     For authenticated requests, includes user ID for per-user limits.
+    Records hits to backup store for persistence.
     """
     if TESTING:
         return "test-client"
@@ -57,9 +60,20 @@ def get_client_identifier(request: Request) -> str:
         client_ip = get_remote_address(request)
 
     if hasattr(request.state, "user_id"):
-        return f"{client_ip}:{request.state.user_id}"
+        identifier = f"{client_ip}:{request.state.user_id}"
+    else:
+        identifier = client_ip
 
-    return client_ip
+    if ENABLE_BACKUP:
+        try:
+            from api.security.rate_limit_backup import backup_store
+            import asyncio
+
+            asyncio.create_task(backup_store.record_hit(identifier))
+        except Exception:
+            pass
+
+    return identifier
 
 
 limiter = Limiter(

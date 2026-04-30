@@ -12,7 +12,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -30,7 +30,7 @@ class WrappedKey:
     encapsulated_secret: bytes
     mlkem_public_key: bytes
     mlkem_secret_key: bytes
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
     is_active: bool = True
 
@@ -42,7 +42,7 @@ class EncryptionKey:
     key_id: str
     key: bytes
     wrapped_key: WrappedKey | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
     is_active: bool = True
     algorithm: str = "ML-KEM-768 + AES-256-GCM"
@@ -101,7 +101,7 @@ class QuantumSafeEncryptionManager:
                 encapsulated_secret=encapsulated,
                 mlkem_public_key=kem_keypair.public_key,
                 mlkem_secret_key=kem_keypair.secret_key,
-                expires_at=datetime.now(timezone.utc) + timedelta(days=90),
+                expires_at=datetime.now(UTC) + timedelta(days=90),
             )
 
             key = EncryptionKey(
@@ -122,8 +122,8 @@ class QuantumSafeEncryptionManager:
 
             return key
 
-        except ImportError:
-            logger.warning("quantum_safe_crypto not available, using fallback encryption")
+        except (ImportError, AttributeError, TypeError) as e:
+            logger.warning(f"quantum_safe_crypto not available ({e}), using fallback encryption")
             return self._generate_fallback_key()
 
     def _generate_fallback_key(self) -> EncryptionKey:
@@ -158,7 +158,7 @@ class QuantumSafeEncryptionManager:
             "key_id": self._active_key_id,
             "algorithm": "ML-KEM-768 + AES-256-GCM",
             "encrypted": base64.urlsafe_b64encode(encrypted).decode(),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "wrapped_key_id": self._wrapped_keys.get(self._active_key_id, {}).get("key_id")
             if self._active_key_id
             else None,
@@ -193,7 +193,7 @@ class QuantumSafeEncryptionManager:
 
             return aes_key
 
-        except ImportError:
+        except (ImportError, AttributeError, TypeError):
             logger.warning("ML-KEM decapsulation unavailable")
             raise RuntimeError("ML-KEM not available for key unwrapping")
 

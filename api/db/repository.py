@@ -15,7 +15,7 @@ Usage:
 import logging
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
@@ -73,6 +73,8 @@ class InMemoryJobStore(BaseStore[dict[str, Any]]):
 
     def __init__(self):
         self._data: dict[str, dict[str, Any]] = {}
+        self._partition_counts: dict[str, int] = {}
+        self._filtered_counts: dict[str, int] = {}
         self._initialized = True
 
     @property
@@ -84,6 +86,12 @@ class InMemoryJobStore(BaseStore[dict[str, Any]]):
         data["id"] = job_id
         data["job_id"] = job_id
         self._data[job_id] = data
+        
+        # Update partition counter
+        user_id = data.get("user_id")
+        if user_id:
+            self._partition_counts[user_id] = self._partition_counts.get(user_id, 0) + 1
+        
         return data
 
     async def get(self, item_id: str, partition_key: str) -> dict[str, Any] | None:
@@ -105,9 +113,18 @@ class InMemoryJobStore(BaseStore[dict[str, Any]]):
     async def upsert(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create or update."""
         job_id = data.get("job_id") or data.get("id")
+        is_new = job_id not in self._data
+        
         data["id"] = job_id
         data["job_id"] = job_id
         self._data[job_id] = data
+        
+        # Update partition counter if new job
+        if is_new:
+            user_id = data.get("user_id")
+            if user_id:
+                self._partition_counts[user_id] = self._partition_counts.get(user_id, 0) + 1
+        
         return data
 
     async def delete(self, item_id: str, partition_key: str) -> bool:
@@ -115,6 +132,13 @@ class InMemoryJobStore(BaseStore[dict[str, Any]]):
             job = self._data[item_id]
             if job.get("user_id") == partition_key:
                 del self._data[item_id]
+                
+                # Update partition counter
+                self._partition_counts[partition_key] = max(0, self._partition_counts.get(partition_key, 0) - 1)
+                
+                # Clear filtered counts cache
+                self._filtered_counts.clear()
+                
                 return True
         return False
 
@@ -150,8 +174,31 @@ class InMemoryJobStore(BaseStore[dict[str, Any]]):
         partition_key: str,
         filters: dict[str, Any] | None = None,
     ) -> int:
-        items = await self.list(partition_key, filters, limit=10000, offset=0)
-        return len(items)
+        # If no filters, use cached partition count
+        if not filters:
+            return self._partition_counts.get(partition_key, 0)
+        
+        # For filtered counts, use cache key
+        cache_key = f"{partition_key}:{str(sorted(filters.items()))}"
+        if cache_key in self._filtered_counts:
+            return self._filtered_counts[cache_key]
+        
+        # Calculate filtered count
+        items = [
+            j
+            for j in self._data.values()
+            if j.get("user_id") == partition_key and not j.get("deleted")
+        ]
+        
+        # Apply filters
+        if "status" in filters and filters["status"]:
+            items = [j for j in items if j.get("status") == filters["status"]]
+        if "problem_type" in filters and filters["problem_type"]:
+            items = [j for j in items if j.get("problem_type") == filters["problem_type"]]
+        
+        count = len(items)
+        self._filtered_counts[cache_key] = count
+        return count
 
 
 class InMemoryUserStore(BaseStore[dict[str, Any]]):
@@ -167,7 +214,7 @@ class InMemoryUserStore(BaseStore[dict[str, Any]]):
                 "password_hash": "$argon2id$v=19$m=65536,t=3,p=4$RicoB40mT5DxZGqpPral7w$JLxZvZ/PbHdGVitr3eu9RW9danm83u2OADLV5rwNoAw",
                 "email": "admin@example.com",
                 "roles": ["admin", "user"],
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
                 "kem_public_key": None,
             }
         }

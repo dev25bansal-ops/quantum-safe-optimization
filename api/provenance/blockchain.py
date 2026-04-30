@@ -6,11 +6,10 @@ Tracks algorithm lineage, versions, and execution history with immutable records
 
 import hashlib
 import json
-import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 import structlog
@@ -104,7 +103,7 @@ class AlgorithmLineage:
     parent_ids: list[str] = field(default_factory=list)
     children_ids: list[str] = field(default_factory=list)
     execution_count: int = 0
-    last_executed_at: Optional[datetime] = None
+    last_executed_at: datetime | None = None
     checksum: str = ""
     tags: list[str] = field(default_factory=list)
 
@@ -143,7 +142,7 @@ class ProvenanceChain:
         genesis = ProvenanceBlock(
             block_id="genesis",
             previous_hash=self.GENESIS_HASH,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type=ProvenanceEventType.ALGORITHM_CREATED,
             algorithm_id="genesis",
             user_id="system",
@@ -161,7 +160,7 @@ class ProvenanceChain:
         algorithm_id: str,
         user_id: str,
         data: dict[str, Any],
-        sign_func: Optional[callable] = None,
+        sign_func: callable | None = None,
     ) -> ProvenanceBlock:
         """Add a new block to the chain."""
         previous_block = self.get_last_block()
@@ -169,7 +168,7 @@ class ProvenanceChain:
         block = ProvenanceBlock(
             block_id=f"block_{uuid4().hex[:12]}",
             previous_hash=previous_block.hash,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type=event_type,
             algorithm_id=algorithm_id,
             user_id=user_id,
@@ -220,7 +219,7 @@ class ProvenanceChain:
                 name=data.get("name", "Unknown"),
                 version=data.get("version", "1.0.0"),
                 author_id=user_id,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 checksum=data.get("checksum", ""),
                 tags=data.get("tags", []),
             )
@@ -230,7 +229,7 @@ class ProvenanceChain:
 
         if event_type == ProvenanceEventType.ALGORITHM_EXECUTED:
             lineage.execution_count += 1
-            lineage.last_executed_at = datetime.now(timezone.utc)
+            lineage.last_executed_at = datetime.now(UTC)
 
         elif event_type == ProvenanceEventType.ALGORITHM_UPDATED:
             lineage.version = data.get("new_version", lineage.version)
@@ -319,7 +318,7 @@ class ProvenanceChain:
     def search_by_user(
         self,
         user_id: str,
-        event_type: Optional[ProvenanceEventType] = None,
+        event_type: ProvenanceEventType | None = None,
     ) -> list[dict]:
         """Search provenance records by user."""
         results = []
@@ -353,7 +352,7 @@ class ProvenanceChain:
             {
                 "chain": [block.to_dict() for block in self._chain],
                 "lineages": {aid: lin.to_dict() for aid, lin in self._lineages.items()},
-                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "exported_at": datetime.now(UTC).isoformat(),
             },
             indent=2,
         )

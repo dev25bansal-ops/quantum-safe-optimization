@@ -5,9 +5,9 @@ Provides usage tracking, cost estimation, and invoice generation.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from .models import (
     CostEstimateRequest,
@@ -72,7 +72,7 @@ async def get_usage_summary_endpoint(
     tenant_id: str = Depends(get_tenant_id),
 ):
     """Get usage summary for a billing period."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if period == "day":
         period_start = now - timedelta(days=1)
@@ -128,7 +128,7 @@ async def generate_invoice_endpoint(
     tenant_id: str = Depends(get_tenant_id),
 ):
     """Generate an invoice for the billing period."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if period == "week":
         period_start = now - timedelta(weeks=1)

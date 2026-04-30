@@ -4,14 +4,11 @@ Hybrid Classical-Quantum Optimization.
 Combines classical optimizers with quantum circuits for enhanced performance.
 """
 
-import asyncio
-import json
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Optional
 from uuid import uuid4
 
 import structlog
@@ -50,7 +47,7 @@ class OptimizationResult:
     quantum_circuit_depth: int = 0
     quantum_shots: int = 0
     duration_ms: float = 0.0
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict:
         return {
@@ -77,8 +74,8 @@ class OptimizationConfig:
     learning_rate: float = 0.01
     shots_per_evaluation: int = 1024
     ansatz_reps: int = 3
-    initial_parameters: Optional[list[float]] = None
-    parameter_bounds: Optional[list[tuple[float, float]]] = None
+    initial_parameters: list[float] | None = None
+    parameter_bounds: list[tuple[float, float]] | None = None
 
 
 class QuantumObjectiveFunction(ABC):
@@ -107,7 +104,6 @@ class MaxCutObjective(QuantumObjectiveFunction):
         """Evaluate MaxCut objective."""
         self._evaluations += 1
 
-        import random
         import math
 
         cut_value = 0
@@ -266,7 +262,6 @@ class SPSAOptimizer(ClassicalOptimizer):
         result_id = f"opt_spsa_{uuid4().hex[:8]}"
 
         import random
-        import math
 
         params = initial_params.copy()
         history = [objective.evaluate(params)]
@@ -362,7 +357,6 @@ class AdamOptimizer(ClassicalOptimizer):
                 if abs(history[-1] - history[-2]) < config.tolerance:
                     break
 
-        import math
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 
@@ -396,7 +390,7 @@ class HybridOptimizer:
         self,
         edges: list[tuple[int, int]],
         optimizer: OptimizerType = OptimizerType.SPSA,
-        config: Optional[OptimizationConfig] = None,
+        config: OptimizationConfig | None = None,
     ) -> OptimizationResult:
         """Optimize MaxCut problem."""
         if config is None:
@@ -421,7 +415,7 @@ class HybridOptimizer:
         self,
         hamiltonian_coeffs: list[float],
         optimizer: OptimizerType = OptimizerType.ADAM,
-        config: Optional[OptimizationConfig] = None,
+        config: OptimizationConfig | None = None,
     ) -> OptimizationResult:
         """Optimize VQE problem."""
         if config is None:
@@ -445,8 +439,8 @@ class HybridOptimizer:
     def compare_optimizers(
         self,
         problem_type: str = "maxcut",
-        problem_data: Optional[dict] = None,
-        config: Optional[OptimizationConfig] = None,
+        problem_data: dict | None = None,
+        config: OptimizationConfig | None = None,
     ) -> dict:
         """Compare different optimizers on the same problem."""
         if config is None:

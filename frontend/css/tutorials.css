@@ -1,0 +1,244 @@
+.tutorial-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.tutorial-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  pointer-events: auto;
+}
+
+.tutorial-highlight {
+  position: absolute;
+  border: 2px solid var(--color-primary, #6366f1);
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.tutorial-tooltip {
+  position: absolute;
+  width: 380px;
+  max-width: calc(100vw - 40px);
+  background: var(--color-surface, #1e1e2e);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  animation: tooltipFadeIn 0.3s ease;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tutorial-tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border, #333);
+}
+
+.tutorial-step-counter {
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+  white-space: nowrap;
+}
+
+.tutorial-tooltip-header .tutorial-title {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text, #fff);
+}
+
+.tutorial-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted, #888);
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.tutorial-close:hover {
+  background: var(--color-error, #ef4444);
+  color: white;
+}
+
+.tutorial-tooltip-body {
+  padding: 20px;
+}
+
+.tutorial-content {
+  margin: 0;
+  color: var(--color-text, #fff);
+  line-height: 1.6;
+}
+
+.tutorial-tooltip-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--color-border, #333);
+}
+
+.tutorial-progress {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  justify-content: center;
+}
+
+.progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-border, #333);
+  transition: all 0.2s;
+}
+
+.progress-dot.active {
+  background: var(--color-primary, #6366f1);
+  transform: scale(1.2);
+}
+
+.progress-dot.completed {
+  background: var(--color-success, #22c55e);
+}
+
+.tutorial-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tutorials-section {
+  padding: 24px;
+}
+
+.tutorials-header {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.tutorials-header h2 {
+  margin: 0 0 8px;
+  color: var(--color-text, #fff);
+}
+
+.tutorials-header p {
+  margin: 0;
+  color: var(--color-text-muted, #888);
+}
+
+.tutorials-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.tutorial-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: var(--color-surface-elevated, #252535);
+  border-radius: 12px;
+  border: 1px solid var(--color-border, #333);
+  transition: all 0.2s;
+}
+
+.tutorial-card:hover {
+  border-color: var(--color-primary, #6366f1);
+  transform: translateY(-2px);
+}
+
+.tutorial-card.completed {
+  border-color: var(--color-success, #22c55e);
+}
+
+.tutorial-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-primary-bg, rgba(99, 102, 241, 0.1));
+  color: var(--color-primary, #6366f1);
+  font-size: 24px;
+}
+
+.tutorial-card.completed .tutorial-icon {
+  background: var(--color-success-bg, rgba(34, 197, 94, 0.1));
+  color: var(--color-success, #22c55e);
+}
+
+.tutorial-info {
+  flex: 1;
+}
+
+.tutorial-info h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: var(--color-text, #fff);
+}
+
+.tutorial-info p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--color-text-muted, #888);
+}
+
+.tutorial-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+}
+
+.tutorial-meta i {
+  margin-right: 4px;
+}
+
+.tutorial-card .tutorial-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.completed-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-success, #22c55e);
+}
+
+.tutorials-footer {
+  text-align: center;
+}

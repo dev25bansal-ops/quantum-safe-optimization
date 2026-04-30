@@ -3,47 +3,41 @@ Security router for encryption, rotation, audit, and integrity APIs.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from .encryption import (
-    EncryptionManager,
-    encrypt_data,
-    decrypt_data,
-    get_encryption_manager,
-)
-from .quantum_encryption import (
-    get_qs_encryption_manager,
-    encrypt_with_mlkem,
-    decrypt_with_mlkem,
-)
-from .secrets_rotation import (
-    SecretType,
-    RotationPolicy,
-    get_rotation_manager,
-    get_rotation_status,
-    rotate_secret,
-)
-from .audit_retention import (
-    AuditEventType,
-    AuditSeverity,
-    RetentionPolicy,
-    AuditEvent,
-    get_audit_manager,
-    log_audit_event,
-    get_audit_logs,
-    cleanup_old_logs,
-)
 from .audit_integrity import (
     get_audit_integrity,
     sign_audit_entry,
     verify_audit_chain,
 )
+from .audit_retention import (
+    AuditEventType,
+    AuditSeverity,
+    cleanup_old_logs,
+    get_audit_logs,
+    get_audit_manager,
+    log_audit_event,
+)
+from .encryption import (
+    get_encryption_manager,
+)
+from .quantum_encryption import (
+    decrypt_with_mlkem,
+    encrypt_with_mlkem,
+    get_qs_encryption_manager,
+)
 from .request_signing import (
     get_request_signer,
     sign_api_request,
+)
+from .secrets_rotation import (
+    SecretType,
+    get_rotation_manager,
+    get_rotation_status,
+    rotate_secret,
 )
 
 logger = logging.getLogger(__name__)
@@ -469,9 +463,9 @@ async def get_audit_summary(
 ):
     """Get audit summary statistics."""
     if start_time is None:
-        start_time = datetime.now(timezone.utc) - timedelta(days=7)
+        start_time = datetime.now(UTC) - timedelta(days=7)
     if end_time is None:
-        end_time = datetime.now(timezone.utc)
+        end_time = datetime.now(UTC)
 
     manager = get_audit_manager()
     events = [e for e in manager._events if start_time <= e.timestamp <= end_time]

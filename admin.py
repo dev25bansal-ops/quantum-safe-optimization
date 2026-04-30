@@ -16,6 +16,7 @@ import argparse
 import asyncio
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from typing import Any
@@ -167,18 +168,27 @@ def cmd_jobs_cancel(args):
 def cmd_migrate_up(args):
     """Run database migrations."""
     print("Running migrations...")
-    os.system("alembic upgrade head")
+    result = subprocess.run(["alembic", "upgrade", "head"], capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Migration failed: {result.stderr}")
+        return
+    print(result.stdout)
 
 
 def cmd_migrate_down(args):
     """Rollback database migrations."""
     print("Rolling back migration...")
-    os.system("alembic downgrade -1")
+    result = subprocess.run(["alembic", "downgrade", "-1"], capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Rollback failed: {result.stderr}")
+        return
+    print(result.stdout)
 
 
 def cmd_migrate_status(args):
     """Show migration status."""
-    os.system("alembic current")
+    result = subprocess.run(["alembic", "current"], capture_output=True, text=True)
+    print(result.stdout)
 
 
 def cmd_health(args):

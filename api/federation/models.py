@@ -5,7 +5,7 @@ Provides models for cross-region job routing, failover, and load balancing.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -58,7 +58,7 @@ class FederationRegion:
     priority: int = 1
     weight: int = 100
     max_concurrent_jobs: int = 10
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_health_check: datetime | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -95,7 +95,7 @@ class RegionMetrics:
     avg_latency_ms: float = 0.0
     avg_wait_time_s: float = 0.0
     cost_per_shot: float = 0.0
-    last_updated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class RoutingPolicy(BaseModel):
@@ -399,5 +399,5 @@ def get_federation_status() -> FederationStatus:
         offline_regions=offline,
         total_active_jobs=total_jobs,
         routing_strategy=RoutingStrategy.LOAD_BALANCED,
-        last_updated=datetime.now(timezone.utc).isoformat(),
+        last_updated=datetime.now(UTC).isoformat(),
     )

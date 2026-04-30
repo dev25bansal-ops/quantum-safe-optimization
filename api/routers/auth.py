@@ -7,26 +7,26 @@ Includes rate limiting and token revocation for security.
 
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
-
 from quantum_safe_crypto import KemKeyPair, SigningKeyPair, py_verify
 
+from api.auth_stores import (
+    get_auth_stores,
+)
+from api.auth_stores import (
+    hash_password as _hash_password,
+)
+from api.auth_stores import (
+    verify_password as _verify_password,
+)
 from api.security.rate_limiter import RateLimits, limiter
 from api.security.signature_verification import SignedPayload, verify_request_signature
 from api.security.token_revocation import token_revocation_service
-
-from api.auth_stores import (
-    AuthStores,
-    get_auth_stores,
-    hash_password as _hash_password,
-    verify_password as _verify_password,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -137,10 +137,14 @@ async def save_user(user_data: dict) -> dict:
 
 
 async def check_email_exists(email: str) -> bool:
-    """Check if email already exists in the user store."""
+    """Check if email already exists in the user store. O(1) lookup using index."""
     if not email:
         return False
     stores = get_auth_stores()
+    # Use optimized index lookup instead of iterating all users
+    if hasattr(stores.user_store, 'email_exists'):
+        return await stores.user_store.email_exists(email)
+    # Fallback for stores without email_exists method
     users = await stores.user_store.list(limit=1000)
     for user in users:
         if user.get("email") == email:
@@ -194,8 +198,8 @@ def create_pqc_token(
         "sub": user_id,
         "username": username,
         "roles": roles,
-        "iat": datetime.now(timezone.utc).timestamp(),
-        "exp": (datetime.now(timezone.utc) + timedelta(hours=24)).timestamp(),
+        "iat": datetime.now(UTC).timestamp(),
+        "exp": (datetime.now(UTC) + timedelta(hours=24)).timestamp(),
         "jti": secrets.token_hex(16),
     }
 
@@ -243,7 +247,7 @@ def verify_pqc_token(token: str, signing_keypair: SigningKeyPair | None = None) 
         payload = json.loads(base64.urlsafe_b64decode(payload_b64_padded))
 
         # Check expiration
-        if payload.get("exp", 0) < datetime.now(timezone.utc).timestamp():
+        if payload.get("exp", 0) < datetime.now(UTC).timestamp():
             return None
 
         # Note: Token database check is done in verify_pqc_token_async
@@ -278,7 +282,7 @@ async def verify_pqc_token_async(
 
         payload = json.loads(base64.urlsafe_b64decode(payload_b64_padded))
 
-        if payload.get("exp", 0) < datetime.now(timezone.utc).timestamp():
+        if payload.get("exp", 0) < datetime.now(UTC).timestamp():
             return None
 
         # Properly check token in database (async)
@@ -388,7 +392,7 @@ async def login(request: Request, credentials: UserCredentials):
     # Store token for revocation checking
     token_data = {
         "user_id": user["user_id"],
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "full_signature": signature,  # Store full signature for verification
     }
     await save_token(token, token_data)
@@ -432,7 +436,7 @@ async def register(request: Request, registration: UserRegistration):
     password_hash = hash_password(registration.password)
 
     # Create user record
-    created_at = datetime.now(timezone.utc)
+    created_at = datetime.now(UTC)
     user_data = {
         "user_id": user_id,
         "id": user_id,  # For Cosmos DB
@@ -480,7 +484,7 @@ async def refresh_token(request: Request, current_user: dict = Depends(get_curre
     # Store refreshed token for verification
     token_data = {
         "user_id": current_user["sub"],
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "full_signature": signature,
     }
     await save_token(token, token_data)
@@ -513,7 +517,8 @@ async def logout(request: Request, current_user: dict = Depends(get_current_user
 
 
 @router.get("/me", response_model=UserInfo)
-async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+@limiter.limit(RateLimits.READ_OPERATIONS)
+async def get_current_user_info(request: Request, current_user: dict = Depends(get_current_user)):
     """Get current user information."""
     user = await get_user_by_username(current_user["username"])
 
@@ -543,14 +548,14 @@ async def generate_encryption_key(request: Request, current_user: dict = Depends
     keypair = KemKeyPair()
 
     key_id = f"key_{secrets.token_hex(8)}"
-    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+    expires_at = datetime.now(UTC) + timedelta(days=30)
 
     # Store public key on server (secret key stays with client)
     key_data = {
         "id": key_id,
         "user_id": current_user["sub"],
         "public_key": keypair.public_key,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
         "expires_at": expires_at,
         "algorithm": "ML-KEM-768",
     }
@@ -564,8 +569,10 @@ async def generate_encryption_key(request: Request, current_user: dict = Depends
 
 
 @router.post("/keys/register")
+@limiter.limit(RateLimits.KEY_GENERATION)
 async def register_public_key(
-    request: PublicKeyRequest,
+    request: Request,
+    pubkey_request: PublicKeyRequest,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -581,7 +588,7 @@ async def register_public_key(
         "user_id": current_user["sub"],
         "public_key": request.public_key,
         "key_type": request.key_type,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
         "client_generated": True,
     }
     await save_user_keys(current_user["sub"], key_data)
@@ -600,8 +607,10 @@ async def register_public_key(
 
 
 @router.put("/keys/encryption-key")
+@limiter.limit(RateLimits.KEY_GENERATION)
 async def update_encryption_key(
-    request: PublicKeyRequest,
+    request: Request,
+    pubkey_request: PublicKeyRequest,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -615,17 +624,19 @@ async def update_encryption_key(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Update user with new encryption key
-    user["kem_public_key"] = request.public_key
+    user["kem_public_key"] = pubkey_request.public_key
     await save_user(user)
 
     return {
         "message": "Encryption key updated successfully",
-        "key_type": request.key_type,
+        "key_type": pubkey_request.key_type,
     }
 
 
 @router.get("/keys/{key_id}")
+@limiter.limit(RateLimits.READ_OPERATIONS)
 async def get_key_info(
+    request: Request,
     key_id: str,
     current_user: dict = Depends(get_current_user),
 ):

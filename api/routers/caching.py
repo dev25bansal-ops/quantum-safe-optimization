@@ -12,11 +12,10 @@ Features:
 import hashlib
 import json
 import logging
-import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.routers.auth import get_current_user
@@ -131,7 +130,7 @@ async def cache_get(key: str) -> Any | None:
         entry = _memory_cache[key]
         if entry.get("expires_at"):
             expires_at = datetime.fromisoformat(entry["expires_at"])
-            if datetime.now(timezone.utc) > expires_at:
+            if datetime.now(UTC) > expires_at:
                 del _memory_cache[key]
                 _cache_stats["misses"] += 1
                 return None
@@ -155,7 +154,7 @@ async def cache_set(
     redis = await get_redis_client()
     tags = tags or []
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = None
     if ttl_seconds:
         expires_at = now + timedelta(seconds=ttl_seconds)

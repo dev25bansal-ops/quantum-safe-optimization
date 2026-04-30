@@ -5,15 +5,15 @@ Provides tenant management, RBAC, and quota enforcement.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .models import (
+    ROLE_PERMISSIONS,
     Permission,
     Role,
-    ROLE_PERMISSIONS,
+    RoleUpdate,
     Tenant,
     TenantCreate,
     TenantMemberCreate,
@@ -22,10 +22,7 @@ from .models import (
     TenantQuotaCheck,
     TenantResponse,
     TenantSettingsUpdate,
-    TenantTier,
     TenantUsage,
-    RoleUpdate,
-    get_tier_quotas,
 )
 
 logger = logging.getLogger(__name__)

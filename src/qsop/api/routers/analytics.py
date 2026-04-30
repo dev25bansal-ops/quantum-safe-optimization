@@ -53,7 +53,7 @@ class BenchmarkComparisonResponse(BaseModel):
     """Response with benchmark comparison data."""
 
     results: list[BenchmarkResult]
-    summary: dict[str, float]
+    summary: dict[str, float | str | int]
 
 
 class AblationStudyRequest(BaseModel):

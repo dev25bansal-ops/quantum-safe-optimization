@@ -15,7 +15,7 @@ import base64
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 # Import PQC crypto module
@@ -109,7 +109,7 @@ class MLKEMEncryptionService:
             nonce=base64.b64encode(bytes(envelope_data["nonce"])).decode(),
             ciphertext=base64.b64encode(bytes(envelope_data["ciphertext"])).decode(),
             algorithm=envelope_data.get("algorithm", "ML-KEM-768+AES-256-GCM"),
-            encrypted_at=datetime.now(timezone.utc).isoformat(),
+            encrypted_at=datetime.now(UTC).isoformat(),
             key_id=key_id,
         )
 
@@ -227,7 +227,7 @@ class MLKEMEncryptionService:
             nonce=data["nonce"],
             ciphertext=data["ciphertext"],
             algorithm=data.get("algorithm", "ML-KEM-768+AES-256-GCM"),
-            encrypted_at=data.get("encrypted_at", datetime.now(timezone.utc).isoformat()),
+            encrypted_at=data.get("encrypted_at", datetime.now(UTC).isoformat()),
             key_id=data.get("key_id"),
         )
 

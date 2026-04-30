@@ -1,9 +1,9 @@
 """WebSocket module."""
 
 from .compression import (
-    WebSocketCompressor,
-    CompressionConfig,
     CompressionAlgorithm,
+    CompressionConfig,
+    WebSocketCompressor,
     get_websocket_compressor,
 )
 

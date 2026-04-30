@@ -1,14 +1,14 @@
 """Federation module for multi-region quantum computing."""
 
-from .router import router
 from .models import (
-    FederationRegion,
-    RegionStatus,
     FederationConfig,
+    FederationRegion,
     RegionMetrics,
+    RegionStatus,
     RoutingPolicy,
     RoutingStrategy,
 )
+from .router import router
 
 __all__ = [
     "router",

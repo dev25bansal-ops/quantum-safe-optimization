@@ -1,5 +1,5 @@
 # =============================================================================
-# Quantum-Safe Secure Optimization Platform - Docker Compose
+# Quantum-Safe Optimization Platform - Docker Compose (Local Development)
 # =============================================================================
 # Usage:
 #   Development: docker-compose up -d
@@ -21,19 +21,13 @@ services:
       QSOP_ENV: dev
       QSOP_DEBUG: "true"
       QSOP_LOG_LEVEL: INFO
-      QSOP_LOG_FORMAT: json
-      QSOP_API_HOST: "0.0.0.0"
-      QSOP_API_PORT: "8000"
-      QSOP_API_RELOAD: "false"
-      QSOP_SECRET_KEY: dev-secret-key-change-in-production-32chars
+      QSOP_SECRET_KEY: ${QSOP_SECRET_KEY:-dev-secret-key-change-in-production-32chars}
       QSOP_DATABASE_URL: sqlite+aiosqlite:///./data/qsop.db
       QSOP_REDIS_URL: redis://redis:6379/0
       QSOP_PQC_KEM_ALGORITHM: Kyber512
       QSOP_PQC_SIG_ALGORITHM: Dilithium2
       QSOP_QUANTUM_BACKEND: aer_simulator
-      QSOP_OTEL_ENABLED: "true"
-      QSOP_OTEL_EXPORTER_ENDPOINT: http://otel-collector:4317
-      QSOP_METRICS_ENABLED: "true"
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
       - ./src:/app/src:ro
       - qsop-data:/app/data
@@ -41,7 +35,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -80,7 +74,7 @@ services:
   #     - "5432:5432"
   #   environment:
   #     POSTGRES_USER: qsop
-  #     POSTGRES_PASSWORD: qsop_password
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qsop_password}
   #     POSTGRES_DB: qsop
   #   volumes:
   #     - postgres-data:/var/lib/postgresql/data
@@ -100,9 +94,9 @@ services:
     image: otel/opentelemetry-collector-contrib:0.93.0
     container_name: qsop-otel
     ports:
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
-      - "8888:8888"   # Prometheus metrics
+      - "4317:4317"
+      - "4318:4318"
+      - "8888:8888"
     volumes:
       - ./deploy/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
@@ -139,7 +133,7 @@ services:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana-data:/var/lib/grafana
@@ -153,7 +147,7 @@ services:
 volumes:
   qsop-data:
   redis-data:
-  # postgres-data:
+  postgres-data:
   prometheus-data:
   grafana-data:
 

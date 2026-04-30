@@ -5,21 +5,15 @@ Provides high-performance binary protocol for job submission and streaming.
 """
 
 import asyncio
-import json
-import os
 import time
-from datetime import datetime, timezone
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from uuid import uuid4
 
 import structlog
-from grpc import aio, StatusCode
+from grpc import StatusCode, aio
 from grpc_reflection.v1alpha import reflection
 
-from api.grpc import quantum_pb2
-from api.grpc import quantum_pb2_grpc
-from api.security.enhanced.quantum_encryption import encrypt_with_mlkem
-from api.security.enhanced.audit_integrity import sign_audit_entry
+from api.grpc import quantum_pb2, quantum_pb2_grpc
 from api.security.enhanced.audit_retention import AuditEventType, AuditSeverity, log_audit_event
 
 logger = structlog.get_logger()

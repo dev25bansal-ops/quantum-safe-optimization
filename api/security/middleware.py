@@ -13,7 +13,7 @@ Features:
 import os
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, Request, Response
@@ -195,7 +195,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
 
         # Build audit log entry
         audit_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "request_id": request_id,
             "method": request.method,
             "path": request.url.path,

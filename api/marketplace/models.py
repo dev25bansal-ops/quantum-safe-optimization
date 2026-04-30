@@ -5,9 +5,8 @@ Provides models for the quantum algorithm marketplace.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -68,7 +67,7 @@ class AlgorithmRating:
     user_id: str
     rating: int
     comment: str | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -127,7 +126,7 @@ class MarketplaceAlgorithm:
         **kwargs,
     ) -> "MarketplaceAlgorithm":
         """Create a new marketplace algorithm."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         slug = name.lower().replace(" ", "-").replace("_", "-")[:50]
 
         return cls(
@@ -411,7 +410,7 @@ def purchase_algorithm(
         user_id=user_id,
         tenant_id=tenant_id,
         price_paid=algo.price,
-        purchased_at=datetime.now(timezone.utc),
+        purchased_at=datetime.now(UTC),
         license_key=f"KEY-{uuid4().hex[:16].upper()}" if algo.price > 0 else None,
     )
 

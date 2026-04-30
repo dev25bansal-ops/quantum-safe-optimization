@@ -10,12 +10,11 @@ Implements quantum-safe request signing:
 
 import base64
 import hashlib
-import json
 import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -76,7 +75,7 @@ class SigningKey:
     key_id: str
     secret_key: bytes
     public_key: bytes
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
     algorithm: str = "ML-DSA-65"
 
@@ -119,7 +118,7 @@ class RequestSigningManager:
 
             logger.info(f"Initialized ML-DSA-65 request signing key: {key.key_id}")
 
-        except ImportError:
+        except (ImportError, AttributeError, TypeError):
             key = SigningKey(
                 key_id=f"hmac_{uuid4().hex[:8]}",
                 secret_key=os.urandom(32),
@@ -176,7 +175,7 @@ class RequestSigningManager:
 
             return py_sign(key.secret_key, payload, security_level=3)
 
-        except ImportError:
+        except (ImportError, AttributeError, TypeError):
             import hmac
 
             return hmac.new(key.secret_key, payload.encode(), hashlib.sha256).hexdigest()
@@ -259,7 +258,7 @@ class RequestSigningManager:
 
             return new_key.key_id
 
-        except ImportError:
+        except (ImportError, AttributeError, TypeError):
             new_key = SigningKey(
                 key_id=f"hmac_{uuid4().hex[:8]}",
                 secret_key=os.urandom(32),

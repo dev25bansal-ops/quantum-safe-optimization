@@ -6,21 +6,18 @@ Allows users to upload and execute custom quantum algorithms.
 
 import ast
 import hashlib
-import inspect
-import os
 import re
-import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 from uuid import uuid4
 
 import structlog
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 
-logger = structlog.get_logger__)
+logger = structlog.get_logger()
 
 
 class AlgorithmStatus(str, Enum):
@@ -57,8 +54,8 @@ class AlgorithmMetadata:
     tags: list[str] = field(default_factory=list)
     num_qubits: int = 0
     estimated_runtime_ms: int = 0
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     checksum: str = ""
     source_file: str = ""
     validation_errors: list[str] = field(default_factory=list)
@@ -203,10 +200,26 @@ class AlgorithmValidator:
                 logger.warning("unknown_gate_in_qasm", gate=gate)
 
     def _validate_qubo(self, source_code: str) -> None:
-        """Validate QUBO matrix definition."""
+        """Validate QUBO matrix definition using safe parsing."""
+        import json
+        
+        data = None
         try:
-            data = eval(source_code, {"__builtins__": {}}, {})
+            data = json.loads(source_code)
+        except json.JSONDecodeError:
+            try:
+                import ast
+                parsed = ast.parse(source_code, mode='eval')
+                for node in ast.walk(parsed):
+                    if isinstance(node, (ast.Call, ast.Import, ast.ImportFrom)):
+                        self.errors.append("QUBO must be a simple data structure, not code")
+                        return
+                data = ast.literal_eval(source_code)
+            except (ValueError, SyntaxError) as e:
+                self.errors.append(f"Invalid QUBO format: {e}")
+                return
 
+        if data is not None:
             if not isinstance(data, (list, dict)):
                 self.errors.append("QUBO must be a list or dict")
 
@@ -214,9 +227,6 @@ class AlgorithmValidator:
                 for row in data:
                     if not isinstance(row, list):
                         self.errors.append("QUBO matrix rows must be lists")
-
-        except Exception as e:
-            self.errors.append(f"Invalid QUBO format: {e}")
 
 
 class AlgorithmRegistry:
@@ -278,7 +288,7 @@ class AlgorithmRegistry:
 
         metadata.source_file = str(source_file)
         metadata.status = AlgorithmStatus.APPROVED
-        metadata.updated_at = datetime.now(timezone.utc)
+        metadata.updated_at = datetime.now(UTC)
 
         self._algorithms[algorithm_id] = metadata
 
@@ -291,15 +301,15 @@ class AlgorithmRegistry:
 
         return metadata
 
-    def get_algorithm(self, algorithm_id: str) -> Optional[AlgorithmMetadata]:
+    def get_algorithm(self, algorithm_id: str) -> AlgorithmMetadata | None:
         """Get algorithm metadata."""
         return self._algorithms.get(algorithm_id)
 
     def list_algorithms(
         self,
-        author_id: Optional[str] = None,
-        status: Optional[AlgorithmStatus] = None,
-        language: Optional[AlgorithmLanguage] = None,
+        author_id: str | None = None,
+        status: AlgorithmStatus | None = None,
+        language: AlgorithmLanguage | None = None,
     ) -> list[AlgorithmMetadata]:
         """List algorithms with filters."""
         algorithms = list(self._algorithms.values())
@@ -315,13 +325,71 @@ class AlgorithmRegistry:
 
         return sorted(algorithms, key=lambda a: a.created_at, reverse=True)
 
+    def _create_sandboxed_namespace(self) -> dict[str, Any]:
+        """Create a restricted namespace for algorithm execution."""
+        import math
+        import cmath
+        
+        safe_builtins = {
+            "abs": abs,
+            "all": all,
+            "any": any,
+            "bool": bool,
+            "dict": dict,
+            "enumerate": enumerate,
+            "filter": filter,
+            "float": float,
+            "frozenset": frozenset,
+            "int": int,
+            "isinstance": isinstance,
+            "len": len,
+            "list": list,
+            "map": map,
+            "max": max,
+            "min": min,
+            "print": print,
+            "range": range,
+            "reversed": reversed,
+            "round": round,
+            "set": set,
+            "slice": slice,
+            "sorted": sorted,
+            "str": str,
+            "sum": sum,
+            "tuple": tuple,
+            "zip": zip,
+            "True": True,
+            "False": False,
+            "None": None,
+        }
+        
+        safe_math = {
+            "pi": math.pi,
+            "e": math.e,
+            "sin": math.sin,
+            "cos": math.cos,
+            "tan": math.tan,
+            "exp": math.exp,
+            "log": math.log,
+            "sqrt": math.sqrt,
+            "floor": math.floor,
+            "ceil": math.ceil,
+            "pow": pow,
+        }
+        
+        return {
+            "__builtins__": safe_builtins,
+            "math": type('Module', (), safe_math)(),
+            "cmath": cmath,
+        }
+
     def execute_algorithm(
         self,
         algorithm_id: str,
         parameters: dict[str, Any],
         user_id: str,
     ) -> dict[str, Any]:
-        """Execute a registered algorithm."""
+        """Execute a registered algorithm in a sandboxed environment."""
         metadata = self._algorithms.get(algorithm_id)
 
         if not metadata:
@@ -337,24 +405,19 @@ class AlgorithmRegistry:
         metadata.status = AlgorithmStatus.RUNNING
 
         try:
-            namespace = {
-                "__builtins__": {
-                    "print": print,
-                    "len": len,
-                    "range": range,
-                    "list": list,
-                    "dict": dict,
-                    "int": int,
-                    "float": float,
-                    "str": str,
-                    "bool": bool,
-                }
-            }
+            namespace = self._create_sandboxed_namespace()
 
             with open(source_path) as f:
                 source_code = f.read()
 
-            exec(compile(source_code, str(source_path), "exec"), namespace)
+            code_obj = compile(source_code, str(source_path), "exec")
+            
+            for const in code_obj.co_consts:
+                if isinstance(const, type(code_obj)):
+                    if any(name in const.co_names for name in ('eval', 'exec', 'compile', '__import__', 'open')):
+                        raise ValueError("Code contains forbidden operations")
+
+            exec(code_obj, namespace)
 
             entry_point = namespace.get(metadata.entry_point)
             if not entry_point or not callable(entry_point):
@@ -363,19 +426,19 @@ class AlgorithmRegistry:
             result = entry_point(**parameters)
 
             metadata.status = AlgorithmStatus.COMPLETED
-            metadata.updated_at = datetime.now(timezone.utc)
+            metadata.updated_at = datetime.now(UTC)
 
             return {
                 "algorithm_id": algorithm_id,
                 "status": "completed",
                 "result": result,
-                "executed_at": datetime.now(timezone.utc).isoformat(),
+                "executed_at": datetime.now(UTC).isoformat(),
             }
 
         except Exception as e:
             metadata.status = AlgorithmStatus.FAILED
             metadata.validation_errors = [str(e)]
-            metadata.updated_at = datetime.now(timezone.utc)
+            metadata.updated_at = datetime.now(UTC)
 
             logger.error(
                 "algorithm_execution_failed",
@@ -407,3 +470,4 @@ class AlgorithmRegistry:
 
 
 registry = AlgorithmRegistry()
+

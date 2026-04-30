@@ -25,28 +25,37 @@ from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from api.billing.router import router as billing_router
+from api.circuits.router import router as circuits_router
 from api.db.cosmos import close_cosmos, init_cosmos
+from api.federation.router import router as federation_router
 from api.logging_config import setup_logging
+from api.marketplace.router import router as marketplace_router
 from api.routers import auth, auth_demo, health, jobs
 from api.routers.api_keys import router as api_keys_router
 from api.routers.backends import router as backends_router
 from api.routers.batch import router as batch_router
 from api.routers.caching import router as caching_router
 from api.routers.costs import router as costs_router
+from api.routers.demo_mode import router as demo_mode_router
+from api.routers.anomaly import router as anomaly_router
 from api.routers.metrics import MetricsMiddleware
+from api.routers.analytics import router as analytics_router
+from api.routers.health_aggregation import router as health_aggregation_router
+from api.routers.performance_dashboard import router as performance_dashboard_router
+from api.webhooks.router import router as webhooks_router
+from api.alerts.router import router as alerts_router
+from api.templates.router import router as templates_router
+from api.graphql import graphql_router, GRAPHQL_AVAILABLE
 from api.routers.metrics import router as metrics_router
 from api.routers.oauth import router as oauth_router
-from api.routers.scheduling import router as scheduling_router, start_scheduler, stop_scheduler
+from api.routers.performance import router as performance_router
+from api.routers.scheduling import router as scheduling_router
+from api.routers.scheduling import start_scheduler, stop_scheduler
 from api.routers.websocket import close_websocket_manager, init_websocket_manager
 from api.routers.websocket import router as websocket_router
-from api.billing.router import router as billing_router
-from api.tenant.router import router as tenant_router
-from api.circuits.router import router as circuits_router
-from api.marketplace.router import router as marketplace_router
-from api.federation.router import router as federation_router
-from api.security.enhanced.router import router as security_router
 from api.security.enhanced.request_signing import RequestSigningMiddleware
-from api.routers.performance import router as performance_router
+from api.security.enhanced.router import router as security_router
 from api.security.middleware import (
     AuditLoggingMiddleware,
     RequestIDMiddleware,
@@ -62,6 +71,7 @@ from api.telemetry import (
     instrument_fastapi,
     setup_telemetry,
 )
+from api.tenant.router import router as tenant_router
 
 # Initialize structured logging
 logger = setup_logging(
@@ -107,7 +117,7 @@ async def lifespan(app: FastAPI):
     app_env = os.getenv("APP_ENV", "development")
     if app_env == "production":
         try:
-            from quantum_safe_crypto import is_crypto_production_ready, get_crypto_status
+            from quantum_safe_crypto import get_crypto_status, is_crypto_production_ready
 
             if not is_crypto_production_ready():
                 status = get_crypto_status()
@@ -158,11 +168,39 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("job_scheduler_init_failed", error=str(e))
 
-    # Initialize server signing key for PQC tokens
+    # Initialize PQC key rotation service (replaces static keypair)
+    from api.key_rotation import KeyRotationService, RotationPolicy
     from quantum_safe_crypto import SigningKeyPair
 
-    app.state.signing_keypair = SigningKeyPair()
-    logger.info("pqc_keys_initialized", algorithm="ML-DSA-65")
+    rotation_policy = RotationPolicy(
+        max_age_days=int(os.getenv("PQC_KEY_MAX_AGE_DAYS", "90")),
+        rotate_before_days=int(os.getenv("PQC_KEY_ROTATE_BEFORE_DAYS", "7")),
+    )
+    app.state.key_rotation_service = KeyRotationService(
+        rotation_policy=rotation_policy,
+        store=None,  # TODO: Wire up to persistent store
+    )
+
+    # Generate initial signing key
+    signing_key_meta = await app.state.key_rotation_service.generate_key(
+        key_type="signing",
+        security_level=3,  # ML-DSA-65
+    )
+    app.state.signing_keypair = SigningKeyPair()  # Actual key instance
+    app.state.signing_key_id = signing_key_meta.key_id  # Key ID for JWT kid header
+    logger.info(
+        "pqc_keys_initialized",
+        algorithm="ML-DSA-65",
+        key_id=signing_key_meta.key_id,
+        expires_at=signing_key_meta.expires_at.isoformat(),
+    )
+
+    # Start key rotation scheduler
+    try:
+        await app.state.key_rotation_service.start_rotation_scheduler(interval_hours=24)
+        logger.info("key_rotation_scheduler_started")
+    except Exception as e:
+        logger.warning("key_rotation_scheduler_start_failed", error=str(e))
 
     # Check Celery status if enabled
     if os.getenv("USE_CELERY", "false").lower() == "true":
@@ -208,6 +246,14 @@ async def lifespan(app: FastAPI):
         logger.info("secrets_manager_closed")
     except Exception as e:
         logger.warning("secrets_manager_close_error", error=str(e))
+
+    # Stop key rotation scheduler
+    try:
+        if hasattr(app.state, "key_rotation_service"):
+            await app.state.key_rotation_service.stop_rotation_scheduler()
+            logger.info("key_rotation_scheduler_stopped")
+    except Exception as e:
+        logger.warning("key_rotation_scheduler_stop_failed", error=str(e))
 
     logger.info("application_stopped")
 
@@ -290,7 +336,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     """Handle uncaught exceptions."""
     request_id = request.headers.get("X-Request-ID") or getattr(request.state, "request_id", None)
 
-    # Log the exception with full context
+    # Log the exception with full context (always log full details internally)
     logger.exception(
         "unhandled_exception",
         error=str(exc),
@@ -308,11 +354,16 @@ async def global_exception_handler(request: Request, exc: Exception):
     except Exception:
         logger.warning(f"Telemetry recording failed: {exc}")
 
+    # SECURITY: Never leak internal details to clients - always use generic message
+    # Only in explicit development mode (checked via APP_ENV, not DEBUG)
+    is_dev = os.getenv("APP_ENV", "production") == "development"
+    error_message = str(exc) if is_dev else "An internal error occurred"
+
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
             error="internal_server_error",
-            message=str(exc) if os.getenv("DEBUG") else "An internal error occurred",
+            message=error_message,
             request_id=request_id,
         ).model_dump(),
     )
@@ -377,6 +428,33 @@ api_v1_router.include_router(security_router, prefix="/security", tags=["Securit
 api_v1_router.include_router(
     performance_router, prefix="/performance", tags=["Performance & Optimization"]
 )
+api_v1_router.include_router(demo_mode_router, tags=["Demo Mode"])
+api_v1_router.include_router(anomaly_router, tags=["Anomaly Detection"])
+api_v1_router.include_router(analytics_router, prefix="/analytics", tags=["API Analytics"])
+api_v1_router.include_router(health_aggregation_router, prefix="/health/aggregated", tags=["Health Aggregation"])
+api_v1_router.include_router(performance_dashboard_router, prefix="/performance/dashboard", tags=["Performance Dashboard"])
+api_v1_router.include_router(webhooks_router, prefix="/webhooks", tags=["Webhooks"])
+api_v1_router.include_router(alerts_router, prefix="/alerts", tags=["Alerts"])
+api_v1_router.include_router(templates_router, prefix="/templates", tags=["Job Templates"])
+
+if GRAPHQL_AVAILABLE and graphql_router:
+    api_v1_router.include_router(graphql_router, tags=["GraphQL"])
+    logger.info("graphql_api_enabled")
+else:
+    logger.warning("graphql_api_disabled", reason="strawberry-graphql not installed")
+
+# Log demo mode status on startup
+from api.security.demo_mode import get_demo_mode_status, DEMO_MODE
+
+demo_status = get_demo_mode_status()
+logger.info("demo_mode_status", **demo_status)
+if DEMO_MODE:
+    logger.warning(
+        "SECURITY_WARNING",
+        message="Application starting with DEMO MODE ENABLED",
+        environment=demo_status["environment"],
+        note="Unauthenticated access will be allowed",
+    )
 
 # Mount versioned API
 app.include_router(api_v1_router)

@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- GraphQL API at `/api/v1/graphql` with GraphiQL playground
+- Event sourcing for comprehensive audit trail
+- API key rotation automation service with scheduling
+- Rate limit backup persistence for Redis failover scenarios
+- Chaos engineering test suite for resilience verification
+- Frontend build configuration with Vite
+- TypeScript type definitions for frontend modules
+- Demo mode security hardening with environment validation
+- Coverage threshold enforcement (70%) in CI pipeline
+- Token revocation store with automatic cleanup
+- Quantum error mitigation (ZNE, Readout, PEC)
+- Notification service for real-time alerts
+- Data export service (JSON, CSV, PDF)
+- Analytics dashboard service
+- Interactive frontend tutorials module
+- Security scanning CI workflow (Bandit, Safety, pip-audit, CodeQL)
+- Prometheus alerting rules (30 rules across 8 categories)
+
+### Changed
+
+- Demo mode now requires explicit environment validation (blocked in production)
+- Rate limiter includes backup store for persistence during Redis outages
+- Security headers middleware enhanced with additional OWASP headers
+- ML-KEM/ML-DSA fallback handling improved for missing native implementations
+
+### Fixed
+
+- Test data validation in marketplace and federation tests
+- Notification service syntax error
+- Audit integrity response field names
+
 ### Security (Critical)
 
 #### Fixed

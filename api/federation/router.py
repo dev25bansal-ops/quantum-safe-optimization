@@ -5,15 +5,14 @@ Provides multi-region quantum computing with intelligent routing.
 """
 
 import logging
+from datetime import UTC
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .models import (
-    FederationConfig,
     FederationRegion,
     FederationStatus,
-    get_federation_status,
     ProviderType,
     RegionCreate,
     RegionResponse,
@@ -21,10 +20,11 @@ from .models import (
     RoutingDecision,
     RoutingRequest,
     RoutingStrategy,
-    select_region,
-    seed_default_regions,
     _in_memory_regions,
     _region_metrics,
+    get_federation_status,
+    seed_default_regions,
+    select_region,
 )
 
 logger = logging.getLogger(__name__)
@@ -175,9 +175,9 @@ async def update_region_status(
     region = _in_memory_regions[region_id]
     region.status = status
 
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    region.last_health_check = datetime.now(timezone.utc)
+    region.last_health_check = datetime.now(UTC)
 
     return {"region_id": region_id, "status": status.value}
 

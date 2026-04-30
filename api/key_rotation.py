@@ -6,8 +6,8 @@ Handles automatic key rotation, expiration, and lifecycle management.
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from quantum_safe_crypto import KemKeyPair, SigningKeyPair
@@ -86,8 +86,8 @@ class KeyRotationService:
             key_type=key_type,
             public_key=keypair.public_key,
             security_level=security_level,
-            created_at=datetime.now(timezone.utc),
-            expires_at=datetime.now(timezone.utc) + timedelta(days=expires_in),
+            created_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(days=expires_in),
         )
 
         self._keys[key_id] = metadata
@@ -117,10 +117,10 @@ class KeyRotationService:
         )
 
         new_key.rotated_from = key_id
-        new_key.rotated_at = datetime.now(timezone.utc)
+        new_key.rotated_at = datetime.now(UTC)
 
         logger.info(
-            f"Rotated key",
+            "Rotated key",
             extra={
                 "old_key_id": key_id,
                 "new_key_id": new_key.key_id,
@@ -142,7 +142,7 @@ class KeyRotationService:
 
     def get_expiring_keys(self, within_days: int = 7) -> list[KeyMetadata]:
         """Get keys expiring within the specified days."""
-        threshold = datetime.now(timezone.utc) + timedelta(days=within_days)
+        threshold = datetime.now(UTC) + timedelta(days=within_days)
         return [k for k in self._keys.values() if k.is_active and k.expires_at <= threshold]
 
     async def check_and_rotate(self) -> list[KeyMetadata]:

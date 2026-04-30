@@ -16,7 +16,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -138,10 +138,12 @@ class AuditEvent:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
+        event_type_val = self.event_type.value if hasattr(self.event_type, 'value') else self.event_type
+        severity_val = self.severity.value if hasattr(self.severity, 'value') else self.severity
         return {
             "event_id": self.event_id,
-            "event_type": self.event_type.value,
-            "severity": self.severity.value,
+            "event_type": event_type_val,
+            "severity": severity_val,
             "timestamp": self.timestamp.isoformat(),
             "user_id": self.user_id,
             "tenant_id": self.tenant_id,
@@ -193,7 +195,7 @@ class AuditLogManager:
 
     def _get_log_file_path(self, date: datetime | None = None) -> Path:
         """Get log file path for a date."""
-        date = date or datetime.now(timezone.utc)
+        date = date or datetime.now(UTC)
         return self._log_dir / f"audit-{date.strftime('%Y-%m-%d')}.jsonl"
 
     def _hash_sensitive_data(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -234,7 +236,7 @@ class AuditLogManager:
             event_id=f"evt_{uuid4().hex[:16]}",
             event_type=event_type,
             severity=severity,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             user_id=user_id,
             tenant_id=tenant_id,
             ip_address=ip_address,
@@ -318,7 +320,7 @@ class AuditLogManager:
 
     async def cleanup_old_logs(self) -> dict[str, int]:
         """Clean up old log files based on retention policy."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stats = {
             "files_deleted": 0,
             "files_compressed": 0,
@@ -330,7 +332,7 @@ class AuditLogManager:
             for log_file in self._log_dir.glob("audit-*.jsonl*"):
                 try:
                     date_str = log_file.stem.replace("audit-", "").replace(".jsonl", "")
-                    file_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                    file_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)
                     age_days = (now - file_date).days
 
                     if age_days > self._policy.delete_archived_after_days:

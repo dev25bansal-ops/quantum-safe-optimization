@@ -8,7 +8,7 @@ Split from jobs.py for maintainability.
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -72,7 +72,7 @@ async def submit_job(
         "problem_config": job_data.problem_config,
         "parameters": job_data.parameters or {},
         "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "webhook_url": job_data.webhook_url,
         "encrypt_results": job_data.encrypt_results,
     }
@@ -89,5 +89,5 @@ async def submit_job(
         job_id=job_id,
         status="pending",
         message="Job submitted successfully",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )

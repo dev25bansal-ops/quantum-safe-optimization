@@ -72,7 +72,7 @@ async def test_search_with_query(client: AsyncClient, auth_token: str):
 @pytest.mark.anyio
 async def test_search_by_category(client: AsyncClient, auth_token: str):
     response = await client.get(
-        "/api/v1/marketplace/search?category=optimization",
+        "/api/v1/marketplace/search?category=qaoa",
         headers={"Authorization": f"Bearer {auth_token}"},
     )
     assert response.status_code == 200
@@ -131,7 +131,7 @@ async def test_publish_algorithm(client: AsyncClient, auth_token: str):
         json={
             "name": "Test Algorithm",
             "description": "A test algorithm for unit testing",
-            "category": "optimization",
+            "category": "qaoa",
             "pricing_model": "free",
             "price": 0,
             "tags": ["test", "quantum"],
@@ -153,18 +153,18 @@ async def test_publish_paid_algorithm(client: AsyncClient, auth_token: str):
         "/api/v1/marketplace/",
         json={
             "name": "Premium Algorithm",
-            "description": "A premium algorithm",
+            "description": "A premium algorithm with advanced features",
             "category": "machine_learning",
-            "pricing_model": "paid",
+            "pricing_model": "one_time",
             "price": 99.99,
-            "license_type": "commercial",
+            "license_type": "proprietary",
             "tags": ["premium"],
         },
         headers={"Authorization": f"Bearer {auth_token}"},
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["pricing_model"] == "paid"
+    assert data["pricing_model"] == "one_time"
     assert data["price"] == 99.99
 
 
@@ -295,8 +295,8 @@ async def test_delete_algorithm(client: AsyncClient, auth_token: str):
         "/api/v1/marketplace/",
         json={
             "name": "Algorithm to Delete",
-            "description": "Will be deleted",
-            "category": "optimization",
+            "description": "Will be deleted from marketplace",
+            "category": "other",
             "pricing_model": "free",
         },
         headers={"Authorization": f"Bearer {auth_token}"},
@@ -317,10 +317,10 @@ async def test_algorithm_fields(client: AsyncClient, auth_token: str):
         "/api/v1/marketplace/",
         json={
             "name": "Full Fields Algorithm",
-            "description": "Testing all fields",
-            "long_description": "This is a longer description",
-            "category": "optimization",
-            "pricing_model": "paid",
+            "description": "Testing all fields of the algorithm",
+            "long_description": "This is a longer description of the algorithm",
+            "category": "vqe",
+            "pricing_model": "one_time",
             "price": 49.99,
             "license_type": "mit",
             "tags": ["quantum", "vqe"],

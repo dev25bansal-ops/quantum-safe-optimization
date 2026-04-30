@@ -7,11 +7,10 @@ Provides export and analysis capabilities for audit logs.
 import csv
 import io
 import json
-import os
-from datetime import datetime, timedelta, timezone
-from typing import Any, Iterator
+from collections.abc import Iterator
+from datetime import datetime
+from typing import Any
 
-from fastapi import Response
 from fastapi.responses import StreamingResponse
 
 

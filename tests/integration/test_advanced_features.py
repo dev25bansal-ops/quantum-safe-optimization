@@ -104,7 +104,7 @@ async def test_marketplace_federation_integration(client: AsyncClient, auth_toke
 
     route_response = await client.post(
         "/api/v1/federation/route",
-        json={"shots": 5000, "preferred_provider": "ibm"},
+        json={"job_type": "VQE", "algorithm": "vqe", "num_qubits": 4, "shots": 5000, "preferred_provider": "ibm"},
         headers={"Authorization": f"Bearer {auth_token}"},
     )
     assert route_response.status_code == 200
@@ -128,7 +128,7 @@ async def test_purchase_with_federation(client: AsyncClient, auth_token: str):
 
         route_response = await client.post(
             "/api/v1/federation/route",
-            json={"shots": 1000},
+            json={"job_type": "QAOA", "algorithm": "qaoa", "num_qubits": 6, "shots": 1000},
             headers={"Authorization": f"Bearer {auth_token}"},
         )
         assert route_response.status_code == 200

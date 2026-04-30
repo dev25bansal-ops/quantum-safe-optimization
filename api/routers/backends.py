@@ -6,6 +6,7 @@ monitoring health status, and retrieving available devices.
 """
 
 import logging
+from datetime import UTC
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -263,12 +264,12 @@ async def test_backend_connection(
     Attempts to establish a connection and fetch available devices.
     Returns success status, latency, and number of devices found.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     bt = _backend_type_from_string(backend_type)
     manager = _get_manager()
 
-    start_time = datetime.now(timezone.utc)
+    start_time = datetime.now(UTC)
 
     try:
         if not manager._running:
@@ -277,7 +278,7 @@ async def test_backend_connection(
         backend = await manager.get_connection(bt)
         try:
             devices = await backend.get_available_devices()
-            elapsed = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            elapsed = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
             return ConnectionTestResult(
                 backend_type=bt.value,
@@ -290,7 +291,7 @@ async def test_backend_connection(
             await manager.release_connection(backend, success=True)
 
     except ConnectionError as e:
-        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+        elapsed = (datetime.now(UTC) - start_time).total_seconds() * 1000
         return ConnectionTestResult(
             backend_type=bt.value,
             success=False,
@@ -298,7 +299,7 @@ async def test_backend_connection(
             latency_ms=round(elapsed, 2),
         )
     except Exception as e:
-        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+        elapsed = (datetime.now(UTC) - start_time).total_seconds() * 1000
         return ConnectionTestResult(
             backend_type=bt.value,
             success=False,

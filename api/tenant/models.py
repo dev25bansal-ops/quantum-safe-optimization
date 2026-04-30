@@ -4,16 +4,13 @@ Multi-tenant Isolation Module.
 Provides tenant isolation, RBAC, and data segregation for enterprise deployments.
 """
 
-import os
-import hashlib
-import secrets
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class TenantTier(str, Enum):
@@ -111,7 +108,7 @@ class Tenant:
     slug: str
     tier: TenantTier = TenantTier.FREE
     is_active: bool = True
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     settings: dict[str, Any] = field(default_factory=dict)
     quotas: dict[str, int] = field(default_factory=dict)
 
@@ -183,7 +180,7 @@ class TenantMembership:
     user_id: str
     role: Role = Role.MEMBER
     custom_permissions: set[Permission] = field(default_factory=set)
-    joined_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    joined_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     invited_by: str | None = None
 
     def has_permission(self, permission: Permission) -> bool:

@@ -9,9 +9,9 @@ This is the SECURE alternative to client-side demo token forgery.
 
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from .auth import create_pqc_token, get_server_signing_keypair
@@ -70,5 +70,5 @@ async def enable_demo_mode(request: Request, body: DemoModeRequest):
         "expires_in": 86400,  # 24 hours
         "pqc_signature": signature,
         "demo_mode": True,
-        "expires_at": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
+        "expires_at": (datetime.now(UTC) + timedelta(hours=24)).isoformat(),
     }

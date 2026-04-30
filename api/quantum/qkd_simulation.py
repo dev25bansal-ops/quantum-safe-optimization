@@ -4,14 +4,11 @@ Quantum Key Distribution (QKD) Simulation.
 Simulates BB84, E91, and other QKD protocols for educational and testing purposes.
 """
 
-import hashlib
-import json
 import random
 import secrets
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 from uuid import uuid4
 
 import structlog
@@ -55,7 +52,7 @@ class QKDSimulationResult:
     quantum_channel_losses: float
     classical_channel_uses: int
     duration_ms: float
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict:
         return {

@@ -7,8 +7,8 @@ Provides both in-memory and database-backed storage for users, tokens, and keys.
 import logging
 import os
 import secrets
-from datetime import datetime, timezone
-from typing import Any, Protocol
+from datetime import UTC, datetime
+from typing import Protocol
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -45,10 +45,12 @@ class KeyStore(Protocol):
 
 
 class InMemoryUserStore:
-    """In-memory user storage (for development/testing)."""
+    """In-memory user storage (for development/testing) with optimized indexes."""
 
     def __init__(self):
         self._users: dict[str, dict] = {}
+        self._email_index: dict[str, str] = {}  # email -> user_id (O(1) lookup)
+        self._id_index: dict[str, str] = {}  # user_id -> username (O(1) lookup)
         self._initialize_default_admin()
 
     def _initialize_default_admin(self) -> None:
@@ -65,42 +67,95 @@ class InMemoryUserStore:
             )
 
         if not admin_password:
-            admin_password = "changeme"
+            # Generate a random password for development instead of using 'changeme'
+            import secrets
+            admin_password = secrets.token_urlsafe(16)
             logger.warning(
-                "Using default admin password 'changeme' for development. "
-                "Set ADMIN_PASSWORD environment variable for production."
+                f"SECURITY: Generated random admin password: {admin_password}. "
+                "Save it now! Set ADMIN_PASSWORD environment variable for persistence."
             )
 
         if admin_username not in self._users:
-            self._users[admin_username] = {
+            admin_user = {
                 "user_id": "usr_001",
                 "id": "usr_001",
                 "username": admin_username,
                 "password_hash": _password_hasher.hash(admin_password),
                 "email": os.environ.get("ADMIN_EMAIL", "admin@example.com"),
                 "roles": ["admin", "user"],
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
                 "kem_public_key": None,
             }
+            self._users[admin_username] = admin_user
+            
+            # Build indexes
+            if admin_user.get("email"):
+                self._email_index[admin_user["email"]] = admin_user["user_id"]
+            self._id_index[admin_user["user_id"]] = admin_username
+            
             logger.info(f"Initialized admin user: {admin_username}")
 
     async def get_by_username(self, username: str) -> dict | None:
         return self._users.get(username)
 
     async def get_by_id(self, user_id: str) -> dict | None:
-        for user in self._users.values():
-            if user.get("user_id") == user_id:
-                return user
+        # O(1) lookup via index instead of O(n) iteration
+        username = self._id_index.get(user_id)
+        if username:
+            return self._users.get(username)
         return None
+
+    async def get_by_email(self, email: str) -> dict | None:
+        """Get user by email using index (O(1))."""
+        user_id = self._email_index.get(email)
+        if user_id:
+            username = self._id_index.get(user_id)
+            if username:
+                return self._users.get(username)
+        return None
+
+    async def email_exists(self, email: str) -> bool:
+        """Check if email exists using index (O(1) instead of O(n))."""
+        return email in self._email_index
 
     async def save(self, user: dict) -> dict:
         username = user.get("username")
         if username:
+            # Remove old email index if updating existing user
+            old_user = self._users.get(username)
+            if old_user and old_user.get("email"):
+                self._email_index.pop(old_user["email"], None)
+            
             self._users[username] = user
+            
+            # Update indexes
+            if user.get("email"):
+                self._email_index[user["email"]] = user.get("user_id", "")
+            if user.get("user_id"):
+                self._id_index[user["user_id"]] = username
+                
         return user
+
+    async def delete(self, username: str) -> bool:
+        """Delete user and remove from indexes."""
+        if username in self._users:
+            user = self._users[username]
+            # Remove from indexes
+            if user.get("email"):
+                self._email_index.pop(user["email"], None)
+            if user.get("user_id"):
+                self._id_index.pop(user["user_id"], None)
+            # Remove user
+            del self._users[username]
+            return True
+        return False
 
     async def list(self, limit: int = 100) -> list[dict]:
         return list(self._users.values())[:limit]
+
+    async def count(self) -> int:
+        """Get user count in O(1)."""
+        return len(self._users)
 
 
 class InMemoryTokenStore:
@@ -123,26 +178,61 @@ class InMemoryTokenStore:
     async def revoke(self, token_id: str, reason: str) -> None:
         if token_id in self._tokens:
             self._tokens[token_id]["revoked"] = True
-            self._tokens[token_id]["revoked_at"] = datetime.now(timezone.utc).isoformat()
+            self._tokens[token_id]["revoked_at"] = datetime.now(UTC).isoformat()
             self._tokens[token_id]["revoked_reason"] = reason
 
 
 class InMemoryKeyStore:
-    """In-memory key storage (for development/testing)."""
+    """In-memory key storage (for development/testing) with user index."""
 
     def __init__(self):
         self._keys: dict[str, dict] = {}
+        self._user_index: dict[str, list[str]] = {}  # user_id -> [key_ids]
 
     async def save(self, key: dict) -> None:
         key_id = key.get("key_id") or secrets.token_hex(16)
         key["key_id"] = key_id
         self._keys[key_id] = key
+        
+        # Update user index
+        user_id = key.get("user_id")
+        if user_id:
+            if user_id not in self._user_index:
+                self._user_index[user_id] = []
+            if key_id not in self._user_index[user_id]:
+                self._user_index[user_id].append(key_id)
 
     async def get(self, key_id: str) -> dict | None:
         return self._keys.get(key_id)
 
     async def list_for_user(self, user_id: str) -> list[dict]:
-        return [k for k in self._keys.values() if k.get("user_id") == user_id]
+        # O(1) lookup via index instead of O(n) iteration
+        key_ids = self._user_index.get(user_id, [])
+        keys = []
+        for kid in key_ids:
+            if kid in self._keys:
+                keys.append(self._keys[kid])
+        # Sort by creation date, newest first
+        keys.sort(key=lambda k: k.get("created_at", ""), reverse=True)
+        return keys
+
+    async def delete(self, key_id: str) -> bool:
+        """Delete a key and update indexes."""
+        if key_id in self._keys:
+            key = self._keys[key_id]
+            user_id = key.get("user_id")
+            if user_id and user_id in self._user_index:
+                if key_id in self._user_index[user_id]:
+                    self._user_index[user_id].remove(key_id)
+                if not self._user_index[user_id]:
+                    del self._user_index[user_id]
+            del self._keys[key_id]
+            return True
+        return False
+
+    async def count_for_user(self, user_id: str) -> int:
+        """Count keys for a user in O(1)."""
+        return len(self._user_index.get(user_id, []))
 
 
 class AuthStores:

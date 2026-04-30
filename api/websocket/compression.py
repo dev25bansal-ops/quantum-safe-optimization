@@ -8,13 +8,11 @@ Provides compression for large WebSocket payloads:
 - Compression metrics
 """
 
-import asyncio
 import gzip
 import logging
 import struct
 import zlib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 

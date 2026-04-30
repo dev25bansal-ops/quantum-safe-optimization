@@ -4,12 +4,11 @@ Quantum Machine Learning Integration.
 Provides quantum circuits and algorithms for machine learning tasks.
 """
 
-import json
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 import structlog
@@ -64,16 +63,16 @@ class QMLTrainingResult:
     status: str
     epochs_completed: int
     train_loss: float
-    val_loss: Optional[float] = None
-    train_accuracy: Optional[float] = None
-    val_accuracy: Optional[float] = None
+    val_loss: float | None = None
+    train_accuracy: float | None = None
+    val_accuracy: float | None = None
     best_epoch: int = 0
     training_history: list[dict] = field(default_factory=list)
     model_parameters: list[float] = field(default_factory=list)
     circuit_depth: int = 0
     total_shots: int = 0
     duration_ms: float = 0.0
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict:
         return {
@@ -100,10 +99,10 @@ class QMLPredictionResult:
     prediction_id: str
     model_id: str
     predictions: list[Any]
-    probabilities: Optional[list[list[float]]] = None
-    confidence: Optional[float] = None
+    probabilities: list[list[float]] | None = None
+    confidence: float | None = None
     duration_ms: float = 0.0
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class VariationalQuantumClassifier:
@@ -135,8 +134,8 @@ class VariationalQuantumClassifier:
 
     def _create_circuit(self, encoded_data: list[float]) -> int:
         """Create quantum circuit and return measured expectation."""
-        import random
         import math
+        import random
 
         expectation = 0.0
         for i, param in enumerate(self._parameters[: self.config.n_layers * self.config.n_qubits]):
@@ -154,8 +153,8 @@ class VariationalQuantumClassifier:
         self,
         X_train: list[list[float]],
         y_train: list[int],
-        X_val: Optional[list[list[float]]] = None,
-        y_val: Optional[list[int]] = None,
+        X_val: list[list[float]] | None = None,
+        y_val: list[int] | None = None,
     ) -> QMLTrainingResult:
         """Train the classifier."""
         start_time = time.perf_counter()
@@ -394,7 +393,7 @@ class QMLPipeline:
 
     def create_classifier(
         self,
-        config: Optional[QMLModelConfig] = None,
+        config: QMLModelConfig | None = None,
     ) -> VariationalQuantumClassifier:
         """Create a VQC classifier."""
         if config is None:
@@ -414,9 +413,9 @@ class QMLPipeline:
         algorithm: QMLAlgorithm,
         X_train: list[list[float]],
         y_train: list[int],
-        config: Optional[QMLModelConfig] = None,
-        X_val: Optional[list[list[float]]] = None,
-        y_val: Optional[list[int]] = None,
+        config: QMLModelConfig | None = None,
+        X_val: list[list[float]] | None = None,
+        y_val: list[int] | None = None,
     ) -> QMLTrainingResult:
         """Train a QML model."""
         if config is None:

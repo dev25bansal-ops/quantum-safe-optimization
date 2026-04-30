@@ -15,14 +15,13 @@ import logging
 import os
 import secrets
 import urllib.parse
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/oauth", tags=["OAuth / SSO"])
@@ -216,8 +215,8 @@ def create_jwt_token(user_info: dict, expires_in: int = 3600) -> str:
         "name": user_info.get("name"),
         "roles": user_info.get("roles", ["user"]),
         "provider": user_info.get("provider"),
-        "iat": datetime.now(timezone.utc),
-        "exp": datetime.now(timezone.utc) + timedelta(seconds=expires_in),
+        "iat": datetime.now(UTC),
+        "exp": datetime.now(UTC) + timedelta(seconds=expires_in),
         "jti": secrets.token_hex(16),
     }
 
@@ -277,7 +276,7 @@ async def oauth_authorize(
         "provider": provider,
         "code_verifier": code_verifier,
         "redirect_uri": redirect_uri or config.redirect_uri,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
 
     params = {
@@ -506,8 +505,8 @@ async def oauth_logout(request: Request):
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
-        from api.security.token_revocation import token_revocation_service
         from api.security.jwt_config import get_jwt_secret
+        from api.security.token_revocation import token_revocation_service
 
         try:
             secret = get_jwt_secret()

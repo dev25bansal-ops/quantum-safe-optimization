@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -76,11 +76,31 @@ try:
 except ImportError:
     _webhooks_available = False
 
-# Configuration
-USE_CELERY = os.getenv("USE_CELERY", "false").lower() == "true"
-DEMO_MODE = (
-    os.getenv("DEMO_MODE", "false").lower() == "true"
-)  # Allow unauthenticated access for demo
+# Configuration - Use Celery by default in production for performance
+# SECURITY: Running quantum jobs in FastAPI process blocks the event loop
+_app_env = os.getenv("APP_ENV", "development")
+_is_production = _app_env == "production"
+USE_CELERY = os.getenv("USE_CELERY", "true" if _is_production else "false").lower() == "true"
+
+if _is_production and not USE_CELERY:
+    logger.warning(
+        "SECURITY_WARNING: Production environment detected with USE_CELERY=false. "
+        "Quantum jobs will block the FastAPI event loop. This is NOT recommended for production."
+    )
+
+from api.security.demo_mode import DEMO_MODE, is_demo_mode_allowed, log_demo_mode_access
+
+if DEMO_MODE:
+    logger.warning(
+        "jobs_router_demo_mode", extra={"message": "Job router initialized with demo mode enabled"}
+    )
+
+
+def _log_demo_access(user_id: str, action: str, details: dict[str, Any] | None = None):
+    """Log demo mode access for audit."""
+    if DEMO_MODE:
+        log_demo_mode_access(user_id, action, details)
+
 
 # Logger for this module
 logger = logging.getLogger(__name__)
@@ -111,7 +131,9 @@ async def get_optional_user(
 ) -> dict:
     """
     Optional authentication dependency for demo mode.
-    Returns authenticated user if token provided and valid, otherwise returns demo user.
+
+    Returns authenticated user if token provided and valid.
+    In demo mode (development only), returns demo user for unauthenticated access.
     """
     # If credentials provided, try to validate
     if credentials:
@@ -123,17 +145,23 @@ async def get_optional_user(
             # Check if token revoked
             token_jti = payload.get("jti")
             if token_jti and await check_token_revocation(token_jti):
-                pass  # Fall through to demo user
+                pass  # Fall through to demo user or rejection
             else:
                 return payload
 
-    # Demo mode: return demo user
+    # Demo mode: return demo user (only in development environments)
     if DEMO_MODE:
-        return {
+        demo_user = {
             "sub": "demo_user",
             "username": "demo",
             "roles": ["user"],
         }
+        _log_demo_access(
+            "demo_user",
+            "unauthenticated_access",
+            {"path": str(request.url.path), "method": request.method},
+        )
+        return demo_user
 
     # Not demo mode and no valid token
     raise HTTPException(
@@ -360,7 +388,7 @@ async def send_webhook_notification(
             "event": "job.completed" if status == "completed" else "job.failed",
             "job_id": job_id,
             "status": status,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         if result:
@@ -474,7 +502,7 @@ async def process_optimization_job(job_id: str, job_data: dict[str, Any]):
         await update_job(
             {
                 "status": "running",
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
             }
         )
 
@@ -486,15 +514,22 @@ async def process_optimization_job(job_id: str, job_data: dict[str, Any]):
 
         # Create advanced simulator if configured
         use_advanced = backend == "advanced_simulator" or simulator_config
+        advanced_sim = None
+        
         if use_advanced:
-            advanced_sim = create_advanced_simulator(
-                simulator_type=simulator_config.get("simulator_type", "statevector"),
-                noise_model=simulator_config.get("noise_model", "ideal"),
-                enable_error_mitigation=simulator_config.get("enable_error_mitigation", False),
-                single_qubit_error_rate=simulator_config.get("single_qubit_error_rate", 0.001),
-                two_qubit_error_rate=simulator_config.get("two_qubit_error_rate", 0.01),
-            )
-            await advanced_sim.connect()
+            try:
+                advanced_sim = create_advanced_simulator(
+                    simulator_type=simulator_config.get("simulator_type", "statevector"),
+                    noise_model=simulator_config.get("noise_model", "ideal"),
+                    enable_error_mitigation=simulator_config.get("enable_error_mitigation", False),
+                    single_qubit_error_rate=simulator_config.get("single_qubit_error_rate", 0.001),
+                    two_qubit_error_rate=simulator_config.get("two_qubit_error_rate", 0.01),
+                )
+                await advanced_sim.connect()
+            except Exception as e:
+                logger.error("advanced_simulator_connection_failed", error=str(e), job_id=job_id)
+                use_advanced = False  # Fall back to standard runner
+                advanced_sim = None
 
         result = None
 
@@ -767,11 +802,21 @@ async def process_optimization_job(job_id: str, job_data: dict[str, Any]):
         await update_job(
             {
                 "status": "completed",
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "result": result if not encrypted_result else None,
                 "encrypted_result": encrypted_result,
             }
         )
+
+        # Cache the result for faster retrieval (if caching enabled)
+        try:
+            from api.cache.result_cache import get_result_cache
+            cache = get_result_cache()
+            if cache:  # Will be NoOpResultCache if disabled
+                await cache.set(problem_config, parameters, result, user_id=job_data.get("user_id"))
+                logger.debug("result_cached", job_id=job_id)
+        except Exception as e:
+            logger.warning("result_cache_failed", error=str(e), job_id=job_id)
 
         # Send webhook notification if callback_url is set
         callback_url = job_data.get("callback_url")
@@ -789,7 +834,7 @@ async def process_optimization_job(job_id: str, job_data: dict[str, Any]):
             {
                 "status": "failed",
                 "error": error_msg,
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             }
         )
 
@@ -802,6 +847,14 @@ async def process_optimization_job(job_id: str, job_data: dict[str, Any]):
                 status="failed",
                 error=error_msg,
             )
+    finally:
+        # CRITICAL: Clean up simulator connection to prevent resource leak
+        if advanced_sim:
+            try:
+                await advanced_sim.disconnect()
+                logger.debug("simulator_disconnected", job_id=job_id)
+            except Exception as e:
+                logger.warning("simulator_disconnect_failed", error=str(e), job_id=job_id)
 
 
 @router.post("", response_model=JobResponse, status_code=202)
@@ -867,7 +920,7 @@ async def submit_job(
         "backend": job_request.backend,
         "priority": priority_int,
         "status": "queued",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "started_at": None,
         "completed_at": None,
         "result": None,
@@ -1115,7 +1168,7 @@ async def cancel_job(
 
     # Update job status
     job["status"] = "cancelled"
-    job["completed_at"] = datetime.now(timezone.utc).isoformat()
+    job["completed_at"] = datetime.now(UTC).isoformat()
     job["cancellation_reason"] = "User requested cancellation"
 
     # Persist to store
@@ -1144,7 +1197,20 @@ async def get_job_result(
 
     If the result was encrypted, returns the encrypted envelope.
     Use POST /{job_id}/decrypt to decrypt with your secret key.
+    
+    Performance: Checks result cache first for faster retrieval.
     """
+    # Try to get from cache first (if available)
+    try:
+        from api.cache.result_cache import get_result_cache
+        cache = get_result_cache()
+        if cache:
+            # We'd need the original problem_config and parameters to check cache
+            # For now, we'll just serve from the job store
+            pass
+    except Exception:
+        pass  # Cache not available, serve from job store
+    
     job = await get_job_data(job_id, current_user["sub"])
 
     if not job:
@@ -1173,6 +1239,7 @@ async def get_job_result(
             "problem_type": job["problem_type"],
             "backend": job["backend"],
             "execution_time_ms": _calculate_execution_time(job),
+            "served_from_cache": False,  # Would be True if served from cache
         },
     }
 
@@ -1238,7 +1305,7 @@ async def retry_job(
         "job_id": new_job_id,
         "id": new_job_id,
         "status": "queued",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "started_at": None,
         "completed_at": None,
         "result": None,

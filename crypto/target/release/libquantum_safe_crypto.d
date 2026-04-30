@@ -1,0 +1,1 @@
+D:\Quantum\crypto\target\release\libquantum_safe_crypto.rlib: D:\Quantum\crypto\src\encryption.rs D:\Quantum\crypto\src\error.rs D:\Quantum\crypto\src\kem.rs D:\Quantum\crypto\src\lib.rs D:\Quantum\crypto\src\signatures.rs

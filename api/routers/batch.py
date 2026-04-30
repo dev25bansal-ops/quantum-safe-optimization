@@ -12,11 +12,11 @@ Features:
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.routers.auth import get_current_user
@@ -121,7 +121,7 @@ async def execute_single_job(job: dict, batch_id: str) -> dict:
     job_type = job.get("job_type")
     config = job.get("config", {})
 
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
 
     job_status = {
         "job_id": job_id,
@@ -167,7 +167,7 @@ async def execute_single_job(job: dict, batch_id: str) -> dict:
         job_status["status"] = "failed"
         job_status["error"] = str(e)
 
-    completed_at = datetime.now(timezone.utc)
+    completed_at = datetime.now(UTC)
     job_status["completed_at"] = completed_at.isoformat()
 
     return job_status
@@ -180,7 +180,7 @@ async def execute_batch(batch_id: str):
         return
 
     batch["status"] = BatchStatus.RUNNING.value
-    batch["started_at"] = datetime.now(timezone.utc).isoformat()
+    batch["started_at"] = datetime.now(UTC).isoformat()
 
     jobs = batch.get("jobs", [])
     parallel = batch.get("parallel", True)
@@ -238,7 +238,7 @@ async def execute_batch(batch_id: str):
 
                         if result.get("status") == "failed" and stop_on_failure:
                             batch["status"] = BatchStatus.FAILED.value
-                            batch["completed_at"] = datetime.now(timezone.utc).isoformat()
+                            batch["completed_at"] = datetime.now(UTC).isoformat()
                             logger.warning(f"Batch {batch_id} stopped due to failure")
                             return
                     except Exception as e:
@@ -267,7 +267,7 @@ async def execute_batch(batch_id: str):
     else:
         batch["status"] = BatchStatus.COMPLETED.value
 
-    batch["completed_at"] = datetime.now(timezone.utc).isoformat()
+    batch["completed_at"] = datetime.now(UTC).isoformat()
 
     notify_url = batch.get("notify_on_complete")
     if notify_url:
@@ -298,7 +298,7 @@ async def create_batch(
 ):
     """Create and submit a batch of jobs."""
     batch_id = f"batch_{uuid.uuid4().hex[:12]}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     user_id = current_user.get("sub", "anonymous")
 
     # Validate webhook URL if provided
@@ -489,7 +489,7 @@ async def cancel_batch(
         raise HTTPException(status_code=400, detail=f"Batch already {batch['status']}")
 
     batch["status"] = BatchStatus.CANCELLED.value
-    batch["completed_at"] = datetime.now(timezone.utc).isoformat()
+    batch["completed_at"] = datetime.now(UTC).isoformat()
 
     for job_id, job in batch.get("job_results", {}).items():
         if job.get("status") in ["pending", "running"]:

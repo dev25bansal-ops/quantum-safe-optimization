@@ -8,7 +8,7 @@ Keys are hashed using Argon2id and can have scoped permissions.
 import logging
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -184,13 +184,13 @@ async def validate_api_key(api_key: str) -> dict | None:
 
     if key_data.get("expires_at"):
         expires_at = datetime.fromisoformat(key_data["expires_at"])
-        if datetime.now(timezone.utc) > expires_at:
+        if datetime.now(UTC) > expires_at:
             return None
 
     if not verify_api_key(api_key, key_data.get("key_hash", "")):
         return None
 
-    key_data["last_used_at"] = datetime.now(timezone.utc).isoformat()
+    key_data["last_used_at"] = datetime.now(UTC).isoformat()
     key_data["usage_count"] = key_data.get("usage_count", 0) + 1
     await save_api_key(key_data)
 
@@ -267,7 +267,7 @@ async def create_api_key(request: Request, key_create: APIKeyCreate):
     key_hash = hash_api_key(full_key)
     key_id = f"apikey_{secrets.token_hex(8)}"
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = None
     if key_create.expires_in_days:
         expires_at = now + timedelta(days=key_create.expires_in_days)
@@ -372,7 +372,7 @@ async def revoke_api_key(
         raise HTTPException(status_code=404, detail="API key not found")
 
     key_data["is_active"] = False
-    key_data["revoked_at"] = datetime.now(timezone.utc).isoformat()
+    key_data["revoked_at"] = datetime.now(UTC).isoformat()
     await save_api_key(key_data)
 
     logger.info(f"API key revoked: {key_id}")
@@ -414,7 +414,7 @@ async def rotate_api_key(
     key_data["key_prefix"] = key_prefix
     key_data["key_hash"] = key_hash
     key_data["key_secret_hash"] = _password_hasher.hash(key_secret)
-    key_data["rotated_at"] = datetime.now(timezone.utc).isoformat()
+    key_data["rotated_at"] = datetime.now(UTC).isoformat()
     key_data["usage_count"] = 0
     key_data["is_active"] = True
 
@@ -443,3 +443,109 @@ async def test_api_key_validation(service: dict = Depends(get_current_service)):
         "scopes": service.get("scopes", []),
         "key_id": service.get("key_id"),
     }
+
+
+@router.get("/{key_id}/rotation-status")
+async def get_rotation_status(
+    key_id: str,
+    service: dict = Depends(require_scope(APIKeyScope.JOBS_READ)),
+):
+    """Get rotation status for an API key."""
+    from api.security.api_key_rotation import rotation_service
+
+    return await rotation_service.get_rotation_status(key_id)
+
+
+@router.post("/{key_id}/schedule-rotation")
+async def schedule_key_rotation(
+    key_id: str,
+    days: int = 7,
+    service: dict = Depends(require_scope(APIKeyScope.ADMIN)),
+):
+    """Schedule an API key rotation for a future date."""
+    from api.security.api_key_rotation import rotation_service
+    from datetime import timedelta
+
+    scheduled_at = datetime.now(UTC) + timedelta(days=days)
+    result = await rotation_service.schedule_rotation(
+        key_id=key_id,
+        scheduled_at=scheduled_at,
+        reason=f"Scheduled by {service.get('name', 'admin')}",
+    )
+
+    return {
+        "key_id": key_id,
+        "scheduled": True,
+        "scheduled_at": scheduled_at.isoformat(),
+        "message": result,
+    }
+
+
+@router.get("/rotation/due")
+async def get_keys_due_for_rotation(
+    service: dict = Depends(require_scope(APIKeyScope.ADMIN)),
+):
+    """Get API keys that are due for rotation."""
+    from api.security.api_key_rotation import rotation_service
+
+    all_keys = list(_in_memory_keys.values())
+    due_keys = await rotation_service.get_keys_due_for_rotation(all_keys)
+
+    return {"keys_due": due_keys, "count": len(due_keys)}
+
+
+@router.get("/rotation/settings")
+async def get_rotation_settings(
+    service: dict = Depends(require_scope(APIKeyScope.ADMIN)),
+):
+    """Get current rotation policy settings."""
+    from api.security.api_key_rotation import rotation_service, RotationPolicy
+
+    return {
+        "policy": rotation_service.config.policy.value,
+        "grace_period_hours": rotation_service.config.grace_period_hours,
+        "notify_before_days": rotation_service.config.notify_before_days,
+        "auto_rotate_enabled": rotation_service.config.auto_rotate_enabled,
+        "max_key_age_days": rotation_service.config.max_key_age_days,
+        "available_policies": [p.value for p in RotationPolicy],
+    }
+
+
+@router.put("/rotation/settings")
+async def update_rotation_settings(
+    policy: str = "90_days",
+    grace_period_hours: int = 24,
+    notify_before_days: int = 7,
+    auto_rotate_enabled: bool = True,
+    service: dict = Depends(require_scope(APIKeyScope.ADMIN)),
+):
+    """Update rotation policy settings."""
+    from api.security.api_key_rotation import rotation_service, RotationConfig, RotationPolicy
+
+    try:
+        new_config = RotationConfig(
+            policy=RotationPolicy(policy),
+            grace_period_hours=grace_period_hours,
+            notify_before_days=notify_before_days,
+            auto_rotate_enabled=auto_rotate_enabled,
+        )
+        rotation_service.config = new_config
+
+        logger.info(
+            "rotation_settings_updated",
+            policy=policy,
+            grace_period_hours=grace_period_hours,
+            updated_by=service.get("name", "admin"),
+        )
+
+        return {
+            "updated": True,
+            "config": {
+                "policy": new_config.policy.value,
+                "grace_period_hours": new_config.grace_period_hours,
+                "notify_before_days": new_config.notify_before_days,
+                "auto_rotate_enabled": new_config.auto_rotate_enabled,
+            },
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid policy: {policy}")

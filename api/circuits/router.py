@@ -7,11 +7,11 @@ Provides real-time quantum circuit visualization with WebSocket streaming.
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -137,7 +137,7 @@ def generate_sample_circuit(num_qubits: int = 4, depth: int = 3) -> QuantumCircu
         layers=layers,
         total_gates=gate_count,
         depth=depth,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -186,7 +186,7 @@ async def simulate_circuit_execution(execution_id: str, circuit: QuantumCircuit)
         execution.status = "completed"
         execution.current_layer = len(circuit.layers)
         execution.measurements = measurements
-        execution.completed_at = datetime.now(timezone.utc).isoformat()
+        execution.completed_at = datetime.now(UTC).isoformat()
 
         await broadcast_execution_update(
             execution_id,
@@ -242,7 +242,7 @@ async def execute_circuit(circuit_id: str, shots: int = 1024):
         status="running",
         current_layer=0,
         total_layers=len(circuit.layers),
-        started_at=datetime.now(timezone.utc).isoformat(),
+        started_at=datetime.now(UTC).isoformat(),
     )
 
     _in_memory_executions[execution_id] = execution
@@ -272,7 +272,7 @@ async def cancel_execution(execution_id: str):
         raise HTTPException(status_code=400, detail="Execution already completed")
 
     execution.status = "cancelled"
-    execution.completed_at = datetime.now(timezone.utc).isoformat()
+    execution.completed_at = datetime.now(UTC).isoformat()
 
     await broadcast_execution_update(
         execution_id,
@@ -333,7 +333,7 @@ async def websocket_execution_visualization(websocket: WebSocket, execution_id: 
                             )
                         )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 execution = _in_memory_executions.get(execution_id)
                 if execution and execution.status in ("completed", "cancelled", "failed"):
                     break
