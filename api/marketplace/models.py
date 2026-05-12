@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 class AlgorithmCategory(str, Enum):
     """Algorithm categories."""
 
+    OPTIMIZATION = "optimization"
     QAOA = "qaoa"
     VQE = "vqe"
     QUBO = "qubo"
@@ -362,7 +363,16 @@ def search_algorithms(
             or any(query_lower in t.lower() for t in a.tags)
         ]
 
-    if category:
+    if category == AlgorithmCategory.OPTIMIZATION:
+        results = [
+            a
+            for a in results
+            if "optimization" in a.description.lower()
+            or "optimization" in a.name.lower()
+            or "optimization" in a.tags
+            or a.category in {AlgorithmCategory.QAOA, AlgorithmCategory.QUBO, AlgorithmCategory.ANNEALING}
+        ]
+    elif category:
         results = [a for a in results if a.category == category]
 
     if min_rating is not None:

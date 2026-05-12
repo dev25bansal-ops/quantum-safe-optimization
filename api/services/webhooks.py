@@ -33,6 +33,20 @@ WEBHOOK_ALLOWED_HOSTS = os.getenv("WEBHOOK_ALLOWED_HOSTS", "")
 WEBHOOK_BLOCK_PRIVATE = os.getenv("WEBHOOK_BLOCK_PRIVATE", "true").lower() == "true"
 WEBHOOK_REQUIRE_HTTPS = os.getenv("WEBHOOK_REQUIRE_HTTPS", "true").lower() == "true"
 WEBHOOK_ALLOWLIST_ONLY = os.getenv("WEBHOOK_ALLOWLIST_ONLY", "false").lower() == "true"
+WEBHOOK_MAX_URL_LENGTH = int(os.getenv("WEBHOOK_MAX_URL_LENGTH", "2048"))
+
+
+class _AwaitableValidation(tuple):
+    """Tuple result that also supports ``await`` for async call sites."""
+
+    def __new__(cls, is_valid: bool, error: str):
+        return super().__new__(cls, (is_valid, error))
+
+    def __await__(self):
+        async def _result():
+            return tuple(self)
+
+        return _result().__await__()
 
 
 def _host_matches_allowlist(host: str, allowlist: list[str]) -> bool:
@@ -73,7 +87,19 @@ def _is_private_ip(host: str) -> bool:
         return False
 
 
-def validate_webhook_url(url: str) -> tuple[bool, str]:
+def _is_malformed_ip_literal(host: str) -> bool:
+    """Detect hostnames that look like invalid IPv4 literals."""
+    parts = host.split(".")
+    if len(parts) != 4 or not all(part.isdigit() for part in parts):
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False
+    except ValueError:
+        return True
+
+
+def validate_webhook_url(url: str) -> _AwaitableValidation:
     """
     Validate webhook destination URL to mitigate SSRF.
 
@@ -85,23 +111,33 @@ def validate_webhook_url(url: str) -> tuple[bool, str]:
     - Block cloud metadata endpoints
     - Enforce allowlist when configured
     """
-    parsed = urlparse(url)
+    if not isinstance(url, str) or len(url) > WEBHOOK_MAX_URL_LENGTH:
+        return _AwaitableValidation(False, "url too long")
+
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return _AwaitableValidation(False, "malformed URL")
+
     if parsed.scheme not in ("http", "https"):
-        return False, "invalid scheme"
+        return _AwaitableValidation(False, "invalid scheme")
 
     demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"
     if WEBHOOK_REQUIRE_HTTPS and not demo_mode and parsed.scheme != "https":
-        return False, "https required"
+        return _AwaitableValidation(False, "https required")
 
     if parsed.username or parsed.password:
-        return False, "credentials not allowed in URL"
+        return _AwaitableValidation(False, "credentials not allowed in URL")
 
     host = (parsed.hostname or "").lower()
     if not host:
-        return False, "missing hostname"
+        return _AwaitableValidation(False, "missing hostname")
+
+    if _is_malformed_ip_literal(host):
+        return _AwaitableValidation(False, "malformed IP address")
 
     if _is_blocked_hostname(host):
-        return False, "local/internal hostname not allowed"
+        return _AwaitableValidation(False, "local/internal hostname not allowed")
 
     # Block cloud metadata endpoints (SSRF protection)
     blocked_metadata_endpoints = {
@@ -112,19 +148,19 @@ def validate_webhook_url(url: str) -> tuple[bool, str]:
     }
 
     if host in blocked_metadata_endpoints:
-        return False, "cloud metadata endpoint not allowed"
+        return _AwaitableValidation(False, "cloud metadata endpoint not allowed")
 
     if WEBHOOK_BLOCK_PRIVATE and _is_private_ip(host):
-        return False, "private IP not allowed"
+        return _AwaitableValidation(False, "private IP not allowed")
 
     allowlist = [h for h in WEBHOOK_ALLOWED_HOSTS.split(",") if h.strip()]
     if allowlist:
         if not _host_matches_allowlist(host, allowlist):
-            return False, "hostname not in allowlist"
+            return _AwaitableValidation(False, "hostname not in allowlist")
     elif WEBHOOK_ALLOWLIST_ONLY:
-        return False, "allowlist required"
+        return _AwaitableValidation(False, "allowlist required")
 
-    return True, ""
+    return _AwaitableValidation(True, "")
 
 
 class WebhookEvent(str, Enum):
@@ -512,10 +548,20 @@ async def send_job_failed_webhook(
     )
 
 
+def generate_webhook_signature(payload: Any, secret: str | None = None) -> str:
+    """Generate a deterministic HMAC signature for a payload."""
+    payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hmac.new(
+        (secret or WEBHOOK_SECRET).encode("utf-8"),
+        payload_json.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
 def verify_webhook_signature(
-    payload: str,
-    timestamp: str,
-    signature: str,
+    payload: Any,
+    timestamp_or_signature: str,
+    signature: str | None = None,
     secret: str | None = None,
 ) -> bool:
     """
@@ -533,7 +579,15 @@ def verify_webhook_signature(
     Returns:
         True if signature is valid
     """
-    # Strip "sha256=" prefix if present
+    if signature is None or (secret is None and signature and "T" not in timestamp_or_signature):
+        provided = timestamp_or_signature
+        secret_value = signature if signature is not None else secret
+        expected = generate_webhook_signature(payload, secret_value)
+        if provided.startswith("sha256="):
+            provided = provided[7:]
+        return hmac.compare_digest(provided, expected)
+
+    timestamp = timestamp_or_signature
     if signature.startswith("sha256="):
         signature = signature[7:]
 

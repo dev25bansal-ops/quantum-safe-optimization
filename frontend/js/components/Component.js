@@ -158,6 +158,15 @@ export class Component {
     }));
   }
 
+  emit(name, detail = {}) {
+    const event = new CustomEvent(name, { detail });
+    if (this.element) {
+      this.element.dispatchEvent(event);
+    }
+    window.dispatchEvent(event);
+    return event;
+  }
+
   // Create child component
   createChild(ComponentClass, props = {}, container = null) {
     const child = new ComponentClass(props);

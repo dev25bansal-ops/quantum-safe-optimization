@@ -8,6 +8,7 @@ Includes backup persistence for Redis failover scenarios.
 
 import logging
 import os
+import sys
 from collections.abc import Callable
 
 from slowapi import Limiter
@@ -17,6 +18,7 @@ from starlette.requests import Request
 logger = logging.getLogger(__name__)
 
 TESTING = os.environ.get("TESTING", "0") == "1"
+UNDER_PYTEST = any("pytest" in arg.lower() for arg in sys.argv)
 APP_ENV = os.environ.get("APP_ENV", "development")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
 ENABLE_BACKUP = os.environ.get("RATE_LIMIT_BACKUP_ENABLED", "true").lower() == "true"
@@ -24,7 +26,7 @@ ENABLE_BACKUP = os.environ.get("RATE_LIMIT_BACKUP_ENABLED", "true").lower() == "
 
 def get_storage_uri() -> str:
     """Get appropriate storage URI based on environment."""
-    if TESTING:
+    if TESTING or UNDER_PYTEST:
         return "memory://"
 
     if APP_ENV == "production":
@@ -50,7 +52,7 @@ def get_client_identifier(request: Request) -> str:
     For authenticated requests, includes user ID for per-user limits.
     Records hits to backup store for persistence.
     """
-    if TESTING:
+    if TESTING or UNDER_PYTEST:
         return "test-client"
 
     forwarded = request.headers.get("X-Forwarded-For")
@@ -78,9 +80,9 @@ def get_client_identifier(request: Request) -> str:
 
 limiter = Limiter(
     key_func=get_client_identifier,
-    default_limits=["1000/minute"] if TESTING else ["100/minute"],
+    default_limits=["1000/minute"] if TESTING or UNDER_PYTEST else ["100/minute"],
     storage_uri=get_storage_uri(),
-    enabled=not TESTING,
+    enabled=not (TESTING or UNDER_PYTEST),
     strategy="fixed-window",
 )
 

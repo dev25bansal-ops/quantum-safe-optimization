@@ -4,7 +4,7 @@ from enum import Enum
 from functools import lru_cache
 from typing import Annotated
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -197,12 +197,22 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    env: Environment = Environment.DEV
+    env: Environment = Field(
+        default=Environment.DEV,
+        validation_alias=AliasChoices("QSOP_ENV", "APP_ENV"),
+    )
     debug: bool = False
     log_level: str = "INFO"
     log_format: LogFormat = LogFormat.JSON
     log_include_trace_id: bool = True
-    secret_key: Annotated[SecretStr, Field(min_length=32)]
+    secret_key: Annotated[
+        SecretStr,
+        Field(
+            default="dev-only-qsop-secret-key-change-before-production",
+            min_length=32,
+            validation_alias=AliasChoices("QSOP_SECRET_KEY", "JWT_SECRET"),
+        ),
+    ]
     health_check_timeout: int = 5
 
     api: APISettings = APISettings()
@@ -227,6 +237,27 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.env == Environment.DEV
+
+    @field_validator("env", mode="before")
+    @classmethod
+    def normalize_env(cls, value: str | Environment) -> str | Environment:
+        if isinstance(value, str):
+            aliases = {
+                "development": Environment.DEV,
+                "dev": Environment.DEV,
+                "production": Environment.PROD,
+                "prod": Environment.PROD,
+                "staging": Environment.STAGING,
+            }
+            return aliases.get(value.lower(), value)
+        return value
+
+    @model_validator(mode="after")
+    def reject_default_secret_in_production(self) -> "Settings":
+        default_secret = "dev-only-qsop-secret-key-change-before-production"
+        if self.is_production and self.secret_key.get_secret_value() == default_secret:
+            raise ValueError("QSOP_SECRET_KEY or JWT_SECRET must be set in production")
+        return self
 
 
 @lru_cache

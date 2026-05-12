@@ -7,7 +7,8 @@ Provides key derivation and expansion using HKDF-SHA256.
 from dataclasses import dataclass
 
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF, HKDFExpand
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF as CryptoHKDF
+from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 
 
 @dataclass(frozen=True)
@@ -72,8 +73,6 @@ def derive_key(
 
     if not isinstance(input_key_material, bytes):
         raise TypeError("input_key_material must be bytes")
-    if len(input_key_material) == 0:
-        raise ValueError("input_key_material cannot be empty")
     if salt is not None and not isinstance(salt, bytes):
         raise TypeError("salt must be bytes")
     if info is not None and not isinstance(info, bytes):
@@ -88,7 +87,7 @@ def derive_key(
             f"Requested length {length} exceeds maximum {max_length} for {config.hash_algorithm}"
         )
 
-    hkdf = HKDF(
+    hkdf = CryptoHKDF(
         algorithm=config.get_hash(),
         length=length,
         salt=salt,
@@ -187,9 +186,6 @@ def derive_multiple_keys(
 
     if not isinstance(input_key_material, bytes):
         raise TypeError("input_key_material must be bytes")
-    if len(input_key_material) == 0:
-        raise ValueError("input_key_material cannot be empty")
-
     # First, extract to get PRK
     prk = derive_key(input_key_material, config.hash_length, salt=salt, config=config)
 
@@ -207,7 +203,30 @@ def derive_multiple_keys(
     return keys
 
 
+class HKDF:
+    """Compatibility facade exposing static HKDF derivation."""
+
+    @staticmethod
+    def derive(
+        input_key_material: bytes,
+        salt: bytes | None = None,
+        info: bytes | None = None,
+        *,
+        length: int = 32,
+        config: HKDFConfig | None = None,
+    ) -> bytes:
+        """Derive key material using HKDF-SHA256 by default."""
+        return derive_key(
+            input_key_material=input_key_material,
+            length=length,
+            salt=salt,
+            info=info,
+            config=config,
+        )
+
+
 __all__ = [
+    "HKDF",
     "HKDFConfig",
     "derive_key",
     "expand_key",

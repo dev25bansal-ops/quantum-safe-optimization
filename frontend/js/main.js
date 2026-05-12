@@ -104,14 +104,18 @@ function initNavigation() {
     // Mobile menu toggle
     if (mobileMenuBtn) {
         mobileMenuBtn.addEventListener('click', () => {
-            mobileMenuBtn.classList.toggle('active');
+            const isOpen = document.body.classList.toggle('mobile-menu-open');
+            mobileMenuBtn.classList.toggle('active', isOpen);
+            mobileMenuBtn.setAttribute('aria-expanded', String(isOpen));
 
-            // Create mobile menu if it doesn't exist
+            // Create mobile menu panel if it doesn't exist
             let mobileMenu = document.querySelector('.mobile-menu');
 
             if (!mobileMenu) {
                 mobileMenu = document.createElement('div');
                 mobileMenu.className = 'mobile-menu';
+                mobileMenu.setAttribute('role', 'dialog');
+                mobileMenu.setAttribute('aria-label', 'Mobile navigation');
                 mobileMenu.innerHTML = `
                     <div class="mobile-menu-content">
                         ${navLinks ? navLinks.outerHTML : ''}
@@ -119,63 +123,30 @@ function initNavigation() {
                     </div>
                 `;
 
-                // Add styles
-                mobileMenu.style.cssText = `
-                    position: fixed;
-                    top: 70px;
-                    left: 0;
-                    right: 0;
-                    background: rgba(10, 10, 15, 0.98);
-                    backdrop-filter: blur(20px);
-                    border-bottom: 1px solid var(--border-color);
-                    padding: 24px;
-                    transform: translateY(-100%);
-                    opacity: 0;
-                    visibility: hidden;
-                    transition: all 0.3s ease;
-                    z-index: 999;
-                `;
-
-                const content = mobileMenu.querySelector('.mobile-menu-content');
-                content.style.cssText = `
-                    display: flex;
-                    flex-direction: column;
-                    gap: 24px;
-                `;
-
-                const links = mobileMenu.querySelector('.nav-links');
-                if (links) {
-                    links.style.cssText = `
-                        display: flex;
-                        flex-direction: column;
-                        gap: 16px;
-                    `;
-                }
-
-                const actions = mobileMenu.querySelector('.nav-actions');
-                if (actions) {
-                    actions.style.cssText = `
-                        display: flex;
-                        flex-direction: column;
-                        gap: 12px;
-                    `;
-                }
-
                 navbar.after(mobileMenu);
-            }
 
-            // Toggle menu visibility
-            if (mobileMenuBtn.classList.contains('active')) {
-                mobileMenu.style.transform = 'translateY(0)';
-                mobileMenu.style.opacity = '1';
-                mobileMenu.style.visibility = 'visible';
-            } else {
-                mobileMenu.style.transform = 'translateY(-100%)';
-                mobileMenu.style.opacity = '0';
-                mobileMenu.style.visibility = 'hidden';
+                // Close menu when clicking a nav link
+                mobileMenu.querySelectorAll('.nav-links a').forEach(link => {
+                    link.addEventListener('click', () => {
+                        document.body.classList.remove('mobile-menu-open');
+                        mobileMenuBtn.classList.remove('active');
+                        mobileMenuBtn.setAttribute('aria-expanded', 'false');
+                    });
+                });
             }
         });
     }
+
+    // Close mobile menu on outside click
+    document.addEventListener('click', (e) => {
+        if (document.body.classList.contains('mobile-menu-open') &&
+            !e.target.closest('.mobile-menu') &&
+            !e.target.closest('.mobile-menu-btn')) {
+            document.body.classList.remove('mobile-menu-open');
+            mobileMenuBtn?.classList.remove('active');
+            mobileMenuBtn?.setAttribute('aria-expanded', 'false');
+        }
+    });
 
     // Smooth scroll for anchor links
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -596,6 +567,58 @@ const API = {
 
 // Expose API for dashboard use
 window.QuantumSafeAPI = API;
+
+/**
+ * Toast Notification System
+ * @param {string} type - 'success', 'error', 'warning', 'info'
+ * @param {string} title - Short title
+ * @param {string} message - Detailed message
+ * @param {number} duration - Auto-dismiss in ms (default 5000)
+ */
+function showToast(type = 'info', title = '', message = '', duration = 5000) {
+  const icons = {
+    success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+    error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+  };
+
+  let container = document.querySelector('.toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'toast-container toast-container-top-right';
+    container.setAttribute('role', 'status');
+    container.setAttribute('aria-live', 'polite');
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.setAttribute('role', 'alert');
+  toast.innerHTML = `
+    <div class="toast-icon">${icons[type] || icons.info}</div>
+    <div class="toast-content">
+      ${title ? `<div class="toast-title">${title}</div>` : ''}
+      ${message ? `<div class="toast-message">${message}</div>` : ''}
+    </div>
+    <button class="toast-close" aria-label="Dismiss notification">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="toast-progress" style="animation-duration:${duration}ms"></div>
+  `;
+
+  container.appendChild(toast);
+
+  const dismiss = () => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100%)';
+    toast.style.transition = 'all 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  };
+
+  toast.querySelector('.toast-close').addEventListener('click', dismiss);
+  if (duration > 0) setTimeout(dismiss, duration);
+}
 
 /**
  * Auth Modal Functions

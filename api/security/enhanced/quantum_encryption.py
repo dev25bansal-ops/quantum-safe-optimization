@@ -154,14 +154,14 @@ class QuantumSafeEncryptionManager:
 
         encrypted = self._fernet.encrypt(plaintext)
 
+        wrapped_key = self._wrapped_keys.get(self._active_key_id) if self._active_key_id else None
+
         result = {
             "key_id": self._active_key_id,
             "algorithm": "ML-KEM-768 + AES-256-GCM",
             "encrypted": base64.urlsafe_b64encode(encrypted).decode(),
             "timestamp": datetime.now(UTC).isoformat(),
-            "wrapped_key_id": self._wrapped_keys.get(self._active_key_id, {}).get("key_id")
-            if self._active_key_id
-            else None,
+            "wrapped_key_id": wrapped_key.key_id if wrapped_key else None,
         }
 
         return base64.urlsafe_b64encode(json.dumps(result).encode()).decode()

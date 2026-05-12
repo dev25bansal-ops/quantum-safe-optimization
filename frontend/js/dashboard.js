@@ -331,7 +331,9 @@ function initNavigation() {
     if (sidebarToggle && sidebar) {
         sidebarToggle.addEventListener('click', () => {
             sidebar.classList.toggle('open');
-            sidebarBackdrop?.classList.toggle('active', sidebar.classList.contains('open'));
+            if (sidebarBackdrop) {
+                sidebarBackdrop.classList.toggle('visible', sidebar.classList.contains('open'));
+            }
             document.body.classList.toggle('sidebar-open', sidebar.classList.contains('open'));
         });
     }
@@ -340,7 +342,7 @@ function initNavigation() {
     if (sidebarBackdrop) {
         sidebarBackdrop.addEventListener('click', () => {
             sidebar?.classList.remove('open');
-            sidebarBackdrop.classList.remove('active');
+            sidebarBackdrop.classList.remove('visible');
             document.body.classList.remove('sidebar-open');
         });
     }
@@ -348,9 +350,9 @@ function initNavigation() {
     // Close sidebar when clicking nav item on mobile
     document.querySelectorAll('.nav-item').forEach(item => {
         item.addEventListener('click', () => {
-            if (window.innerWidth <= 1024) {
+            if (window.innerWidth <= 768) {
                 sidebar?.classList.remove('open');
-                sidebarBackdrop?.classList.remove('active');
+                if (sidebarBackdrop) sidebarBackdrop.classList.remove('visible');
                 document.body.classList.remove('sidebar-open');
             }
         });
@@ -3181,6 +3183,14 @@ function closeAuthModal() {
     }
 }
 
+function showLoginForm() {
+    openAuthModal();
+}
+
+function showRegisterForm() {
+    openRegisterModal();
+}
+
 // Login and register handlers are now in AuthModal component
 // These functions are no longer used here - see frontend/js/modules/auth.js
 
@@ -3832,9 +3842,6 @@ function updateNotificationUI() {
              `).join('');
         }
     }
-    
-    // Also show toast for new notifications
-    showToast(type, title, message);
 }
 
 function getNotificationIcon(type) {

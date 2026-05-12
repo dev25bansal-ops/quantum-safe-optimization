@@ -5,7 +5,6 @@ Supports AES-256-GCM and ChaCha20-Poly1305.
 """
 
 import os
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 
@@ -80,55 +79,45 @@ class EncryptedData:
         )
 
 
-class AEADCipher(ABC):
-    """Abstract AEAD cipher interface."""
+class AEADCipher:
+    """Convenience AES-GCM cipher with a cryptography-compatible surface."""
+
+    def __init__(
+        self,
+        key: bytes | None = None,
+        algorithm: AEADAlgorithm = AEADAlgorithm.AES_256_GCM,
+    ):
+        self._algorithm = algorithm
+        self._key = key or self.generate_key()
+        if len(self._key) != algorithm.key_size:
+            raise ValueError(f"Key must be {algorithm.key_size} bytes, got {len(self._key)}")
+        self._cipher = (
+            AESGCM(self._key)
+            if algorithm == AEADAlgorithm.AES_256_GCM
+            else ChaCha20Poly1305(self._key)
+        )
 
     @property
-    @abstractmethod
     def algorithm(self) -> AEADAlgorithm:
         """The algorithm used by this cipher."""
-        pass
+        return self._algorithm
 
-    @abstractmethod
-    def encrypt(
-        self,
-        plaintext: bytes,
-        aad: bytes | None = None,
-        nonce: bytes | None = None,
-    ) -> EncryptedData:
-        """
-        Encrypt plaintext with optional associated data.
+    @staticmethod
+    def generate_key() -> bytes:
+        """Generate a 256-bit AEAD key."""
+        return os.urandom(32)
 
-        Args:
-            plaintext: Data to encrypt.
-            aad: Additional authenticated data (optional).
-            nonce: Nonce to use (optional, random if not provided).
+    def encrypt(self, nonce: bytes, plaintext: bytes, aad: bytes | None = None) -> bytes:
+        """Encrypt using the same argument order as cryptography's AEAD classes."""
+        if len(nonce) != self.algorithm.nonce_size:
+            raise ValueError(f"Nonce must be {self.algorithm.nonce_size} bytes")
+        return self._cipher.encrypt(nonce, plaintext, aad)
 
-        Returns:
-            EncryptedData containing ciphertext, nonce, and tag.
-        """
-        pass
-
-    @abstractmethod
-    def decrypt(
-        self,
-        encrypted: EncryptedData,
-        aad: bytes | None = None,
-    ) -> bytes:
-        """
-        Decrypt ciphertext with optional associated data.
-
-        Args:
-            encrypted: EncryptedData to decrypt.
-            aad: Additional authenticated data (must match encryption).
-
-        Returns:
-            Decrypted plaintext.
-
-        Raises:
-            ValueError: If authentication fails.
-        """
-        pass
+    def decrypt(self, nonce: bytes, ciphertext: bytes, aad: bytes | None = None) -> bytes:
+        """Decrypt using the same argument order as cryptography's AEAD classes."""
+        if len(nonce) != self.algorithm.nonce_size:
+            raise ValueError(f"Nonce must be {self.algorithm.nonce_size} bytes")
+        return self._cipher.decrypt(nonce, ciphertext, aad)
 
     def encrypt_bytes(
         self,
@@ -137,6 +126,10 @@ class AEADCipher(ABC):
         nonce: bytes | None = None,
     ) -> bytes:
         """Encrypt and return as serialized bytes."""
+        if type(self) is AEADCipher:
+            nonce = nonce or os.urandom(self.algorithm.nonce_size)
+            return nonce + self.encrypt(nonce, plaintext, aad)
+
         encrypted = self.encrypt(plaintext, aad, nonce)
         return encrypted.to_bytes()
 
@@ -146,6 +139,11 @@ class AEADCipher(ABC):
         aad: bytes | None = None,
     ) -> bytes:
         """Decrypt from serialized bytes."""
+        if type(self) is AEADCipher:
+            nonce = data[: self.algorithm.nonce_size]
+            ciphertext = data[self.algorithm.nonce_size :]
+            return self.decrypt(nonce, ciphertext, aad)
+
         encrypted = EncryptedData.from_bytes(data, self.algorithm)
         return self.decrypt(encrypted, aad)
 

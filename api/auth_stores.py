@@ -51,6 +51,7 @@ class InMemoryUserStore:
         self._users: dict[str, dict] = {}
         self._email_index: dict[str, str] = {}  # email -> user_id (O(1) lookup)
         self._id_index: dict[str, str] = {}  # user_id -> username (O(1) lookup)
+        self._username_email_index: dict[str, str] = {}  # username -> email
         self._initialize_default_admin()
 
     def _initialize_default_admin(self) -> None:
@@ -66,9 +67,10 @@ class InMemoryUserStore:
                 "Refusing to start with insecure configuration."
             )
 
-        if not admin_password:
+        if not admin_password and os.environ.get("TESTING") == "1":
+            admin_password = "changeme"  # noqa: S105 - deterministic test credential only
+        elif not admin_password:
             # Generate a random password for development instead of using 'changeme'
-            import secrets
             admin_password = secrets.token_urlsafe(16)
             logger.warning(
                 f"SECURITY: Generated random admin password: {admin_password}. "
@@ -122,15 +124,16 @@ class InMemoryUserStore:
         username = user.get("username")
         if username:
             # Remove old email index if updating existing user
-            old_user = self._users.get(username)
-            if old_user and old_user.get("email"):
-                self._email_index.pop(old_user["email"], None)
+            old_email = self._username_email_index.get(username)
+            if old_email and old_email != user.get("email"):
+                self._email_index.pop(old_email, None)
             
             self._users[username] = user
             
             # Update indexes
             if user.get("email"):
                 self._email_index[user["email"]] = user.get("user_id", "")
+                self._username_email_index[username] = user["email"]
             if user.get("user_id"):
                 self._id_index[user["user_id"]] = username
                 
@@ -143,6 +146,7 @@ class InMemoryUserStore:
             # Remove from indexes
             if user.get("email"):
                 self._email_index.pop(user["email"], None)
+            self._username_email_index.pop(username, None)
             if user.get("user_id"):
                 self._id_index.pop(user["user_id"], None)
             # Remove user
@@ -150,8 +154,8 @@ class InMemoryUserStore:
             return True
         return False
 
-    async def list(self, limit: int = 100) -> list[dict]:
-        return list(self._users.values())[:limit]
+    async def list(self, limit: int = 100, offset: int = 0) -> list[dict]:
+        return list(self._users.values())[offset : offset + limit]
 
     async def count(self) -> int:
         """Get user count in O(1)."""

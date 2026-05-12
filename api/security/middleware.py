@@ -16,8 +16,9 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import HTTPException, Request, Response
+from fastapi import Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
@@ -106,8 +107,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         else:
             response.headers["Content-Security-Policy"] = self.custom_csp or self.API_CSP
 
-        # Add HSTS if enabled and using HTTPS
-        if self.enable_hsts and request.url.scheme == "https":
+        # Add HSTS when enabled. Browsers enforce it only over HTTPS, but emitting
+        # the configured header consistently keeps proxies and tests observable.
+        if self.enable_hsts:
             hsts_value = f"max-age={self.hsts_max_age}"
             if self.hsts_include_subdomains:
                 hsts_value += "; includeSubDomains"
@@ -291,10 +293,7 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
         user_agent = request.headers.get("user-agent", "").lower()
         for blocked in self.BLOCKED_USER_AGENTS:
             if blocked in user_agent:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Access denied",
-                )
+                return JSONResponse(status_code=403, content={"detail": "Access denied"})
 
         # Validate content type for body requests
         if request.method in ("POST", "PUT", "PATCH"):
@@ -304,9 +303,9 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
             if content_type and not any(
                 allowed in content_type for allowed in self.ALLOWED_CONTENT_TYPES
             ):
-                raise HTTPException(
+                return JSONResponse(
                     status_code=415,
-                    detail=f"Unsupported content type: {content_type}",
+                    content={"detail": f"Unsupported content type: {content_type}"},
                 )
 
             # Check content length
@@ -316,9 +315,9 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
                     length = int(content_length)
                     max_length = self._get_max_length(content_type)
                     if length > max_length:
-                        raise HTTPException(
+                        return JSONResponse(
                             status_code=413,
-                            detail=f"Request too large. Max: {max_length} bytes",
+                            content={"detail": f"Request too large. Max: {max_length} bytes"},
                         )
                 except ValueError:
                     pass

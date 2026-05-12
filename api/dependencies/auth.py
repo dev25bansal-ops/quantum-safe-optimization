@@ -6,7 +6,6 @@ across billing, marketplace, federation, and tenant routers.
 """
 
 import logging
-from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -17,8 +16,8 @@ security = HTTPBearer()
 
 
 async def get_current_user_from_token(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    request: Request = None,
 ) -> dict:
     """
     Extract and validate user from JWT token.
@@ -37,10 +36,16 @@ async def get_current_user_from_token(
     """
     try:
         # Import actual auth functions
-        from api.routers.auth import get_current_user, verify_pqc_token
-        
-        # Use the real auth implementation
-        user = await get_current_user(credentials.credentials)
+        from api.routers.auth import verify_pqc_token_async
+
+        signing_keypair = getattr(request.app.state, "signing_keypair", None)
+        user = await verify_pqc_token_async(credentials.credentials, signing_keypair)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return user
         
     except ImportError:
@@ -79,7 +84,10 @@ async def get_tenant_from_user(
     Returns:
         Tenant ID string
     """
-    tenant_id = current_user.get("tenant_id") or current_user.get("sub", "").split(":")[0]
+    tenant_id = current_user.get("tenant_id")
+    subject = current_user.get("sub", "")
+    if not tenant_id and ":" in subject:
+        tenant_id = subject.split(":", 1)[0]
     
     if not tenant_id:
         raise HTTPException(

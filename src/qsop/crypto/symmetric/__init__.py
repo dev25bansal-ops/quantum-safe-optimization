@@ -12,6 +12,7 @@ from qsop.crypto.symmetric.aead import (
     get_aead_cipher,
 )
 from qsop.crypto.symmetric.hkdf import (
+    HKDF,
     HKDFConfig,
     derive_key,
     expand_key,
@@ -25,5 +26,6 @@ __all__ = [
     "get_aead_cipher",
     "derive_key",
     "expand_key",
+    "HKDF",
     "HKDFConfig",
 ]

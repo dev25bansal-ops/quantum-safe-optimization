@@ -19,9 +19,18 @@ export default defineConfig({
         entryFileNames: "js/[name].[hash].js",
         chunkFileNames: "js/chunks/[name].[hash].js",
         assetFileNames: "assets/[name].[hash].[ext]",
-        manualChunks: {
-          vendor: ["chart.js"],
-          utils: ["./js/modules/utils.js", "./js/modules/api.js"],
+        manualChunks(id) {
+          const normalizedId = id.replace(/\\/g, "/");
+          if (normalizedId.includes("/node_modules/chart.js/")) {
+            return "vendor";
+          }
+          if (
+            normalizedId.endsWith("/js/modules/utils.js") ||
+            normalizedId.endsWith("/js/modules/api.js")
+          ) {
+            return "utils";
+          }
+          return undefined;
         },
       },
     },
@@ -60,6 +69,9 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ["chart.js"],
+  },
+  test: {
+    environment: "jsdom",
   },
   plugins: [],
 });

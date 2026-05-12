@@ -628,7 +628,7 @@ async function renderUsageChart(dailyData) {
     const canvas = document.getElementById('usage-chart');
     if (!canvas || !window.Chart) return;
 
-    await loadChartJS();
+    await window.loadChartJS?.();
 
     const ctx = canvas.getContext('2d');
 

@@ -9117,3 +9117,291 @@ right: -100%;
     background: rgba(239, 68, 68, 0.15);
     color: #ef4444;
 }
+
+/* ============================================================================
+   Responsive Design - Dashboard
+   ============================================================================ */
+
+/* Sidebar backdrop for mobile */
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-backdrop.visible {
+    display: block;
+    opacity: 1;
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Tablet — 768px */
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        z-index: 100;
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .sidebar-toggle {
+        display: flex;
+    }
+
+    .main-content {
+        margin-left: 0 !important;
+    }
+
+    .topbar {
+        padding: 12px 16px;
+    }
+
+    .search-box {
+        display: none;
+    }
+
+    .search-box.mobile-visible {
+        display: flex;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        padding: 12px 16px;
+        background: var(--bg-dark);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .search-box input {
+        width: 100%;
+    }
+
+    .topbar-right .icon-btn:not(.mobile-search-toggle) {
+        display: none;
+    }
+
+    .connectivity-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .form-group.full-width {
+        grid-column: span 1;
+    }
+
+    .stat-card {
+        padding: 16px;
+    }
+
+    .overview-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-card {
+        padding: 16px;
+    }
+
+    .jobs-table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .jobs-table {
+        min-width: 700px;
+    }
+
+    .nav-item {
+        min-height: 44px;
+        padding: 12px;
+    }
+
+    .icon-btn {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .btn {
+        min-height: 44px;
+    }
+
+    .config-section {
+        padding: 16px;
+    }
+
+    .security-options {
+        padding: 16px;
+    }
+}
+
+/* Mobile — 480px */
+@media (max-width: 480px) {
+    .topbar {
+        padding: 10px 12px;
+    }
+
+    .page-title {
+        font-size: 1rem;
+    }
+
+    .stat-card {
+        padding: 12px;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+    }
+
+    .card-header {
+        padding: 12px 16px;
+    }
+
+    .card-body {
+        padding: 12px 16px;
+    }
+
+    .job-form {
+        padding: 0;
+    }
+
+    .advanced-options-toggle {
+        width: 100%;
+    }
+
+    .algorithm-selector {
+        flex-direction: column;
+    }
+
+    .algorithm-option {
+        width: 100%;
+    }
+
+    .modal-content {
+        margin: 12px;
+        max-height: calc(100vh - 24px);
+    }
+
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding: 12px;
+    }
+
+    .notification-item {
+        padding: 12px;
+    }
+
+    .sidebar-header {
+        padding: 16px;
+    }
+
+    .sidebar-nav {
+        padding: 12px 8px;
+    }
+
+    .sidebar-footer {
+        padding: 12px 16px;
+    }
+}
+
+/* ============================================================================
+   Skeleton Loading States
+   ============================================================================ */
+
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--bg-elevated) 25%,
+        var(--bg-hover) 50%,
+        var(--bg-elevated) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+    border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.skeleton-text {
+    height: 16px;
+    margin-bottom: 8px;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-text:last-child {
+    width: 75%;
+}
+
+.skeleton-heading {
+    height: 24px;
+    width: 60%;
+    margin-bottom: 12px;
+}
+
+.skeleton-card {
+    height: 120px;
+    border-radius: var(--radius-md);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.skeleton-chart {
+    height: 250px;
+    border-radius: var(--radius-md);
+}
+
+.skeleton-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+.skeleton-badge {
+    width: 80px;
+    height: 24px;
+    border-radius: var(--radius-full);
+}
+
+.skeleton-button {
+    width: 100px;
+    height: 40px;
+    border-radius: var(--radius-md);
+}
+
+/* Reduced motion: disable skeleton animation */
+@media (prefers-reduced-motion: reduce) {
+    .skeleton {
+        animation: none;
+        background: var(--bg-elevated);
+    }
+}

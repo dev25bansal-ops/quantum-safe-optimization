@@ -38,6 +38,7 @@ class InputValidator:
     # Common patterns
     SQL_INJECTION_PATTERN = re.compile(
         r"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT)\b)|"
+        r"(\b(OR|AND)\b\s+\d+\s*=\s*\d+)|"
         r"(--|;|\/\*|\*\/|'|\"|xp_|sp_)",
         re.IGNORECASE
     )
@@ -526,7 +527,7 @@ class QuantumJobValidator:
         "COBYLA",
         "SPSA",
         "SLSQP",
-        "Nelder-Mead",
+        "NELDER-MEAD",
         "BFGS",
         "L-BFGS-B",
         "TNC"

@@ -154,9 +154,9 @@ class RegionResponse(BaseModel):
 class RoutingRequest(BaseModel):
     """Request to route a job."""
 
-    job_type: str
-    algorithm: str
-    num_qubits: int
+    job_type: str = "optimization"
+    algorithm: str = "qaoa"
+    num_qubits: int = 4
     shots: int = 1024
     preferred_region: str | None = None
     preferred_provider: ProviderType | None = None

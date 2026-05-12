@@ -7,6 +7,7 @@ Handles automatic key rotation, expiration, and lifecycle management.
 import asyncio
 import logging
 from dataclasses import dataclass
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -91,6 +92,7 @@ class KeyRotationService:
         )
 
         self._keys[key_id] = metadata
+        await self._persist_key(metadata, operation="create")
 
         logger.info(
             f"Generated {key_type} key",
@@ -110,6 +112,7 @@ class KeyRotationService:
 
         old_key = self._keys[key_id]
         old_key.is_active = False
+        await self._persist_key(old_key, operation="deactivate")
 
         new_key = await self.generate_key(
             key_type=old_key.key_type,
@@ -118,6 +121,11 @@ class KeyRotationService:
 
         new_key.rotated_from = key_id
         new_key.rotated_at = datetime.now(UTC)
+        await self._persist_key(
+            new_key,
+            operation="rotate",
+            details={"rotated_from": key_id},
+        )
 
         logger.info(
             "Rotated key",
@@ -128,6 +136,31 @@ class KeyRotationService:
         )
 
         return new_key
+
+    async def _persist_key(
+        self,
+        key: KeyMetadata,
+        operation: str,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        """Persist key metadata when a backing store is configured."""
+        if not self.store:
+            return
+
+        key_data = asdict(key)
+        for field in ("created_at", "expires_at", "rotated_at"):
+            value = key_data.get(field)
+            if isinstance(value, datetime):
+                key_data[field] = value.isoformat()
+
+        if hasattr(self.store, "save_key"):
+            await self.store.save_key(key.key_id, key_data)
+        if hasattr(self.store, "record_key_operation"):
+            await self.store.record_key_operation(
+                key_id=key.key_id,
+                operation=operation,
+                details=details or {},
+            )
 
     def get_key(self, key_id: str) -> KeyMetadata | None:
         """Get key metadata."""

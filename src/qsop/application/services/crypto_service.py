@@ -18,6 +18,7 @@ from ...crypto.envelopes.envelope import (
 from ...crypto.pqc import KEMAlgorithm, SignatureAlgorithm
 from ...crypto.signing.signatures import SignatureBundle, Signer, Verifier, generate_keypair
 from ...domain.ports.keystore import KeyStore, KeyType
+from ...domain.ports.keystore import KeyMetadata, KeyStatus
 from ...security.audit import AuditLogger
 from ...security.compliance import ComplianceChecker, CompliancePolicy
 
@@ -42,6 +43,74 @@ class KeyMaterial:
     algorithm: str = ""
 
 
+class InMemoryKeyStore:
+    """Process-local keystore for tests and ephemeral development workflows."""
+
+    def __init__(self):
+        self._keys: dict[str, dict[str, Any]] = {}
+
+    def store_key(
+        self,
+        key_type: KeyType,
+        algorithm: str,
+        public_key: bytes,
+        secret_key: bytes,
+        key_id: str | None = None,
+        **metadata: Any,
+    ) -> str:
+        actual_key_id = key_id or f"key-{len(self._keys) + 1}"
+        self._keys[actual_key_id] = {
+            "key_type": key_type,
+            "algorithm": algorithm,
+            "public_key": public_key,
+            "secret_key": secret_key,
+            "metadata": metadata,
+        }
+        return actual_key_id
+
+    def get_public_key(self, key_id: str) -> bytes:
+        return self._keys[key_id]["public_key"]
+
+    def get_secret_key(self, key_id: str) -> bytes:
+        return self._keys[key_id]["secret_key"]
+
+    def get_metadata(self, key_id: str) -> KeyMetadata:
+        key = self._keys[key_id]
+        return KeyMetadata(
+            key_id=key_id,
+            key_type=key["key_type"],
+            algorithm=key["algorithm"],
+            status=KeyStatus.ACTIVE,
+            custom_data=key["metadata"],
+        )
+
+    def list_keys(self, key_type=None, status=None, owner_id=None, tags=None) -> list[KeyMetadata]:
+        return [
+            self.get_metadata(key_id)
+            for key_id, key in self._keys.items()
+            if key_type is None or key["key_type"] == key_type
+        ]
+
+    def rotate_key(self, key_id: str, new_public_key: bytes, new_secret_key: bytes, new_key_id=None) -> str:
+        return self.store_key(
+            key_type=self._keys[key_id]["key_type"],
+            algorithm=self._keys[key_id]["algorithm"],
+            public_key=new_public_key,
+            secret_key=new_secret_key,
+            key_id=new_key_id,
+            rotated_from=key_id,
+        )
+
+    def revoke_key(self, key_id: str, reason: str = "") -> None:
+        self._keys[key_id]["revoked"] = True
+
+    def delete_key(self, key_id: str) -> None:
+        self._keys.pop(key_id, None)
+
+    def record_usage(self, key_id: str) -> None:
+        self._keys[key_id]["usage_count"] = self._keys[key_id].get("usage_count", 0) + 1
+
+
 class CryptoService:
     """
     Service for cryptographic operations on optimization artifacts.
@@ -52,12 +121,12 @@ class CryptoService:
 
     def __init__(
         self,
-        keystore: KeyStore,
+        keystore: KeyStore | None = None,
         policy: CryptoPolicy | None = None,
         audit_logger: AuditLogger | None = None,
         compliance_policy: CompliancePolicy | None = None,
     ):
-        self.keystore = keystore
+        self.keystore = keystore or InMemoryKeyStore()
         self.policy = policy or CryptoPolicy()
         self.audit_logger = audit_logger
         self.compliance_policy = compliance_policy or CompliancePolicy.nist_l3()

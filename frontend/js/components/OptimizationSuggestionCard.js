@@ -202,8 +202,8 @@ export class OptimizationSuggestionCard extends Component {
       this.emit('suggestion-copied', { suggestionId });
     }).catch(err => {
       console.error('Failed to copy:', err);
+      this.emit('suggestion-copy-failed', { error: err.message });
     });
-    this.emit('suggestion-copy-failed', { error: err.message });
   }
   
   close() {
@@ -485,6 +485,7 @@ class OptimizationSuggestionService {
     let confidence = 50;
     
     // High confidence if converged quickly
+    if (Number.isFinite(optimal_value)) confidence += 5;
     if (execution_time && execution_time < 10) confidence += 15;
     else if (execution_time < 30) confidence += 10;
     else if (execution_time < 60) confidence += 5;
@@ -495,8 +496,10 @@ class OptimizationSuggestionService {
     
     // High confidence if has good convergence history
     if (convergence_history?.length > 1) {
-      const improvement = conververgence_history.length > 1
-        ? Math.abs(convergence_history[-1] - convergence_history[0]) / convergence_history[0]
+      const initial = convergence_history[0];
+      const final = convergence_history[convergence_history.length - 1];
+      const improvement = initial !== 0
+        ? Math.abs(final - initial) / Math.abs(initial)
         : 0;
       if (improvement > 0.5) confidence += 15;
       else if (improvement > 0.2) confidence += 10;

@@ -83,7 +83,7 @@ class DIContainer:
     def register(
         self,
         interface: Type[T],
-        factory: Callable[..., T],
+        factory: Callable[..., T] | None = None,
         lifetime: str = ServiceLifetime.TRANSIENT
     ) -> None:
         """Register a service.
@@ -94,7 +94,7 @@ class DIContainer:
             lifetime: Service lifetime (singleton, transient, scoped)
         """
         descriptor = ServiceDescriptor(
-            factory=factory,
+            factory=factory or interface,
             lifetime=lifetime,
             interface=interface
         )

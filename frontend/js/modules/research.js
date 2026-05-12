@@ -136,8 +136,8 @@ export async function exportJobData(jobId, format = 'json') {
 export async function runBenchmarkComparison(
     algorithms,
     problemId,
-    problemConfig: any = null,
-    pLayersRange: [number, number] = [1, 3]
+    problemConfig = null,
+    pLayersRange = [1, 3]
 ) {
     const response = await apiRequest('POST', '/analytics/benchmark/compare', {
         algorithms,
@@ -154,11 +154,11 @@ export async function runBenchmarkComparison(
  */
 export async function runAblationStudy(
     algorithm,
-    pLayersRange: [number, number] = [1, 10],
-    optimizers, 'SPSA', 'ADAM'],
-    shotsList,
-    repetitions,
-    randomSeed,
+    pLayersRange = [1, 10],
+    optimizers = ['COBYLA', 'SPSA', 'ADAM'],
+    shotsList = [100, 500, 1000],
+    repetitions = 3,
+    randomSeed = null,
 ) {
     const response = await apiRequest('POST', '/analytics/benchmark/run-ablation', {
         algorithm,
@@ -195,7 +195,7 @@ export async function getPublicationMetadata() {
  */
 export async function createConvergenceChart(
     containerId,
-    data: { algorithm,
+    data,
 ) {
     await loadPlotlyJS();
 
@@ -251,7 +251,7 @@ export async function createConvergenceChart(
         modeBarButtonsToRemove: ['select2d', 'lasso2d', 'hoverClosestCartesian']
     };
 
-    (window as any).Plotly.newPlot(containerId, traces, layout, config);
+    window.Plotly.newPlot(containerId, traces, layout, config);
 }
 
 /**
@@ -259,7 +259,7 @@ export async function createConvergenceChart(
  */
 export async function createPerformanceChart(
     containerId,
-    data: { algorithm,
+    data,
 ) {
     await loadPlotlyJS();
 
@@ -323,7 +323,7 @@ export async function createPerformanceChart(
         modeBarButtonsToRemove: ['select2d', 'lasso2d']
     };
 
-    (window as any).Plotly.newPlot(containerId, traces, layout, config);
+    window.Plotly.newPlot(containerId, traces, layout, config);
 }
 
 /**
@@ -331,7 +331,7 @@ export async function createPerformanceChart(
  */
 export async function createAblationHeatmap(
     containerId,
-    data: { p_layers,
+    data,
 ) {
     await loadPlotlyJS();
 
@@ -396,7 +396,7 @@ export async function createAblationHeatmap(
         displayModeBar: true
     };
 
-    (window as any).Plotly.newPlot(containerId, [trace], layout, config);
+    window.Plotly.newPlot(containerId, [trace], layout, config);
 }
 
 /**
@@ -404,7 +404,7 @@ export async function createAblationHeatmap(
  */
 export async function createSideBySideComparison(
     containerId,
-    data: { algorithm,
+    data,
 ) {
     await loadPlotlyJS();
 
@@ -495,7 +495,7 @@ export async function createSideBySideComparison(
         displayModeBar: true
     };
 
-    (window as any).Plotly.newPlot(containerId, [trace1, trace2, trace3], layout, config);
+    window.Plotly.newPlot(containerId, [trace1, trace2, trace3], layout, config);
 }
 
 /**
@@ -548,7 +548,7 @@ export async function initializeResearchDashboard(tenantId,) {
  */
 export async function createAnimatedConvergence(
     containerId,
-    convergenceData: { algorithm,
+    convergenceData,
 ) {
     await loadPlotlyJS();
 
@@ -599,13 +599,13 @@ export async function createAnimatedConvergence(
         displayModeBar: true
     };
 
-    (window as any).Plotly.newPlot(containerId, traces, layout, config);
-    (window as any).Plotly.addFrames(containerId, frames);
+    window.Plotly.newPlot(containerId, traces, layout, config);
+    window.Plotly.addFrames(containerId, frames);
 }
 
 // Export for global use
 if (typeof window !== 'undefined') {
-    (window as any).ResearchModule = {
+    window.ResearchModule = {
         loadPlotlyJS,
         displayCircuitVisualization,
         exportJobData,

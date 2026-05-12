@@ -41,6 +41,7 @@ from .secrets_rotation import (
     RotationPolicy,
     SecretMetadata,
     SecretRotationManager,
+    SecretType,
     get_rotation_status,
     rotate_secret,
 )
@@ -53,6 +54,7 @@ __all__ = [
     "decrypt_file",
     "get_encryption_manager",
     "SecretRotationManager",
+    "SecretType",
     "RotationPolicy",
     "SecretMetadata",
     "rotate_secret",
