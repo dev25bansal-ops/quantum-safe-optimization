@@ -21,10 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
-# Install Python dependencies
-COPY pyproject.toml .
-COPY README.md .
-
+# Install Python dependencies (separate layer for caching)
+COPY pyproject.toml README.md ./
 RUN pip install --upgrade pip && \
     pip install . && \
     pip install gunicorn uvicorn[standard]
@@ -37,7 +35,6 @@ FROM base as development
 ENV APP_ENV=development
 
 # Install development dependencies
-COPY pyproject.toml .
 RUN pip install -e ".[dev]" && \
     pip install pytest-cov
 
@@ -73,9 +70,15 @@ RUN chown -R appuser:appgroup /app
 # Switch to non-root user
 USER appuser
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Verify non-root user
+RUN whoami | grep -q appuser
+
+# Health check (liveness)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
+
+# Readiness probe (can be used by orchestrators)
+# curl -f http://localhost:8000/ready
 
 # Expose port
 EXPOSE 8000
@@ -88,7 +91,8 @@ CMD ["gunicorn", "api.main:app", \
      "--timeout", "120", \
      "--access-logfile", "-", \
      "--error-logfile", "-", \
-     "--capture-output"]
+     "--capture-output", \
+     "--forwarded-allow-ips", "*"]
 
 # ===========================
 # Stage 4: Minimal image for serverless

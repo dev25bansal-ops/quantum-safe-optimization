@@ -1,0 +1,79 @@
+name: SBOM Generation
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+  schedule:
+    # Weekly on Monday
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: write
+  security-events: write
+
+jobs:
+  generate-sbom:
+    name: Generate Software Bill of Materials
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install cyclonedx-bom
+          pip install -e .
+
+      - name: Generate Python SBOM (CycloneDX)
+        run: |
+          cyclonedx-py \
+            --output-format json \
+            --output-file sbom-python.json \
+            --purl-type library
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate Rust SBOM
+        working-directory: crypto
+        run: |
+          cargo install cargo-cyclonedx
+          cargo-cyclonedx --format json --output sbom-rust.json
+
+      - name: Merge SBOMs
+        run: |
+          python -c "
+          import json, sys
+          # Simple merge - Python dependencies
+          with open('sbom-python.json') as f:
+              sbom = json.load(f)
+          # Add Rust components
+          try:
+              with open('crypto/sbom-rust.json') as f:
+                  rust_sbom = json.load(f)
+              for comp in rust_sbom.get('components', []):
+                  comp['purl'] = f'pkg:cargo/{comp[\"name\"]}@{comp[\"version\"]}'
+                  sbom['components'].append(comp)
+          except FileNotFoundError:
+              pass
+          with open('sbom.json', 'w') as f:
+              json.dump(sbom, f, indent=2)
+          print(f'SBOM generated with {len(sbom[\"components\"])} components')
+          "
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+      - name: Upload SBOM to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: sbom.json

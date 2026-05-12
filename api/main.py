@@ -1,22 +1,18 @@
 """
 Quantum-Safe Secure Optimization Platform - FastAPI Backend
 
-Main application entry point with PQC-secured endpoints.
-Features:
-- Post-Quantum Cryptography (ML-KEM-768, ML-DSA-65)
-- Celery task queue for distributed job processing
-- WebSocket for real-time job progress streaming
-- Connection pooling for Cosmos DB
-- API versioning (/api/v1/)
-- Structured logging with structlog
-- Distributed tracing with OpenTelemetry
+Thin wrapper around app_factory for development use.
+For production, use api.app_factory directly with gunicorn.
+
+Usage:
+    uvicorn api.main:app --reload        # Development
+    gunicorn api.app_factory:app ...     # Production
 """
 
 import os
-from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -26,53 +22,9 @@ from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from api.billing.router import router as billing_router
-from api.circuits.router import router as circuits_router
-from api.db.cosmos import close_cosmos, init_cosmos
-from api.federation.router import router as federation_router
+# Delegate app creation to the factory
+from api.app_factory import AppFactory
 from api.logging_config import setup_logging
-from api.marketplace.router import router as marketplace_router
-from api.routers import auth, auth_demo, health, jobs
-from api.routers.api_keys import router as api_keys_router
-from api.routers.backends import router as backends_router
-from api.routers.batch import router as batch_router
-from api.routers.caching import router as caching_router
-from api.routers.costs import router as costs_router
-from api.routers.demo_mode import router as demo_mode_router
-from api.routers.anomaly import router as anomaly_router
-from api.routers.metrics import MetricsMiddleware
-from api.routers.analytics import router as analytics_router
-from api.routers.health_aggregation import router as health_aggregation_router
-from api.routers.performance_dashboard import router as performance_dashboard_router
-from api.webhooks.router import router as webhooks_router
-from api.alerts.router import router as alerts_router
-from api.templates.router import router as templates_router
-from api.graphql import graphql_router, GRAPHQL_AVAILABLE
-from api.routers.metrics import router as metrics_router
-from api.routers.oauth import router as oauth_router
-from api.routers.performance import router as performance_router
-from api.routers.scheduling import router as scheduling_router
-from api.routers.scheduling import start_scheduler, stop_scheduler
-from api.routers.websocket import close_websocket_manager, init_websocket_manager
-from api.routers.websocket import router as websocket_router
-from api.security.enhanced.request_signing import RequestSigningMiddleware
-from api.security.enhanced.router import router as security_router
-from api.security.middleware import (
-    AuditLoggingMiddleware,
-    RequestIDMiddleware,
-    RequestValidationMiddleware,
-    SecurityHeadersMiddleware,
-)
-from api.security.rate_limiter import limiter
-from api.security.secrets_manager import close_secrets_manager, init_secrets_manager
-from api.security.token_revocation import close_token_revocation, init_token_revocation
-from api.telemetry import (
-    TelemetryConfig,
-    instrument_dependencies,
-    instrument_fastapi,
-    setup_telemetry,
-)
-from api.tenant.router import router as tenant_router
 
 # Initialize structured logging
 logger = setup_logging(
@@ -80,20 +32,6 @@ logger = setup_logging(
     log_format=os.getenv("LOG_FORMAT", "json"),
     service_name="quantum-api",
 )
-
-# Initialize OpenTelemetry tracing (disabled by default for local dev)
-if os.getenv("OTEL_ENABLED", "false").lower() == "true":
-    telemetry_config = TelemetryConfig(
-        service_name=os.getenv("OTEL_SERVICE_NAME", "quantum-api"),
-        service_version="0.1.0",
-        environment=os.getenv("APP_ENV", "development"),
-        otlp_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
-        sample_rate=float(os.getenv("OTEL_TRACES_SAMPLER_ARG", "1.0")),
-        console_export=os.getenv("OTEL_CONSOLE_EXPORT", "false").lower() == "true",
-    )
-    setup_telemetry(telemetry_config)
-    instrument_dependencies()
-    logger.info("telemetry_initialized", endpoint=telemetry_config.otlp_endpoint)
 
 # API Version
 API_VERSION = "v1"
@@ -107,242 +45,26 @@ class ErrorResponse(BaseModel):
     request_id: str | None = None
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
-    # Startup
-    logger.info("application_starting", platform="Quantum-Safe Optimization Platform")
-    logger.info("crypto_initializing", subsystem="PQC")
-
-    # SECURITY: Check that real crypto is available in production
-    app_env = os.getenv("APP_ENV", "development")
-    if app_env == "production":
-        try:
-            from quantum_safe_crypto import get_crypto_status, is_crypto_production_ready
-
-            if not is_crypto_production_ready():
-                status = get_crypto_status()
-                logger.critical(
-                    "SECURITY CRITICAL: Production environment detected but using STUB crypto. "
-                    f"Status: {status}. Refusing to start."
-                )
-                raise RuntimeError(
-                    "SECURITY: Cannot start in production with stub cryptography. "
-                    "Install liboqs and liboqs-python for real post-quantum cryptography."
-                )
-        except ImportError:
-            logger.critical("SECURITY CRITICAL: quantum_safe_crypto module not found")
-            raise RuntimeError("Cannot start without cryptography module")
-
-    # Initialize Secrets Manager first (needed by other services)
-    try:
-        await init_secrets_manager()
-        logger.info("secrets_manager_initialized")
-    except Exception as e:
-        logger.warning("secrets_manager_init_failed", error=str(e), fallback="environment")
-
-    # Initialize Cosmos DB connection with pooling
-    try:
-        await init_cosmos()
-        logger.info("cosmos_connected", feature="connection_pooling")
-    except Exception as e:
-        logger.warning("cosmos_init_failed", error=str(e), fallback="in-memory")
-
-    # Initialize token revocation service
-    try:
-        await init_token_revocation()
-        logger.info("token_revocation_initialized")
-    except Exception as e:
-        logger.warning("token_revocation_init_failed", error=str(e))
-
-    # Initialize WebSocket manager for real-time updates
-    try:
-        await init_websocket_manager()
-        logger.info("websocket_manager_initialized")
-    except Exception as e:
-        logger.warning("websocket_manager_init_failed", error=str(e))
-
-    # Initialize job scheduler
-    try:
-        await start_scheduler()
-        logger.info("job_scheduler_initialized")
-    except Exception as e:
-        logger.warning("job_scheduler_init_failed", error=str(e))
-
-    # Initialize PQC key rotation service with persistent storage
-    from api.key_rotation import KeyRotationService, RotationPolicy
-    from api.stores.persistent_key_store import init_persistent_key_store
-    from quantum_safe_crypto import SigningKeyPair
-
-    # Initialize persistent key store
-    redis_url = os.getenv("QSOP_REDIS_URL") or os.getenv("REDIS_URL")
-    persistent_store = await init_persistent_key_store(redis_url)
-
-    rotation_policy = RotationPolicy(
-        max_age_days=int(os.getenv("PQC_KEY_MAX_AGE_DAYS", "90")),
-        rotate_before_days=int(os.getenv("PQC_KEY_ROTATE_BEFORE_DAYS", "7")),
-    )
-    app.state.key_rotation_service = KeyRotationService(
-        rotation_policy=rotation_policy,
-        store=persistent_store,  # Now wired to persistent store
-    )
-
-    # Generate initial signing key
-    signing_key_meta = await app.state.key_rotation_service.generate_key(
-        key_type="signing",
-        security_level=3,  # ML-DSA-65
-    )
-    app.state.signing_keypair = SigningKeyPair()  # Actual key instance
-    app.state.signing_key_id = signing_key_meta.key_id  # Key ID for JWT kid header
-    logger.info(
-        "pqc_keys_initialized",
-        algorithm="ML-DSA-65",
-        key_id=signing_key_meta.key_id,
-        expires_at=signing_key_meta.expires_at.isoformat(),
-    )
-
-    # Start key rotation scheduler
-    try:
-        await app.state.key_rotation_service.start_rotation_scheduler(interval_hours=24)
-        logger.info("key_rotation_scheduler_started")
-    except Exception as e:
-        logger.warning("key_rotation_scheduler_start_failed", error=str(e))
-
-    # Check Celery status if enabled
-    if os.getenv("USE_CELERY", "false").lower() == "true":
-        try:
-            from api.tasks.celery_app import get_celery_status
-
-            status = get_celery_status()
-            if status.get("status") == "connected":
-                logger.info("celery_connected", workers=status.get("workers", []))
-            else:
-                logger.warning("celery_not_connected", fallback="sync_execution")
-        except Exception as e:
-            logger.warning("celery_status_check_failed", error=str(e))
-
-    logger.info("application_started")
-    yield
-
-    # Shutdown
-    logger.info("application_stopping")
-    try:
-        await stop_scheduler()
-        logger.info("scheduler_stopped")
-    except Exception as e:
-        logger.warning("scheduler_stop_error", error=str(e))
-    try:
-        await close_websocket_manager()
-        logger.info("websocket_manager_closed")
-    except Exception as e:
-        logger.warning("websocket_manager_close_error", error=str(e))
-    try:
-        await close_token_revocation()
-        logger.info("token_revocation_closed")
-    except Exception as e:
-        logger.warning("token_revocation_close_error", error=str(e))
-    try:
-        await close_cosmos()
-        logger.info("cosmos_connection_closed")
-    except Exception as e:
-        logger.warning("cosmos_close_error", error=str(e))
-
-    try:
-        await close_secrets_manager()
-        logger.info("secrets_manager_closed")
-    except Exception as e:
-        logger.warning("secrets_manager_close_error", error=str(e))
-
-    # Stop key rotation scheduler
-    try:
-        if hasattr(app.state, "key_rotation_service"):
-            await app.state.key_rotation_service.stop_rotation_scheduler()
-            logger.info("key_rotation_scheduler_stopped")
-    except Exception as e:
-        logger.warning("key_rotation_scheduler_stop_failed", error=str(e))
-
-    logger.info("application_stopped")
-
-
-app = FastAPI(
-    title="Quantum-Safe Secure Optimization Platform",
-    description="""
-    A production-ready platform integrating Post-Quantum Cryptography (PQC)
-    with Quantum Optimization Algorithms.
-
-    ## Features
-
-    * **QAOA** - Quantum Approximate Optimization Algorithm for combinatorial problems
-    * **VQE** - Variational Quantum Eigensolver for quantum chemistry
-    * **Quantum Annealing** - D-Wave integration for QUBO problems
-    * **PQC Security** - ML-KEM-768 encryption and ML-DSA-65 signatures
-
-    ## Security
-
-    All endpoints are secured with:
-    - ML-DSA-65 signed JWT tokens
-    - ML-KEM-768 encrypted payloads (optional)
-    - Hybrid TLS (X25519 + ML-KEM)
-    """,
-    version="0.1.0",
-    lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+# Create app via factory (API mode = full-featured)
+_factory = AppFactory(
+    mode="api",
+    enable_frontend=True,
+    enable_websockets=True,
+    enable_rate_limiting=True,
+    enable_security_middleware=True,
 )
-
-# Instrument FastAPI with OpenTelemetry
-if os.getenv("OTEL_ENABLED", "false").lower() == "true":
-    instrument_fastapi(app)
-
-# Add production security middleware (order matters - outermost first)
-is_production = os.getenv("APP_ENV") == "production"
-
-# Security headers (always enabled)
-app.add_middleware(SecurityHeadersMiddleware, enable_hsts=is_production)
-
-# GZip compression for responses > 500 bytes
-app.add_middleware(GZipMiddleware, minimum_size=500)
-
-# Request ID tracking for distributed tracing
-app.add_middleware(RequestIDMiddleware)
-
-# Audit logging for security compliance
-if os.getenv("ENABLE_AUDIT_LOGGING", "true").lower() == "true":
-    app.add_middleware(AuditLoggingMiddleware, logger=logger)
-
-# Request validation (content type, size limits, etc.)
-app.add_middleware(RequestValidationMiddleware)
-
-# Request signing verification (optional - verify ML-DSA signatures)
-if os.getenv("ENABLE_REQUEST_SIGNING", "false").lower() == "true":
-    app.add_middleware(RequestSigningMiddleware)
-
-# Add rate limiter to app state
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-# CORS configuration - stricter in production
-cors_origins = os.getenv(
-    "CORS_ORIGINS",
-    "http://localhost:8000,http://127.0.0.1:8000,http://localhost:8001,http://127.0.0.1:8001,http://localhost:3000,http://localhost:8080",
-)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[origin.strip() for origin in cors_origins.split(",")],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-API-Key"],
-    max_age=3600,
-)
+app: FastAPI = _factory.create_app()
 
 
-# Global exception handler
+# ============================================================================
+# Exception handlers (main.py specific - not in factory)
+# ============================================================================
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Handle uncaught exceptions."""
     request_id = request.headers.get("X-Request-ID") or getattr(request.state, "request_id", None)
 
-    # Log the exception with full context (always log full details internally)
     logger.exception(
         "unhandled_exception",
         error=str(exc),
@@ -352,16 +74,6 @@ async def global_exception_handler(request: Request, exc: Exception):
         request_id=request_id,
     )
 
-    # Add error to current trace span
-    try:
-        from api.telemetry import record_exception
-
-        record_exception(exc)
-    except Exception:
-        logger.warning(f"Telemetry recording failed: {exc}")
-
-    # SECURITY: Never leak internal details to clients - always use generic message
-    # Only in explicit development mode (checked via APP_ENV, not DEBUG)
     is_dev = os.getenv("APP_ENV", "production") == "development"
     error_message = str(exc) if is_dev else "An internal error occurred"
 
@@ -375,7 +87,6 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Structured 404 handler
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
     """Handle 404 Not Found with structured response."""
@@ -403,7 +114,6 @@ def _sanitize_validation_errors(exc) -> list[dict]:
     return sanitized
 
 
-# Structured 422 handler for validation errors
 @app.exception_handler(RequestValidationError)
 async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation errors with clearer messages."""
@@ -432,83 +142,12 @@ async def validation_exception_handler(request: Request, exc):
     )
 
 
-# Create versioned API router
-api_v1_router = APIRouter(prefix=f"/api/{API_VERSION}")
+# ============================================================================
+# Frontend static file serving (main.py specific)
+# ============================================================================
 
-# Include routers under versioned prefix
-api_v1_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-api_v1_router.include_router(auth_demo.router, prefix="/auth", tags=["Authentication-Demo"])
-api_v1_router.include_router(jobs.router, prefix="/jobs", tags=["Optimization Jobs"])
-api_v1_router.include_router(websocket_router, prefix="/ws", tags=["WebSocket"])
-api_v1_router.include_router(costs_router, tags=["Cost Estimation"])
-api_v1_router.include_router(backends_router, tags=["Quantum Backends"])
-api_v1_router.include_router(api_keys_router, tags=["API Keys"])
-api_v1_router.include_router(oauth_router, tags=["OAuth / SSO"])
-api_v1_router.include_router(scheduling_router, tags=["Job Scheduling"])
-api_v1_router.include_router(caching_router, tags=["Caching"])
-api_v1_router.include_router(batch_router, tags=["Batch Jobs"])
-api_v1_router.include_router(billing_router, prefix="/billing", tags=["Billing & Usage"])
-api_v1_router.include_router(tenant_router, tags=["Multi-Tenant"])
-api_v1_router.include_router(circuits_router, prefix="/circuits", tags=["Circuit Visualization"])
-api_v1_router.include_router(
-    marketplace_router, prefix="/marketplace", tags=["Algorithm Marketplace"]
-)
-api_v1_router.include_router(
-    federation_router, prefix="/federation", tags=["Federation & Multi-Region"]
-)
-api_v1_router.include_router(security_router, prefix="/security", tags=["Security & Audit"])
-api_v1_router.include_router(
-    performance_router, prefix="/performance", tags=["Performance & Optimization"]
-)
-api_v1_router.include_router(demo_mode_router, tags=["Demo Mode"])
-api_v1_router.include_router(anomaly_router, tags=["Anomaly Detection"])
-api_v1_router.include_router(analytics_router, prefix="/analytics", tags=["API Analytics"])
-api_v1_router.include_router(health_aggregation_router, prefix="/health/aggregated", tags=["Health Aggregation"])
-api_v1_router.include_router(performance_dashboard_router, prefix="/performance/dashboard", tags=["Performance Dashboard"])
-api_v1_router.include_router(webhooks_router, prefix="/webhooks", tags=["Webhooks"])
-api_v1_router.include_router(alerts_router, prefix="/alerts", tags=["Alerts"])
-api_v1_router.include_router(templates_router, prefix="/templates", tags=["Job Templates"])
-
-if GRAPHQL_AVAILABLE and graphql_router:
-    api_v1_router.include_router(graphql_router, tags=["GraphQL"])
-    logger.info("graphql_api_enabled")
-else:
-    logger.warning("graphql_api_disabled", reason="strawberry-graphql not installed")
-
-# Log demo mode status on startup
-from api.security.demo_mode import get_demo_mode_status, DEMO_MODE
-
-demo_status = get_demo_mode_status()
-logger.info("demo_mode_status", **demo_status)
-if DEMO_MODE:
-    logger.warning(
-        "SECURITY_WARNING",
-        message="Application starting with DEMO MODE ENABLED",
-        environment=demo_status["environment"],
-        note="Unauthenticated access will be allowed",
-    )
-
-# Mount versioned API
-app.include_router(api_v1_router)
-
-# Metrics endpoint at root level (for Prometheus scraping)
-app.include_router(metrics_router, tags=["Metrics"])
-
-# Add metrics middleware for automatic request tracking
-app.add_middleware(MetricsMiddleware)
-
-# Health endpoints at root level (for load balancers/orchestrators)
-app.include_router(health.router, tags=["Health"])
-
-# SECURITY: Legacy root-level routes removed. All API access must use /api/v1/ prefix.
-# Previously deprecated routes (/auth, /jobs, /ws, /costs at root level) have been
-# removed to reduce attack surface and prevent configuration drift.
-
-
-# Serve frontend static files
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 if FRONTEND_DIR.exists():
-    # Mount static assets (CSS, JS)
     app.mount("/css", StaticFiles(directory=FRONTEND_DIR / "css"), name="css")
     app.mount("/js", StaticFiles(directory=FRONTEND_DIR / "js"), name="js")
 
@@ -535,22 +174,18 @@ if FRONTEND_DIR.exists():
 
     @app.get("/", response_class=FileResponse)
     async def serve_frontend():
-        """Serve the frontend landing page."""
         return FileResponse(FRONTEND_DIR / "index.html")
 
     @app.get("/index.html", response_class=FileResponse)
     async def serve_index_html():
-        """Serve the frontend landing page (explicit .html)."""
         return FileResponse(FRONTEND_DIR / "index.html")
 
     @app.get("/dashboard", response_class=FileResponse)
     async def serve_dashboard():
-        """Serve the dashboard page."""
         return FileResponse(FRONTEND_DIR / "dashboard.html")
 
     @app.get("/dashboard.html", response_class=FileResponse)
     async def serve_dashboard_html():
-        """Serve the dashboard page (explicit .html)."""
         return FileResponse(FRONTEND_DIR / "dashboard.html")
 else:
 
@@ -567,7 +202,6 @@ else:
                 "docs": "/docs",
                 "health": "/health",
             },
-            "deprecation_notice": "Root-level /auth and /jobs endpoints are deprecated. Use /api/v1/ prefix.",
         }
 
 
@@ -575,8 +209,8 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "main:app",
-        host=os.getenv("HOST", "0.0.0.0"),  # noqa: S104 - Accepting connections from all interfaces
+        "api.main:app",
+        host=os.getenv("HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", 8000)),
         reload=os.getenv("DEBUG", "false").lower() == "true",
     )
