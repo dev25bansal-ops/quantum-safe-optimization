@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -168,9 +169,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("job_scheduler_init_failed", error=str(e))
 
-    # Initialize PQC key rotation service (replaces static keypair)
+    # Initialize PQC key rotation service with persistent storage
     from api.key_rotation import KeyRotationService, RotationPolicy
+    from api.stores.persistent_key_store import init_persistent_key_store
     from quantum_safe_crypto import SigningKeyPair
+
+    # Initialize persistent key store
+    redis_url = os.getenv("QSOP_REDIS_URL") or os.getenv("REDIS_URL")
+    persistent_store = await init_persistent_key_store(redis_url)
 
     rotation_policy = RotationPolicy(
         max_age_days=int(os.getenv("PQC_KEY_MAX_AGE_DAYS", "90")),
@@ -178,7 +184,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.key_rotation_service = KeyRotationService(
         rotation_policy=rotation_policy,
-        store=None,  # TODO: Wire up to persistent store
+        store=persistent_store,  # Now wired to persistent store
     )
 
     # Generate initial signing key
@@ -385,16 +391,42 @@ async def not_found_handler(request: Request, exc):
     return JSONResponse(status_code=404, content={"error": "Not Found"})
 
 
+def _sanitize_validation_errors(exc) -> list[dict]:
+    """Remove request body echoes from validation errors to avoid leaking secrets."""
+    if not hasattr(exc, "errors"):
+        return [{"msg": "Validation failed"}]
+
+    sanitized = []
+    for error in exc.errors():
+        item = {key: value for key, value in error.items() if key not in {"input", "ctx"}}
+        sanitized.append(item)
+    return sanitized
+
+
 # Structured 422 handler for validation errors
-@app.exception_handler(422)
-async def validation_exception_handler(request: Request, exc):
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation errors with clearer messages."""
     return JSONResponse(
         status_code=422,
         content={
             "error": "validation_error",
             "message": "Request validation failed. Check your request body and parameters.",
-            "details": exc.errors() if hasattr(exc, "errors") else str(exc),
+            "details": _sanitize_validation_errors(exc),
+            "request_id": request.headers.get("X-Request-ID"),
+        },
+    )
+
+
+@app.exception_handler(422)
+async def validation_exception_handler(request: Request, exc):
+    """Handle status-code validation errors without echoing request payloads."""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "validation_error",
+            "message": "Request validation failed. Check your request body and parameters.",
+            "details": _sanitize_validation_errors(exc),
             "request_id": request.headers.get("X-Request-ID"),
         },
     )
@@ -468,14 +500,9 @@ app.add_middleware(MetricsMiddleware)
 # Health endpoints at root level (for load balancers/orchestrators)
 app.include_router(health.router, tags=["Health"])
 
-# Legacy routes (deprecated, will be removed in future versions)
-# These mirror the v1 routes for backward compatibility
-app.include_router(auth.router, prefix="/auth", tags=["Authentication (Legacy)"], deprecated=True)
-app.include_router(
-    jobs.router, prefix="/jobs", tags=["Optimization Jobs (Legacy)"], deprecated=True
-)
-app.include_router(websocket_router, prefix="/ws", tags=["WebSocket (Legacy)"], deprecated=True)
-app.include_router(costs_router, tags=["Cost Estimation (Legacy)"], deprecated=True)
+# SECURITY: Legacy root-level routes removed. All API access must use /api/v1/ prefix.
+# Previously deprecated routes (/auth, /jobs, /ws, /costs at root level) have been
+# removed to reduce attack surface and prevent configuration drift.
 
 
 # Serve frontend static files

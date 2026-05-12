@@ -40,7 +40,7 @@ class DatabaseConfig:
     
     # Cosmos DB
     cosmos_endpoint: str = "https://localhost:8081"
-    cosmos_key: str = "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+    cosmos_key: str = ""  # SECURITY: Must be set via COSMOS_KEY env var
     cosmos_database: str = "quantum_optimization"
     use_managed_identity: bool = False
     
@@ -90,7 +90,7 @@ class SecurityConfig:
     """Security configuration."""
     
     # JWT
-    jwt_secret: str = "your-super-secret-jwt-key-change-in-production"
+    jwt_secret: str = ""  # SECURITY: Must be set via JWT_SECRET env var
     access_token_expire: int = 3600
     refresh_token_expire: int = 604800
     
@@ -283,11 +283,18 @@ class AppConfig:
         # Validate production settings
         if self.app_env == Environment.PRODUCTION:
             if self.debug:
-                logger.warning("DEBUG should not be enabled in production")
-            
-            if self.security.jwt_secret == "your-super-secret-jwt-key-change-in-production":
-                logger.critical("SECURITY: JWT_SECRET must be changed in production")
-            
+                raise ValueError("DEBUG must not be enabled in production")
+
+            if not self.security.jwt_secret:
+                raise ValueError(
+                    "SECURITY: JWT_SECRET environment variable is required in production"
+                )
+
+            if not self.database.cosmos_key and not self.database.use_managed_identity:
+                raise ValueError(
+                    "SECURITY: COSMOS_KEY or USE_MANAGED_IDENTITY is required in production"
+                )
+
             if not self.use_celery:
                 logger.warning("USE_CELERY should be enabled in production")
         
@@ -322,7 +329,7 @@ class AppConfig:
                 "db_max_connections": self.database.db_max_connections,
             },
             "redis": {
-                "redis_url": self.database.cosmos_endpoint,  # Don't expose full URL
+                "redis_url": self.redis.redis_url.split("@")[-1] if "@" in self.redis.redis_url else "redis://***",  # Don't expose credentials
                 "redis_max_connections": self.redis.redis_max_connections,
             },
             "security": {

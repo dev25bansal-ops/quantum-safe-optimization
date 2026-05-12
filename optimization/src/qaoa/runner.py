@@ -26,6 +26,13 @@ class QAOAConfig:
     use_warm_start: bool = False
     error_mitigation: bool = False
 
+    # Adaptive shot allocation
+    adaptive_shots: bool = False  # Enable dynamic shot count
+    min_shots: int = 100  # Minimum shots per iteration
+    max_shots: int = 10000  # Maximum shots per iteration
+    shot_increase_factor: float = 1.5  # Factor to increase shots when convergence stalls
+    shot_decrease_threshold: float = 0.01  # Decrease shots if energy change below this
+
 
 class QAOARunner:
     """
@@ -209,6 +216,50 @@ class QAOARunner:
     def clear_history(self) -> None:
         """Clear execution history."""
         self._history = []
+
+    def calculate_adaptive_shots(
+        self,
+        current_shots: int,
+        convergence_history: list[float] | None = None,
+        iteration: int = 0,
+    ) -> int:
+        """Calculate adaptive shot count based on convergence rate.
+
+        Increases shots when convergence stalls (need more precision),
+        decreases shots when converging quickly (save quantum resources).
+
+        Args:
+            current_shots: Current shot count
+            convergence_history: List of energy values from previous iterations
+            iteration: Current iteration number
+
+        Returns:
+            Adjusted shot count
+        """
+        if not convergence_history or len(convergence_history) < 2:
+            return current_shots
+
+        # Calculate recent convergence rate
+        recent = convergence_history[-min(5, len(convergence_history)):]
+        if len(recent) < 2:
+            return current_shots
+
+        energy_change = abs(recent[-1] - recent[0])
+        avg_energy = abs(np.mean(recent)) if np.mean(recent) != 0 else 1.0
+        relative_change = energy_change / avg_energy
+
+        cfg = self.config
+
+        if relative_change < cfg.shot_decrease_threshold:
+            # Convergence stalled - need more precision
+            new_shots = int(current_shots * cfg.shot_increase_factor)
+            return min(new_shots, cfg.max_shots)
+        elif relative_change > cfg.shot_decrease_threshold * 10 and iteration > 5:
+            # Converging well - can reduce shots
+            new_shots = int(current_shots / cfg.shot_increase_factor)
+            return max(new_shots, cfg.min_shots)
+
+        return current_shots
 
     async def benchmark(
         self,

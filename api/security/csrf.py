@@ -19,7 +19,22 @@ logger = logging.getLogger(__name__)
 
 CSRF_HEADER_NAME = "X-CSRF-Token"
 CSRF_COOKIE_NAME = "csrf_token"
-CSRF_SECRET = os.getenv("CSRF_SECRET", secrets.token_hex(32))
+def _get_csrf_secret() -> str:
+    """Get CSRF secret from environment, or fail in production."""
+    secret = os.getenv("CSRF_SECRET")
+    if not secret:
+        app_env = os.getenv("APP_ENV", "development")
+        if app_env == "production":
+            raise RuntimeError(
+                "SECURITY: CSRF_SECRET environment variable is required in production. "
+                "Generate one with: python -c 'import secrets; print(secrets.token_hex(32))'"
+            )
+        # Development only - generate a runtime secret (tokens invalidate on restart)
+        return secrets.token_hex(32)
+    return secret
+
+
+CSRF_SECRET = _get_csrf_secret()
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
