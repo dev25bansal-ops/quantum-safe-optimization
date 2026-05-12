@@ -424,6 +424,21 @@
       <div class="dashboard-content">
         <!-- Overview Section -->
         <section class="dashboard-section active" id="section-overview">
+          <!-- Skeleton loading state -->
+          <div id="overview-skeleton" class="skeleton-container" style="display:none;">
+            <div class="stats-grid">
+              <div class="stat-card"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-text"></div></div>
+              <div class="stat-card"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-text"></div></div>
+              <div class="stat-card"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-text"></div></div>
+              <div class="stat-card"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-text"></div></div>
+            </div>
+            <div class="dashboard-grid">
+              <div class="card"><div class="card-body"><div class="skeleton skeleton-chart"></div></div></div>
+              <div class="card"><div class="card-body"><div class="skeleton skeleton-chart"></div></div></div>
+            </div>
+          </div>
+          <!-- Real content (hidden during loading) -->
+          <div id="overview-content">
           <div class="stats-grid">
             <div class="stat-card">
               <div class="stat-icon blue">
@@ -810,6 +825,7 @@
               </div>
             </div>
           </div>
+          </div><!-- /overview-content -->
         </section>
 
         <!-- New Job Section -->

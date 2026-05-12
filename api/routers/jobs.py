@@ -127,6 +127,9 @@ try:
 except ImportError:
     _webhooks_available = False
 
+# Import priority queue for job scheduling
+from api.services.priority_queue import get_priority_queue
+
 # Configuration - Use Celery by default in production for performance
 # SECURITY: Running quantum jobs in FastAPI process blocks the event loop
 _app_env = os.getenv("APP_ENV", "development")
@@ -408,6 +411,11 @@ class JobListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+    page: int = 0
+    page_size: int = 0
+    total_pages: int = 0
+    has_next: bool = False
+    has_prev: bool = False
 
 
 class DecryptResultRequest(BaseModel):
@@ -599,6 +607,25 @@ async def process_optimization_job(job_id: str, job_data: dict[str, Any]):
             await save_job(_jobs_cache[job_id])
         except Exception as e:
             logger.warning("job_update_failed", error=str(e), job_id=job_id)
+
+        # Publish to Redis for WebSocket real-time updates
+        try:
+            import redis.asyncio as aioredis
+            redis_url = os.getenv("QSOP_REDIS_URL") or os.getenv("REDIS_URL")
+            if redis_url:
+                redis_client = aioredis.from_url(redis_url)
+                await redis_client.publish(
+                    f"job:{job_id}:progress",
+                    json.dumps({
+                        "job_id": job_id,
+                        "user_id": job_data.get("user_id"),
+                        **updates,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }),
+                )
+                await redis_client.close()
+        except Exception as e:
+            logger.debug("websocket_publish_failed", error=str(e))
 
     try:
         await update_job(
@@ -1040,6 +1067,15 @@ async def submit_job(
     # Save to store (save_job also updates _jobs_cache)
     await save_job(job_data)
 
+    # Enqueue in priority queue for scheduling
+    pq = get_priority_queue()
+    pq.enqueue(
+        job_id=job_id,
+        user_id=current_user["sub"],
+        priority=priority_int,
+        metadata={"problem_type": normalized_problem_type, "backend": job_request.backend},
+    )
+
     # Dispatch to appropriate processing backend
     if USE_CELERY and _celery_available and dispatch_job:
         try:
@@ -1081,6 +1117,25 @@ async def get_worker_status(
     if _celery_available and get_celery_status:
         return get_celery_status()
     return {"status": "celery_not_configured", "use_celery": USE_CELERY}
+
+
+@router.get("/queue/status")
+async def get_priority_queue_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get priority queue status and statistics.
+
+    Returns queue size, priority distribution, and next job info.
+    """
+    pq = get_priority_queue()
+    stats = pq.get_stats()
+    return {
+        "queue_size": stats["total_jobs"],
+        "max_capacity": stats["max_size"],
+        "priority_distribution": {str(k): v for k, v in stats["priority_distribution"].items()},
+        "next_job_id": stats["next_job"],
+    }
 
 
 @router.get("/webhooks/stats")
@@ -1226,6 +1281,9 @@ async def list_jobs(
         offset=offset,
     )
 
+    page = (offset // limit) + 1 if limit > 0 else 1
+    total_pages = (total + limit - 1) // limit if limit > 0 else 0
+
     return JobListResponse(
         jobs=[
             JobResponse(
@@ -1246,6 +1304,11 @@ async def list_jobs(
         total=total,
         limit=limit,
         offset=offset,
+        page=page,
+        page_size=limit,
+        total_pages=total_pages,
+        has_next=offset + limit < total,
+        has_prev=offset > 0,
     )
 
 

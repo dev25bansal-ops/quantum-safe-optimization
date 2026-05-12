@@ -404,3 +404,36 @@ def configure_production_middleware(app: ASGIApp, logger: Any | None = None) -> 
     # 5. CORS
     cors_config = CORSConfig()
     cors_config.apply(app)
+
+    # 6. Rate limit headers
+    app.add_middleware(RateLimitHeadersMiddleware)
+
+
+class RateLimitHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Add rate limiting headers to all API responses.
+
+    Headers added:
+    - X-RateLimit-Limit: Maximum requests allowed in the window
+    - X-RateLimit-Remaining: Requests remaining in the current window
+    - X-RateLimit-Reset: Unix timestamp when the rate limit window resets
+    - Retry-After: Seconds until rate limit resets (only when 429 returned)
+    """
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        response = await call_next(request)
+
+        # SlowAPI attaches rate limit info to request state
+        rate_limit = getattr(request.state, "rate_limit", None)
+        if rate_limit:
+            response.headers["X-RateLimit-Limit"] = str(rate_limit.limit)
+            response.headers["X-RateLimit-Remaining"] = str(max(0, rate_limit.limit - rate_limit.hit))
+            response.headers["X-RateLimit-Reset"] = str(int(rate_limit.reset))
+
+        # Add Retry-After header on 429 responses
+        if response.status_code == 429:
+            retry_after = getattr(request.state, "rate_limit_reset", None)
+            if retry_after:
+                response.headers["Retry-After"] = str(int(retry_after - time.time()))
+
+        return response

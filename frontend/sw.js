@@ -112,6 +112,13 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
         return;
     }
+
+    // Default fallback - try cache then offline page
+    event.respondWith(
+        caches.match(request)
+            .then(cached => cached || fetch(request))
+            .catch(() => caches.match('/offline.html'))
+    );
 });
 
 /**

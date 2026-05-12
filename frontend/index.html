@@ -103,6 +103,19 @@
 <li><a href="#pricing">Pricing</a></li>
 </ul>
             <div class="nav-actions">
+                <button class="btn btn-icon" id="landing-theme-toggle" aria-label="Toggle theme" title="Toggle dark/light theme">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                </button>
                 <button class="btn btn-ghost" onclick="openAuthModal('signin')">Sign In</button>
                 <button class="btn btn-primary" onclick="openAuthModal('signup')">
                     <span>Start Free Trial</span>
@@ -363,13 +376,13 @@ result = client.optimize(
                     on gate-based quantum computers to native quantum annealing.
                 </p>
             </div>
-            <div class="algorithm-tabs">
-                <button class="tab-btn active" data-tab="qaoa">QAOA</button>
-                <button class="tab-btn" data-tab="vqe">VQE</button>
-                <button class="tab-btn" data-tab="annealing">Quantum Annealing</button>
+            <div class="algorithm-tabs" role="tablist" aria-label="Quantum algorithms">
+                <button class="tab-btn active" data-tab="qaoa" role="tab" aria-selected="true" aria-controls="panel-qaoa" id="tab-qaoa">QAOA</button>
+                <button class="tab-btn" data-tab="vqe" role="tab" aria-selected="false" aria-controls="panel-vqe" id="tab-vqe">VQE</button>
+                <button class="tab-btn" data-tab="annealing" role="tab" aria-selected="false" aria-controls="panel-annealing" id="tab-annealing">Quantum Annealing</button>
             </div>
             <div class="algorithm-content">
-                <div class="algorithm-panel active" id="qaoa">
+                <div class="algorithm-panel active" id="qaoa" role="tabpanel" aria-labelledby="tab-qaoa" tabindex="0">
                     <div class="algorithm-info">
                         <h3>Quantum Approximate Optimization Algorithm</h3>
                         <p>
@@ -424,7 +437,7 @@ result = client.optimize(
                         </div>
                     </div>
                 </div>
-                <div class="algorithm-panel" id="vqe">
+                <div class="algorithm-panel" id="vqe" role="tabpanel" aria-labelledby="tab-vqe" tabindex="0">
                     <div class="algorithm-info">
                         <h3>Variational Quantum Eigensolver</h3>
                         <p>
@@ -479,7 +492,7 @@ result = client.optimize(
                         </div>
                     </div>
                 </div>
-                <div class="algorithm-panel" id="annealing">
+                <div class="algorithm-panel" id="annealing" role="tabpanel" aria-labelledby="tab-annealing" tabindex="0">
                     <div class="algorithm-info">
                         <h3>Quantum Annealing</h3>
                         <p>

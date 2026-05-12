@@ -78,6 +78,23 @@
     }
 }
 
+/* Explicit Light Theme (forced via data-theme attribute) */
+[data-theme="light"] {
+    --bg-dark: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-elevated: #f1f5f9;
+    --bg-hover: #e2e8f0;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --border-color: #e2e8f0;
+    --border-light: #cbd5e1;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
+    --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
+}
+
 /* Focus Visible - keyboard accessibility */
 :focus-visible {
     outline: 2px solid var(--primary);

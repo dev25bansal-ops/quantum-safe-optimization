@@ -744,6 +744,7 @@ async function loadJobs(showLoading = false) {
         updateJobsUI();
         updateStats();
         updatePaginationUI();
+        hideOverviewSkeleton();
         return;
     }
 
@@ -844,6 +845,7 @@ async function loadJobs(showLoading = false) {
     } finally {
         STATE.isLoading = false;
         hideJobsLoadingSkeleton();
+        hideOverviewSkeleton();
     }
 }
 
@@ -869,6 +871,20 @@ function showJobsLoadingSkeleton() {
 function hideJobsLoadingSkeleton() {
     const skeletonRows = document.querySelectorAll('.skeleton-row');
     skeletonRows.forEach(row => row.remove());
+}
+
+function showOverviewSkeleton() {
+    const skeleton = document.getElementById('overview-skeleton');
+    const content = document.getElementById('overview-content');
+    if (skeleton) skeleton.style.display = 'block';
+    if (content) content.style.display = 'none';
+}
+
+function hideOverviewSkeleton() {
+    const skeleton = document.getElementById('overview-skeleton');
+    const content = document.getElementById('overview-content');
+    if (skeleton) skeleton.style.display = 'none';
+    if (content) content.style.display = 'block';
 }
 
 function updatePaginationUI() {
